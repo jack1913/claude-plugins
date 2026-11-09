@@ -228,3 +228,73 @@ def test_compare_lists_the_other_skill_and_the_status_warns_while_the_copy_stays
     assert res["state"] == kitcopy.CURRENT and res["other_skills"] == ["acme"]
     lines = kitcopy.status_lines({**res, "label": "site", "note": None}, ".claude/skills/acme-brand")
     assert "  warning: .claude/skills/acme/ is another skill for Acme: Claude may load either; taking it out is yours" in lines
+
+
+# ---------------------------------------------------------------- install.py never writes through a link
+
+import subprocess  # noqa: E402
+
+TODAY = "2026-10-17"
+
+
+def git_repo(tmp_path, name="shop"):
+    repo = tmp_path / name
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    return repo
+
+
+def project_kit(tmp_path, owner=None):
+    kit = tmp_path / "brand" / ".claude" / "skills" / "acme-brand"
+    make_fake_kit(kit, GEN, owner or {"recipes/ad.md": b"ad"})
+    return kit
+
+
+def outside_untouched(folder) -> str:
+    return kitcopy.folder_state(folder)
+
+
+@pytest.mark.parametrize("where", [".claude", ".claude/skills", ".claude/skills/acme-brand/recipes", ".claude/skills/acme-brand/brand/assets"])
+def test_install_refuses_a_link_on_the_way_and_writes_nothing_through_it(tmp_path, where):
+    kit = project_kit(tmp_path)
+    repo = git_repo(tmp_path)
+    if where.startswith(".claude/skills/acme-brand/"):                                       # an installed kit, one of its folders swapped for a link
+        assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
+        shutil.rmtree(repo / where)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = repo / where
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside, target_is_directory=True)
+    before = outside_untouched(outside)
+    with pytest.raises(kitcopy.KitError) as e:
+        kitcopy._install(kit, str(repo), True, False, TODAY)
+    assert e.value.code == 2 and "is a link" in e.value.message, e.value.message
+    assert outside_untouched(outside) == before and not list(outside.iterdir())
+
+
+def test_install_refuses_a_removed_folder_that_is_a_link(tmp_path):
+    kit = project_kit(tmp_path)
+    repo = git_repo(tmp_path)
+    assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
+    (repo / ".claude/skills/acme-brand/brand/old.svg").write_text("<svg/>", encoding="utf-8")       # left over: it is moved to removed-<date>/
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repo / f"removed-{TODAY}").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(kitcopy.KitError) as e:
+        kitcopy._install(kit, str(repo), True, False, TODAY)
+    assert e.value.code == 2 and "is a link" in e.value.message and not list(outside.iterdir())
+    assert (repo / ".claude/skills/acme-brand/brand/old.svg").is_file()                                # nothing moved either
+
+
+def test_a_planted_temporary_name_is_never_written_through(tmp_path):
+    kit = project_kit(tmp_path)
+    repo = git_repo(tmp_path)
+    assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
+    kd = repo / ".claude" / "skills" / "acme-brand"
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me\n", encoding="utf-8")
+    (kd / ".SKILL.md.install-tmp").symlink_to(victim)
+    make_fake_kit(kit, {**GEN, "SKILL.md": b"# Acme brand\nversion two\n"}, {"recipes/ad.md": b"ad"}, version="1.2")
+    assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
+    assert victim.read_text(encoding="utf-8") == "keep me\n" and (kd / "SKILL.md").read_bytes() == b"# Acme brand\nversion two\n"

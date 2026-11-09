@@ -2549,15 +2549,18 @@ proposal, said so), motion (the section above, through the template's `{{motion}
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like
 the adapters (`applied-skill:file`, `applied-skill:state`).
-The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md, with every path inside the kit (the tokens, the marks and the band drawings
-under `brand/`, and the template's `{{kit}}` line filled with the kit section; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
+The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md and brand.md from the kit's own templates (`kit-SKILL.md`, `kit-brand.md`), with every path inside the kit (the tokens, the marks and the band drawings
+under `brand/`, and the `{{kit}}`, `{{how}}` and `{{map}}` lines filled from the kit; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
 A project whose skill folder holds a `kit.json` is handed over to `kit build --yes`: `applied-skill` then exits 2 before it writes anything (with `--plan` and `--replace` too), with "this project's brand skill is a kit (kit.json): run `brand-creator kit build --yes`". `check` gates such a project through the `kit` report and runs no `applied-skill:file` or `applied-skill:state` row for it.
 
 ### kit
 
 `kit build --yes [--plan] [--replace]` (`scripts/kit.py`; the kit as data is `scripts/adaptlib/kitlib.py`) writes the brand kit into the applied skill's folder, `.claude/skills/<slug>-brand/`.
-The kit is the applied skill with more around it: its SKILL.md is still written by `adapt.applied_skill_md` (see `applied-skill`), now with every path inside the kit and a `## The kit`
-section. That section says the kit works beside the owner's web-design skill and not instead of it, and that a product copies the files it uses from `brand/` into its own public or static folder and links them from there. A project without a kit keeps the applied skill as it is: the same bytes, the same command and the same `check` rows.
+The kit is the applied skill with more around it: its SKILL.md is still written by `adapt.applied_skill_md` (see `applied-skill`), from the kit's own template
+(`templates/applied-skill/kit-SKILL.md`), with every path inside the kit. It holds, in this order: `## How to work` (numbered steps, the same for every brand, each naming only files the kit holds: `kitlib.how_md`),
+`## The kit` (the version line and what the folder is; `kit.json` lists the files, SKILL.md does not), `## Rules the owner decided`, `## Never` and `## Map` (one row per need, only for what the kit holds: `kitlib.map_md`).
+The kit section says the kit works beside the owner's web-design skill and not instead of it, and that a product copies the files it uses from `brand/` into its own public or static folder and links them from there.
+The colour, type, layout, mark, motion and claims sections go to `brand.md`, written by the same builder from `templates/applied-skill/kit-brand.md`. A project without a kit keeps the applied skill as it is: the same bytes, the same command and the same `check` rows.
 
 ```text
 .claude/skills/<slug>-brand/
@@ -2565,6 +2568,9 @@ section. That section says the kit works beside the owner's web-design skill and
   kit.json      generated: schema, version, edition, sources, the sha256 of every other generated file and of each owner file (`owned`)
   rules.json    generated: the G4 rules with ids, the size rule and bands, the contrast pairs with their ratios, the forbidden words, the page block (see Rules and facts below)
   facts.json    generated: the public rows of FACTS.md
+  brand.md      generated: the colours and pairs, type, layout, mark and size bands, motion and what may be claimed (the sections SKILL.md leaves to it)
+  checklist.md  generated: the check before handing anything over, every item a `- [ ]` line built from rules.json (see Checklist below)
+  install.py    generated: the kit's installer, `scripts/adaptlib/kitcopy.py` byte for byte (see kit: install.py below)
   brand/        generated: byte copies of the brand's files AT THEIR PROJECT PATHS, so a relative link in one of them still resolves
     assets/tokens/tokens.css, tokens.json
     assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
@@ -2578,10 +2584,11 @@ section. That section says the kit works beside the owner's web-design skill and
   reference-pages/<id>/notes.md   generated: an approved reference page's layout (structure only), approval, stills and choices, each tagged
   EXTENDING.md  voice.md  visual.md  golden-rules.md   the owner's: scaffolded once from templates/kit/, never overwritten (see Owner files below)
   recipes/web-page.md   the owner's: the web-page recipe
+  recipes/ad.md, recipes/presentation.md   the owner's: scaffolded once when assets/masters/masters.json lists an ad, or a slide or deck (see Owner files below)
   <any other file>      the owner's too: a recipe under recipes/, a folder of your own such as notes/ (see Owner files below)
 ```
 
-Everything the build writes, except the five owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
+Everything the build writes, except the owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
 `brand/`, `snippets/` and `reference-pages/` are the generated folders. Every file of the kit folder that is no generated file, is not `kit.json` and is no Finder `.DS_Store` is the owner's: the five the build
 scaffolds, a recipe the owner adds under `recipes/`, a file in a folder of her own. The build leaves each alone, and `kit.json` lists all of them (`owned`).
 
@@ -2617,9 +2624,19 @@ or as the folder one belongs in, whatever it points at (a file or a folder of th
 is the web-page recipe: seven numbered steps (the visitor's job and the page's idea, references, tokens and the brand files copied into the product's own public or static folder, the hero first with the web-design skill beside the kit, the page check, a cold read, and the samples marked before publishing), with no value, no link, no bullet and no fill marker. `kit.json` `owned` is `{path in the kit: sha256}` for every owner file: the hash of the file on disk or, for one of the five that is absent, of the scaffold the build writes; the five are always in it. `kitlib.load()` refuses
 a path that is no owner file (`kitlib.is_owner_path`: a plain path in the kit folder, not `kit.json` or a file the build writes, not below a generated folder, not a `.DS_Store`), a hash that is no sha256, and one of the five that is missing. `content_sha` covers these hashes, so an owner file
 added, edited or taken away moves the version at the next build and the same bytes keep it; a kit whose owner has added nothing has the `owned` it always had. The files are
-written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists after the generated files only the five, under
-"Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not, so that its list of files does not depend on what the owner has written; a recipe or file she adds is named
-nowhere in SKILL.md, and a session in a product repository finds it through `EXTENDING.md`. SKILL.md still carries the version line, which moves when she adds, changes or takes away an owner file).
+written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them. SKILL.md names no owner file one by one: its map names `golden-rules.md`, `visual.md`,
+`voice.md`, `EXTENDING.md` and the folder `recipes/`, the same whatever the owner has written, and a session in a product repository finds a file she added there or through `EXTENDING.md` (SKILL.md still carries the
+version line, which moves when she adds, changes or takes away an owner file).
+Two more recipes are scaffolded once the approved masters call for them (`kitlib.scaffolds`, `MASTER_SCAFFOLDS`): `recipes/ad.md` when `assets/masters/masters.json` (written by `masters approve`) lists an entry of
+kind `ad`, `recipes/presentation.md` when it lists one of kind `slide`, `deck-html`, `deck-pdf` or `deck-pptx`. Each is five numbered steps with no value (start from an approved master, `brand/assets/masters/README.md`;
+keep its canvas and layout; claims from `facts.json`; nothing outside the canvas and no text covered, a PowerPoint deck checked in PowerPoint and never Keynote; anything new a proposal) and one fill marker,
+and is written once, never overwritten, and written again when deleted while `masters.json` still lists the kind, like the five. `kit.json` `owned` lists them then; `kitlib.load()` still requires only the five.
+Masters with no `masters.json` (placed by hand) get no scaffold. A `masters.json` with a problem stops the build (exit 1), naming the first one and `masters approve`.
+
+**Checklist.** `checklist.md` (`kitlib.checklist_md`) is built from `rules.json` and a few fixed lines the plugin holds for every brand, and from nothing else. Sections, each left out when it has no item:
+`## Logo` (the logo from its files; one line per size band, "Up to <max> px the <name> mark uses `<drawing>`." or, for a band of a named mark, "<mark> (<name>)"; the accent line of the size rule),
+`## Colour` (every colour a token role; one line per distinct pair kind and floor, "Every <kind> pair reaches at least <min>:1"), `## The owner's rules` (each G4 rule with its id), `## Words` (the forbidden words),
+`## Page rules` (each rule of the page block, with its id and its G4 words), `## Claims` and `## New things` (fixed lines, the last one "Every rule in `golden-rules.md` holds.").
 
 **What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report (or one that records no outputs), `kit.json` stands in, because it is the version's only home:
 its `generated` hashes, its own bytes as they are on disk, its `version` and its `content_sha`. A deleted report therefore resets nothing: the version goes on, and a file the last build wrote is not "edited by hand".
@@ -2684,7 +2701,7 @@ a `<style>` block that switches as `tokens.css` does: light shows by default, `:
 `:root:not([data-theme="light"])`. The only declaration in it is `display: none` on the image that is not shown, so no size, colour, spacing or visible `display` value is set and the page's own
 rules keep the image that is shown. It adds no key to `kit.json`: the snippet is made from the logo file names and the brand name, which `sources.logos` and `adapter_state_sha` already cover.
 
-**Rules and facts.** `rules.json` and `facts.json` sit at the top of the kit folder, are generated like every other file (locked by `kit.json`, listed in the kit section of SKILL.md, covered by
+**Rules and facts.** `rules.json` and `facts.json` sit at the top of the kit folder, are generated like every other file (locked by `kit.json`, named on the map of SKILL.md, covered by
 `kit:file`) and are written with `indent=2`, no ASCII escapes and a trailing newline. Both are always written.
 
 - `rules.json` (schema 1): `edition` (`approved_edition`, a string); `g4`, the recorded "(rule)" lines of BRAND-STATE.md "Rules (G4)" (the reading of `adapt.view`: a line with a `(...)` placeholder is no
@@ -2899,7 +2916,8 @@ report is a failing or not verified `check`. The row `kit:checked` says not veri
 
 `kit status [--repo DIR[=LABEL]]... [--json]` (`scripts/kit.py`; the comparison is `kitlib.compare(kit_dir, installed_dir)`) says whether the copy of the kit in each product repository is current. It reads
 `<DIR>/.claude/skills/<slug>-brand/` and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
-implementer from the copy list this command prints ([ADR-0011](../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md)); a script never writes outside the project. `DIR` is read as `survey --repo` reads it
+kit's own installer, `install.py`, which judges by this very comparison (`kitcopy.compare`; see kit: install.py below,
+[ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)); the plugin's own scripts never write outside the project. `DIR` is read as `survey --repo` reads it
 (a label after the last `=`, the folder's name when there is none; a relative `DIR` is relative to the working folder). Without `--repo`, every repository that has a `kit` row in `adoption.json` is read, each once, at the
 path the adoption list stores for it; with no such row the exit is 2, "pass --repo DIR (repeatable)".
 
@@ -2914,12 +2932,20 @@ Per repository, one of three states (`--json`: `state`):
   The list of files left over says what to do with them: they are not on the copy list; the implementer moves each to `removed-<date>/<kit folder>/<its path in the kit>` in the repository, and nothing is deleted
   (a script never writes there). A copy is current once that is done.
 
-Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an installed kit's owner files are the repository's own, and an update copies one only where the
-repository has none. The owner files are every owner file of the project's kit folder (`kitlib.owner_paths`: the five scaffolded ones and each file the owner added, in a recipe folder or one of her own), read from the folder as it is now, not
-from `kit.json`; a file of another kind than Markdown is among them. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
-so a copy that stops half way is not vouched for), then the owner files the repository lacks: the five in their order (`EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md`, `recipes/web-page.md`), then the others sorted. A file of hers the repository has with other bytes is reported ("owner files that differ (kept on update)") and not copied, as for the five. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
-repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
+Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an owner file the repository changed or added is its own and is never copied over.
+Each owner file is judged against the `owned` record of the repository's own `kit.json` (`kitcopy.owner_state`, `kitcopy.installed_owned`): one the repository lacks is copied; one whose bytes are the hash that record holds
+(the repository never changed it since it was copied) and differ from the project's is updated ("owner files to update (unchanged in the repository since the last copy)", on the copy list as
+`<path> (owner file, an update)`); anything else is the repository's own. An owner file that record lists, unchanged in the repository, that the project's kit no longer has is left over (`owner_left_over`), and is
+moved like the generated files left over. A repository `kit.json` that is no plain file, no JSON object, of another schema or without an `owned` object counts as no record: no owner file is updated or moved then. The owner files are every owner file of the project's kit folder (`kitlib.owner_paths`: the five scaffolded ones and each file the owner added, in a recipe folder or one of her own), read from the folder as it is now, not
+from `kit.json`; a file of another kind than Markdown is among them. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing), then the owner files the repository lacks:
+the five in their order (`EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md`, `recipes/web-page.md`), then the others sorted, then the owner files to update, and `kit.json` last of all, so a copy that stops half way is
+not vouched for and the next run finishes it (an owner file copied before `kit.json` is then the project's bytes, never taken for the repository's own). A file of hers the repository has with other bytes is reported ("owner files that differ (kept on update)") and not copied, as for the five. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
+repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], update_owner, owner_left_over, other_skills, copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
 and `copy_owner` names the owner files in it, and `left_over_to` says where the files in `left_over` go in the repository (`removed-<date>/<kit folder>/`, with the literal `<date>`), `null` when none is left over.
+
+It also warns when the repository's `.claude/skills/` holds another skill for the same brand (`kitcopy.other_brand_skills`: a folder other than the kit's whose SKILL.md front matter names the brand in its `name:`
+or `description:` line, compared after NFC normalisation and case folding; the brand is read from the kit SKILL.md's `# <brand> brand` heading): "warning: .claude/skills/<folder>/ is another skill for <brand>: Claude may
+load either; taking it out is yours" (`--json`: `other_skills`). It never changes the state or the exit code.
 
 It proves it read only, as the survey does: the installed kit folder is listed with the path, kind, size and modification time of every entry (`kitlib.folder_state`, no link followed) before and after the comparison, and a
 difference exits 1, naming the repository on stderr, without the "read only" line. Nothing in a link is read: a link where a generated file belongs is a file that differs, and a link in a generated folder is left over.
@@ -2929,6 +2955,21 @@ Exit 0 when every repository is current (and unchanged while read). Exit 1 when 
 `~/.claude` ("the kit goes into one product repository at a time, never into a global skills folder"), also when the repository's kit folder leads there through a link; a repository whose kit folder is a link. Exit 3: the kit
 in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records, or a link sits among the owner's files), because a copy cannot be judged against a kit that is not what it says: run
 `kit check`, then `kit build --yes`.
+
+### kit: install.py
+
+`python3 <kit folder>/install.py REPO [--yes] [--json]` is `scripts/adaptlib/kitcopy.py`, copied into every kit by the build: the Python standard library only (no plugin module, which a test checks), so a copy of the kit, or a
+clone of a brand project's mirror, installs with no plugin present. REPO is any folder inside a local git clone (the nearest folder at or above it holding `.git`); the kit goes to `<repository root>/.claude/skills/<kit folder name>/`.
+Without `--yes` it prints what `kit status --repo` prints for that repository and "run again with --yes to copy" (exit 0 when current, 1 otherwise). With `--yes` it copies by the copy list, in its order, each file written to a
+temporary name beside it and then moved into place, `kit.json` last; it first moves aside, into `removed-<date>/` of the repository (the first of `removed-<date>-2/`, `-3/` in which none of the paths is taken), keeping each path
+below the kit folder: the files left over (`left_over`, `owner_left_over`), a file the repository's own `kit.json` records as an owner file where this kit now writes a generated one, and a folder or link where a file goes. Nothing is
+deleted. It then compares again: current with nothing left to copy prints `installed: <kit folder> (version V)` and `next: review and commit it in <repository>` (exit 0); otherwise what is left (exit 1). `--json` prints one
+repository's entry of `kit status --json` with `applied` and `moved` added. The date is `BRAND_CREATOR_TODAY` when set, else today's. It never commits, never makes a branch and never pushes.
+
+Exit 2, with nothing written: a URL (clone it first), a REPO that is no folder, one inside the folder the kit's own project is (the kit sits in `<project>/.claude/skills/<name>/`, so a kit never installs into the brand project or into the
+repository a copy of it sits in), one outside any git work tree, the home folder or a path inside `~/.claude` (never a global skills folder), a kit folder in the repository that is a link, and, with `--yes`, a kit folder that is there but
+holds no `kit.json`, or a link anywhere on the way of a file it would write or move (`.claude`, `.claude/skills`, the kit folder or a folder in it, the `removed-<date>/` folder): every path is checked before the first file
+is moved or written, and nothing is written or moved through a link. Each file is written through a new temporary file of its own (`tempfile.mkstemp`), never a name that was there before. Exit 3: no `kit.json` beside it, or a kit that is not whole. `/brand-creator:brand-adopt` runs it for a Brand kit row ([ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)).
 
 ### launch-todo
 

@@ -12,8 +12,9 @@
     brand-creator kit status --repo DIR[=LABEL] [--repo ...] [--json]   is the copy of the kit in a product repository current, and what to copy (writes nothing)
 
 The kit holds the brand's own files copied byte for byte at their project paths under brand/ (the token files, the logo files and the drawings qa/rules.json names
-for each size band), SKILL.md (the applied skill, written by the same builder, its paths pointing inside the kit, with a "## The kit" section) and kit.json, which
-records the sha256 of every generated file, the version and what the kit was made from. The version is <edition>.<build>: the edition is BRAND-STATE.md
+for each size band), SKILL.md (the applied skill, written by the same builder from the kit's own template, its paths pointing inside the kit: steps, a "## The kit" section,
+the owner's rules, the "never" list and a map), brand.md (the colour, type, layout, mark, motion and claims sections), checklist.md (built from rules.json), install.py (the kit's
+installer, scripts/adaptlib/kitcopy.py byte for byte) and kit.json, which records the sha256 of every generated file, the version and what the kit was made from. The version is <edition>.<build>: the edition is BRAND-STATE.md
 approved_edition, the build number starts at 1 and goes up by 1 when a build changes any kit content. A second build with nothing changed writes nothing.
 
 The rules and the facts are data: rules.json holds the "(rule)" lines of BRAND-STATE.md Rules (G4) each with an id (the ASCII slug of its first six words, `-2`, `-3` for a repeat),
@@ -83,10 +84,11 @@ project; a band drawing that is not written as a plain path; a scaffold with a p
 
 `kit status` reads <DIR>/.claude/skills/<slug>-brand/ of each repository and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
 (no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
-differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the implementer moves it
-to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
-differ (the repository's own, kept on update) and the copy list: the generated files to copy
-(kit.json last), then the owner files the repository lacks (all of the owner's files, those she added too), as paths relative to the kit folder. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
+differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the kit's install.py
+moves it to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
+differ (the repository changed or added them: its own, kept on update), the owner files to update (unchanged in the repository since the last copy, by the `owned` record of its kit.json), a second
+skill for the same brand in the repository's .claude/skills/ (a warning), and the copy list: the generated files to copy, then the owner files the repository lacks (all of the owner's files, those she
+added too), then the owner files to update, kit.json last, as paths relative to the kit folder. The comparison is scripts/adaptlib/kitcopy.py, which the kit carries as install.py. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
 Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
 and after). Exit 2: no kit in the project; a folder that does not exist; the project itself or a folder inside it; your home folder or any path inside ~/.claude (the kit goes into one product
 repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what).

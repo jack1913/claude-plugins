@@ -15,6 +15,7 @@ import json
 import os
 import posixpath
 import re
+import tempfile
 from pathlib import Path
 
 EXIT_FAIL, EXIT_USAGE, EXIT_CANNOT = 1, 2, 3                 # brand-creator's exit codes (_common.EXIT_FAIL, EXIT_USAGE, EXIT_CANNOT)
@@ -524,6 +525,16 @@ def _removed_root(root: Path, today: str, rels: list[str], kd_rel: str) -> Path:
         n += 1
 
 
+def link_on_the_way(base: Path, rel: str) -> Path | None:
+    """The first of `base` and the folders between it and `rel` (the last part of `rel` left out) that is a link, or None: nothing is written or moved through a link."""
+    parts = Path(rel).parts[:-1]
+    for i in range(len(parts) + 1):
+        d = base.joinpath(*parts[:i])
+        if d.is_symlink():
+            return d
+    return None
+
+
 def apply(kit: Path, root: Path, res: dict, today: str) -> list[str]:
     """Copy the kit into `root`'s SKILLS_DIR/<kit folder name>/ by the comparison `res` (`compare`): first move aside what must not be overwritten or is left over, then write
     every file of `res["copy"]` in its order (kit.json last), each to a temporary name beside it and then into place. Moved aside, into removed-<today>/ of the repository and
@@ -535,8 +546,12 @@ def apply(kit: Path, root: Path, res: dict, today: str) -> list[str]:
     recorded = installed_owned(kd)
     aside = [rel for rel in res["copy"] if os.path.lexists(kd / rel) and (rel in recorded and not is_owner_path(rel) or not plain_file(kd, rel))]
     moving = list(dict.fromkeys([*res["left_over"], *res["owner_left_over"], *aside]))
+    base = _removed_root(root, today, moving, kd_rel) if moving else None
+    ways = [f"{kd_rel}/{rel}" for rel in [*res["copy"], *moving]] + [f"{base.name}/{kd_rel}/{rel}" for rel in moving]   # checked before anything is moved or written
+    for way in ways:
+        if (link := link_on_the_way(root, way)) is not None:
+            raise KitError(EXIT_USAGE, f"{link} is a link, and nothing is written or moved through a link: look at where it leads, replace it with a folder, then run it again")
     if moving:
-        base = _removed_root(root, today, moving, kd_rel)
         for rel in moving:
             dest = base / kd_rel / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -548,9 +563,15 @@ def apply(kit: Path, root: Path, res: dict, today: str) -> list[str]:
         dest = kd / rel
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dest.with_name(f".{dest.name}.install-tmp")
-            tmp.write_bytes(data)
-            os.replace(tmp, dest)
+            fd, tmp = tempfile.mkstemp(dir=dest.parent, prefix=f".{dest.name}.", suffix=".install-tmp")   # a new file of its own (O_EXCL): never a name planted beforehand
+            try:
+                with os.fdopen(fd, "wb") as fh:
+                    fh.write(data)
+                os.replace(tmp, dest)
+            except BaseException:
+                if os.path.lexists(tmp):
+                    os.unlink(tmp)
+                raise
         except OSError as e:
             raise KitError(EXIT_FAIL, f"cannot write {kd_rel}/{rel}: {e.strerror or e}. Files before it in the copy list are written; kit.json is written last, so run it again once this is fixed")
     return moving
