@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-08, 0.10.0, the release commit's tree | passed |
+| [Release run](#release-run) | 2026-11-09, 0.11.0, the release commit's tree | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -425,13 +425,23 @@ skip, when `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, both `SM
 printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before
 tagging.
 
-**Last run:** 2026-11-08, brand-creator 0.10.0, macOS 27.3, on the release commit's tree (only this record differs): pytest
-3400 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`. The Linux Docker
-run of the same tree printed `LINUX RUN OK` for pytest (3349 passed, 52 expected skips), node (249 pass) and the smoke. An
+**Last run:** 2026-11-09, brand-creator 0.11.0, macOS 27.3, on the release commit's tree (commit 4f472d4; only this record
+differs): pytest 3454 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
+The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3403 passed, 52 expected skips), node (249 pass)
+and the smoke. The first Mac run, one commit earlier, failed one test: the manual's `install.py` example showed a personal
+path (a home folder on a Mac), which `test_no_personal_paths_or_email_addresses_in_shipped_files` refuses; the example now names
+`<the shop's folder>`. Calibration on a scratch copy of the pilot brand: the kit's `SKILL.md` went from 3,812 words to 1,739
+(`brand.md` 2,114, `checklist.md` 1,430); `kit check` failed only on the e-mail signature master's `{{logo_url}}` placeholder,
+the pilot brand's own fix; `install.py` into a scratch git repository planned, copied and read current, warned about the
+hand-made `placuje` skill, updated an owner file the repository never changed, copied a recipe the owner added, and kept one
+the repository had changed.
+
+The 0.10.0 run (2026-11-08): pytest 3400 passed and 1 skipped on the Mac, 3349 passed and 52 expected skips on Linux. An
 earlier Linux run, after the code review's fixes, failed one test: `cleanup --history` asked git for a decomposed Polish
-file name in its precomposed spelling, which Linux does not store; it now asks with the disk's spelling. Calibration on a scratch copy of the pilot brand: `cleanup --history` took `history/` from 308 MB to 21 MB
-(6124 files), with 0 files lost by any frozen board in the browser; `masters check` on its approved ads, deck PDF and
-PowerPoint deck passed, with one warning (a text box above slide 12) and the PowerPoint render left to the owner.
+file name in its precomposed spelling, which Linux does not store; it now asks with the disk's spelling. Calibration on a
+scratch copy of the pilot brand: `cleanup --history` took `history/` from 308 MB to 21 MB (6124 files), with 0 files lost by
+any frozen board in the browser; `masters check` on its approved ads, deck PDF and PowerPoint deck passed, with one warning
+(a text box above slide 12) and the PowerPoint render left to the owner.
 
 The 0.9.0 run (2026-11-06) failed its first Linux log check on a cleanup test that skipped itself off macOS with a plain
 `pytest.skip`; it carries `requires_macos` since.
