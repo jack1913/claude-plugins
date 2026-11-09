@@ -1812,9 +1812,9 @@ def unsupplied_fonts(doc: dict) -> dict[str, str]:
 
 def link_check(project: Path, doc: dict | None = None) -> dict:
     """Every relative link of the kit's Markdown, HTML and CSS files (`LINK_KINDS`): {"files": files read, "links": relative links judged, "bad": [(file, line, target, why)], "unsupplied": [(file, line,
-    target, path in the kit, reason)]}. With kit.json (`doc`), a link to a font it lists as not copied (`unsupplied_fonts`) is no broken link: it goes to "unsupplied" instead of "bad", so that the row
+    target, path in the kit, reason)], "placeholders": targets that hold a template's `{{...}}` field, which are no link and are not judged}. With kit.json (`doc`), a link to a font it lists as not copied (`unsupplied_fonts`) is no broken link: it goes to "unsupplied" instead of "bad", so that the row
     can say the font must be supplied under its own licence. The font has to be missing from the kit and the link has to spell its path letter for letter."""
-    files = links = 0
+    files = links = placeholders = 0
     bad, unsupplied = [], []
     listed = unsupplied_fonts(doc) if doc else {}
     for rel in kit_paths(project):
@@ -1824,6 +1824,9 @@ def link_check(project: Path, doc: dict | None = None) -> dict:
             continue
         files += 1
         for line, target in _LINK_READERS[kind](text):
+            if _PLACEHOLDER.search(target):          # a template's {{...}} field (an ad, a print template) is filled where the template is used: no link, never judged (the scaffold's pattern)
+                placeholders += 1
+                continue
             relative, why = link_problem(project, rel, target)
             links += relative
             if why:
@@ -1832,7 +1835,7 @@ def link_check(project: Path, doc: dict | None = None) -> dict:
                     unsupplied.append((rel, line, target, at, listed[at]))
                 else:
                     bad.append((rel, line, target, why))
-    return {"files": files, "links": links, "bad": bad, "unsupplied": unsupplied}
+    return {"files": files, "links": links, "bad": bad, "unsupplied": unsupplied, "placeholders": placeholders}
 
 
 def version_problems(project: Path, doc: dict) -> list[str]:

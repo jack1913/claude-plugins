@@ -1982,6 +1982,18 @@ def test_a_fresh_kit_fails_on_its_fill_markers_until_the_owner_files_are_filled(
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
 
 
+
+def test_a_template_placeholder_is_no_link_and_is_not_judged(pack):
+    filled_kit(pack)
+    visual = kit_of(pack) / "visual.md"
+    mutate(visual, "Keep it short. [example]", "Keep it short. [example]\n\n[logo]({{logo_url}})")
+    r = kit_check(pack)
+    row = check_report_rows(pack)["kit:links"]
+    assert row["status"] == "pass", r.stdout
+    assert row["detail"] == (f"{FRESH_LINKS} relative links in {FRESH_FILES} .md, .html and .css files resolve inside the kit; "
+                             "1 template placeholder ({{...}}) is no link and is left as it is"), row
+
+
 def test_a_link_that_leaves_the_kit_fails(pack):
     filled_kit(pack)
     assert kit_check(pack).returncode == 0
@@ -2604,16 +2616,16 @@ def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_cha
     (kd / "brand/assets/logo/old-mark.svg").write_text("<svg/>", encoding="utf-8")        # a file of an older kit, which this kit no longer has
     voice = kd / "voice.md"
     voice.write_text(voice.read_text(encoding="utf-8") + "\nOur own words.\n", encoding="utf-8")   # the repository's own voice file
-    (kd / "visual.md").unlink()                                                           # an owner file the repository lacks
+    (kd / "visual.md").unlink()                                                           # an owner file the repository took out: its own change (0.11.1)
     r = kit_status(pack, repo)
     assert r.returncode == 1, r.stdout + r.stderr
     assert "site: not current (version 1.1 on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)" in r.stdout.splitlines()
     assert listed(r.stdout, "generated files that differ") == ["brand/assets/tokens/tokens.css (not the same bytes)"]
     assert listed(r.stdout, "generated files that are missing") == ["snippets/logo.html"]
     assert listed(r.stdout, "left over from an older kit") == ["brand/assets/logo/old-mark.svg"]
-    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md", "visual.md (deleted in the repository)"]
     copy = paths_of(listed(r.stdout, "copy list"))
-    assert copy == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"]        # the generated files that need copying, then the owner file it lacks; voice.md is not in it
+    assert copy == ["brand/assets/tokens/tokens.css", "snippets/logo.html"]                    # the generated files that need copying; neither voice.md nor the deleted visual.md is in it
     for rel in copy:                                                                       # the copy the list asks for, and the old file taken out
         shutil.copy2(kit_of(pack) / rel, kd / rel)
     r = kit_status(pack, repo)                                                             # the copy is whole now, and only the old file is left: that alone is not current
@@ -2625,7 +2637,7 @@ def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_cha
     r = kit_status(pack, repo)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "site: current (version 1.1)" in r.stdout.splitlines() and "copy list" not in r.stdout
-    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]    # still the repository's own, and current all the same
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md", "visual.md (deleted in the repository)"]    # still the repository's own, and current all the same
     assert "Our own words." in voice.read_text(encoding="utf-8")
 
 
@@ -2867,9 +2879,9 @@ def test_kit_status_json_holds_the_same_facts_as_the_text(pack, tmp_path):
     assert a["copy"] == COPY_ORDER + OWNER_ORDER + ["kit.json"] and a["copy_owner"] == OWNER_ORDER and a["read_only"] is True
     assert (b["label"], b["state"], b["installed_version"], b["project_version"]) == ("stale", "not current", "1.1", "1.1")
     assert b["differ"] == [{"file": "brand/assets/tokens/tokens.css", "why": "not the same bytes"}] and b["missing"] == ["snippets/logo.html"]
-    assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}]
+    assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}, {"file": "visual.md", "why": "missing"}]
     assert b["left_over_to"] == "removed-<date>/.claude/skills/acme-brand/" and a["left_over_to"] is None      # where the files left over go in the repository; none left over, none said
-    assert b["copy"] == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"] and b["copy_owner"] == ["visual.md"]
+    assert b["copy"] == ["brand/assets/tokens/tokens.css", "snippets/logo.html"] and b["copy_owner"] == []          # visual.md was taken out by the repository: not copied back
     assert os.path.realpath(b["path"]) == os.path.realpath(stale)
     r = kit_status(pack, install(pack, tmp_path, "same"), extra=("--json",))
     assert r.returncode == 0 and json.loads(r.stdout)["current"] is True
@@ -4971,9 +4983,9 @@ def test_a_recipe_the_owner_adds_is_hashed_moves_the_version_is_on_the_copy_list
     r = kit_status(pack, repo)
     assert r.returncode == 0 and listed(r.stdout, "owner files that differ (kept on update)") == [EMAIL_KIT] and "copy list" not in r.stdout
     assert (installed_of(repo) / EMAIL_KIT).read_text(encoding="utf-8") == "The repository's own email recipe.\n"
-    (installed_of(repo) / EMAIL_KIT).unlink()                                             # and where it has none, it is on the list again
+    (installed_of(repo) / EMAIL_KIT).unlink()                                             # and where the repository took it out, it stays out (0.11.1): current, nothing to copy
     r = kit_status(pack, repo)
-    assert r.returncode == 0 and paths_of(listed(r.stdout, "copy list")) == [EMAIL_KIT]
+    assert r.returncode == 0 and "copy list" not in r.stdout and listed(r.stdout, "owner files that differ (kept on update)") == [f"{EMAIL_KIT} (deleted in the repository)"]
 
 
 def test_a_page_the_owner_adds_is_never_judged_for_words_but_its_dead_link_fails_kit_links(pack):
@@ -5732,3 +5744,59 @@ def test_kit_status_reads_the_repository_root_as_install_does(pack, tmp_path):
     assert run_install(kit_of(pack) / INSTALL, repo / "apps" / "web", "--yes").returncode == 0
     r = kit_status(pack, repo / "apps" / "web")
     assert r.returncode == 0 and "current (version 1.1)" in r.stdout, r.stdout + r.stderr
+
+
+
+def run_install_home(script, repo, home, *args):
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH",)}
+    env.update({"BRAND_CREATOR_TODAY": "2026-10-17", "HOME": str(home)})
+    return subprocess.run([sys.executable, "-I", str(script), str(repo), *args], capture_output=True, text=True, env=env)
+
+
+def test_an_owner_file_the_repository_deleted_stays_deleted_and_the_copy_is_current(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (installed_of(repo) / "visual.md").unlink()                                               # the product took it out on purpose
+    plan = run_install(kit_of(pack) / INSTALL, repo)
+    doc = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    assert plan.returncode == 0 and "shop: current (version 1.1)" in plan.stdout and "visual.md (deleted in the repository)" in plan.stdout, plan.stdout
+    assert doc["state"] == "current" and doc["copy"] == [] and doc["copy_owner"] == [] and {"file": "visual.md", "why": "missing"} in doc["owner_differ"], doc
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0 and not (installed_of(repo) / "visual.md").exists(), r.stdout + r.stderr
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_the_plan_says_why_yes_would_refuse_instead_of_asking_for_it(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    mutate_json(installed_of(repo) / "kit.json", lambda d: d.__setitem__("version", "1.10"))
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 1 and "run again with --yes to copy" not in r.stdout and "--yes refuses this: " in r.stdout and "git pull" in r.stdout, r.stdout
+    other = git_repo(tmp_path, "other")
+    (installed_of(other)).mkdir(parents=True)
+    (installed_of(other) / "notes.md").write_text("a hand-made skill's notes\n", encoding="utf-8")
+    r = run_install(kit_of(pack) / INSTALL, other)
+    assert r.returncode == 1 and "run again with --yes to copy" not in r.stdout and "--yes refuses this: " in r.stdout and "move it away yourself" in r.stdout, r.stdout
+
+
+def test_install_and_kit_status_warn_about_a_global_skill_for_the_brand(pack, tmp_path):
+    assert build(pack).returncode == 0
+    home = tmp_path / "home"
+    for folder, head in (("acme", "name: acme\ndescription: The Acme brand, made by hand\n"), ("acme-brand", "name: acme-brand\ndescription: An old copy\n"),
+                         ("unrelated", "name: unrelated\ndescription: Something else\n")):
+        (home / ".claude" / "skills" / folder).mkdir(parents=True)
+        (home / ".claude" / "skills" / folder / "SKILL.md").write_text(f"---\n{head}---\n# x\n", encoding="utf-8")
+    repo = git_repo(tmp_path)
+    r = run_install_home(kit_of(pack) / INSTALL, repo, home)
+    for folder in ("acme", "acme-brand"):
+        assert f"warning: ~/.claude/skills/{folder}/ is a global skill for Acme: Claude loads it in every project; taking it out is yours" in r.stdout, r.stdout
+    assert "unrelated" not in r.stdout
+    doc = json.loads(run_install_home(kit_of(pack) / INSTALL, repo, home, "--json").stdout)
+    assert doc["global_skills"] == ["acme", "acme-brand"], doc
+    env = {**os.environ, "HOME": str(home)}
+    r = kit_status(pack, repo, env=env)
+    assert "warning: ~/.claude/skills/acme/ is a global skill for Acme" in r.stdout, r.stdout + r.stderr
+    plain = run_install_home(kit_of(pack) / INSTALL, repo, tmp_path / "nohome")              # no ~/.claude/skills at all: no warning
+    assert "global skill" not in plain.stdout and json.loads(run_install_home(kit_of(pack) / INSTALL, repo, tmp_path / "nohome", "--json").stdout)["global_skills"] == []

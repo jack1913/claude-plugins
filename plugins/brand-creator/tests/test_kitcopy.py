@@ -106,7 +106,7 @@ def two_versions(tmp_path, v1_owner: dict, v2_owner: dict):
 def test_owner_state_table():
     p, r = b"new", b"old"
     assert kitcopy.owner_state(None, p, None) == "copy"
-    assert kitcopy.owner_state(None, p, sha(r)) == "copy"
+    assert kitcopy.owner_state(None, p, sha(r)) == "own"            # recorded as copied, and gone: the repository took it out, and it stays out (0.11.1)
     assert kitcopy.owner_state(p, p, sha(r)) == "same"
     assert kitcopy.owner_state(p, p, None) == "same"
     assert kitcopy.owner_state(r, p, sha(r)) == "update"
@@ -166,10 +166,10 @@ def test_kit_json_is_the_last_file_of_every_copy_list(tmp_path):
     fresh = kitcopy.compare(kit, tmp_path / "fresh" / "acme-brand")
     assert fresh["copy"][-1] == "kit.json" and fresh["copy"].index("recipes/ad.md") < fresh["copy"].index("kit.json")
     kit2, repo = two_versions(tmp_path / "b", {"recipes/ad.md": b"v1", "voice.md": b"v1"}, {"recipes/ad.md": b"v2", "recipes/new.md": b"new"})
-    (repo / "voice.md").unlink()
+    (repo / "voice.md").unlink()                                       # taken out by the repository: its own change, not copied back
     res = kitcopy.compare(kit2, repo)
-    assert res["copy"] == ["voice.md", "recipes/new.md", "recipes/ad.md", "kit.json"]
-    assert res["copy_owner"] == ["voice.md", "recipes/new.md"] and res["update_owner"] == ["recipes/ad.md"]
+    assert res["copy"] == ["recipes/new.md", "recipes/ad.md", "kit.json"]
+    assert res["copy_owner"] == ["recipes/new.md"] and res["update_owner"] == ["recipes/ad.md"] and ("voice.md", kitcopy.WHY_MISSING) in res["owner_differ"]
 
 
 def test_a_copy_stopped_before_kit_json_is_finished_by_the_next_run(tmp_path):
@@ -261,6 +261,7 @@ def test_install_refuses_a_link_on_the_way_and_writes_nothing_through_it(tmp_pat
     if where.startswith(".claude/skills/acme-brand/"):                                       # an installed kit, one of its folders swapped for a link
         assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
         shutil.rmtree(repo / where)
+        make_fake_kit(kit, GEN, {"recipes/ad.md": b"ad", "recipes/email.md": b"email"}, version="1.2")   # a new recipe of the owner's, which the copy writes below recipes/
     outside = tmp_path / "outside"
     outside.mkdir()
     link = repo / where

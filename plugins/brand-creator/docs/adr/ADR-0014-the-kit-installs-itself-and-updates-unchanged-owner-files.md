@@ -57,3 +57,11 @@ ADR-0011 names both as defaults the owner may change in a new record.
 - Every change to `kitcopy.py` changes `install.py`, so a plugin update that touches it moves every kit's build number once.
 - The other generated-kit features of the same release (the shorter `SKILL.md` with steps and a map, `brand.md`, `checklist.md`
   and the masters' recipe scaffolds) change no decision of ADR-0011 and are written in the contract and the changelog.
+
+## Update 2026-11-09
+
+An owner file that the repository's `kit.json` records as copied, and that the repository no longer has, was taken out by the
+repository: a deletion is the repository's own change, like an edit, so the file is not copied back and is reported as deleted
+(0.11.1, from the pilot brand's code review). Before, a missing owner file was copied on every run, as D11 had it. An owner file the
+record does not list, such as a recipe the brand project added since, is still copied where the repository has none. Everything
+else in the decision stands.

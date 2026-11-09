@@ -278,7 +278,9 @@ def links_row(rep, project: Path, doc: dict) -> None:
                         f"{'it does' if len(loose) == 1 else 'they do'} not resolve inside the kit: the font must be supplied under its own licence, copied into the product from where you licensed it: {named(loose)}; "
                         f"the other {got['links'] - len(loose)} resolve inside the kit"))
     else:
-        rep.add("kit:links", "pass", label, detail=f"{got['links']} relative link{'s' if got['links'] != 1 else ''} in {got['files']} .md, .html and .css files resolve inside the kit")
+        n = got["placeholders"]
+        rep.add("kit:links", "pass", label, detail=f"{got['links']} relative link{'s' if got['links'] != 1 else ''} in {got['files']} .md, .html and .css files resolve inside the kit"
+                + ((f"; 1 template placeholder ({{{{...}}}}) is no link and is left as it is" if n == 1 else f"; {n} template placeholders ({{{{...}}}}) are no links and are left as they are") if n else ""))
 
 
 def fill_row(rep, project: Path) -> None:

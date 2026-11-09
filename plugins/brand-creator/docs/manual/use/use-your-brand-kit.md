@@ -205,8 +205,10 @@ installed: <the shop's folder>/.claude/skills/acme-brand (version 1.1)
 next: review and commit it in <the shop's folder>
 ```
 
-Run the same line again after the brand changes: it updates the copy by the same rules as Claude. It never deletes,
-never saves anything into the code's history and never installs into Claude's settings folder or your brand project.
+Run the same line again after the brand changes: it updates the copy by the same rules as Claude. A file of yours that
+the product took out stays out. It never deletes, never saves anything into the code's history and never installs into
+Claude's settings folder or your brand project. It warns when Claude's global skills folder also holds a skill for your
+brand, because Claude loads that one in every project.
 
 ## Check a copy is up to date
 

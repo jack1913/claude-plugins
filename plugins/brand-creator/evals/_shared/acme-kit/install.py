@@ -287,7 +287,7 @@ def compare(kit: Path, installed: Path) -> dict:
     """The kit folder of the project (`kit`) against the folder a product repository holds (`installed`). Reads both, writes nothing, follows no link.
 
     Returns {"state": NOT_INSTALLED | CURRENT | NOT_CURRENT, "installed_version", "project_version", "differ": [(path, why)], "missing": [path], "left_over": [path],
-    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "brand": the name `brand_name` reads or None, "other_skills": [folder] (`other_brand_skills`)}. The copy list `copy` is the
+    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "brand": the name `brand_name` reads or None, "other_skills": [folder] (`other_brand_skills`), "global_skills": [folder] (`global_brand_skills`)}. The copy list `copy` is the
     generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing), then the owner files the repository lacks (`copy_owner`: every
     owner file of the project, `owner_paths`, the five scaffolded ones first, then the others sorted), then the owner files to update (`update_owner`), and kit.json last of all.
     An owner file is judged by `owner_state` against the `owned` record of the repository's own kit.json (`installed_owned`): one the repository never changed since it was
@@ -326,7 +326,7 @@ def compare(kit: Path, installed: Path) -> dict:
         shown = ", ".join(unbuilt[:STATUS_SHOWN]) + (f", and {len(unbuilt) - STATUS_SHOWN} more" if len(unbuilt) > STATUS_SHOWN else "")
         raise KitError(EXIT_CANNOT, f"the owner's files in the project are not what kit.json records ({shown}), so a copy would not record them: run `brand-creator kit build --yes` first")
     out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
-           "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "brand": None, "other_skills": []}
+           "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "brand": None, "other_skills": [], "global_skills": []}
     recorded = installed_owned(installed)
     if not os.path.lexists(installed / KIT_FILE):
         out["copy"] = list(wanted)
@@ -361,6 +361,7 @@ def compare(kit: Path, installed: Path) -> dict:
         out["state"] = NOT_CURRENT
     brand = out["brand"] = brand_name(kit)
     out["other_skills"] = other_brand_skills(installed.parent, installed.name, brand) if brand else []
+    out["global_skills"] = global_brand_skills(brand) if brand else []
     last = [KIT_FILE] if KIT_FILE in out["copy"] else []                 # kit.json last of all: a copy that stops before it is finished by the next run, never taken for the repository's own edits
     out["copy"] = [rel for rel in out["copy"] if rel != KIT_FILE] + out["copy_owner"] + out["update_owner"] + last
     return out
@@ -408,12 +409,19 @@ def other_brand_skills(skills_dir: Path, kit_name: str, brand: str) -> list[str]
     return out
 
 
+def global_brand_skills(brand: str) -> list[str]:
+    """The folders of ~/.claude/skills/ whose SKILL.md front matter names the brand (`other_brand_skills`, a global copy of the kit itself included): a global skill Claude loads in every
+    project, beside the repository's own copy. Read only; sorted folder names; [] when there is no such folder."""
+    return other_brand_skills(Path.home() / SKILLS_DIR, "", brand)
+
+
 def owner_state(repo: bytes | None, project: bytes, recorded: str | None) -> str:
-    """What happens to one owner file of the project's kit in a repository: "copy" (the repository has none), "same" (the same bytes), "update" (the repository's bytes are the ones
-    its own kit.json recorded when it was copied, so the repository never changed it, and the project's differ), or "own" (the repository changed it, or added it: kept, and reported).
+    """What happens to one owner file of the project's kit in a repository: "copy" (the repository has none, and its kit.json records none), "same" (the same bytes), "update" (the
+    repository's bytes are the ones its own kit.json recorded when it was copied, so the repository never changed it, and the project's differ), or "own" (the repository changed it, added
+    it, or took out one its kit.json records as copied: a deletion is a change of the repository's too, so the file is not copied back; kept, and reported).
     `recorded` is the sha256 the repository's kit.json `owned` holds for the file, or None."""
     if repo is None:
-        return "copy"
+        return "copy" if recorded is None else "own"
     if repo == project:
         return "same"
     return "update" if recorded is not None and _sha256(repo) == recorded else "own"
@@ -523,12 +531,14 @@ def status_lines(res: dict, kd_rel: str) -> list[str]:
                          (f"left over from an older kit (not in this kit, so not on the copy list; move each to {left_over_to(kd_rel)} in the repository, keeping its path; nothing is deleted)",
                           res["left_over"]),
                          (f"owner files left over from an older kit, unchanged in the repository (move each to {left_over_to(kd_rel)} too)", res["owner_left_over"]),
-                         ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]]),
+                         ("owner files that differ (kept on update)", [f"{rel} (deleted in the repository)" if why == WHY_MISSING else rel for rel, why in res["owner_differ"]]),
                          ("owner files to update (unchanged in the repository since the last copy)", res["update_owner"])):
         if items:
             L += [f"  {title}:", *(f"    {i}" for i in items)]
     for folder in res.get("other_skills", []):
         L.append(f"  warning: {posixpath.dirname(kd_rel)}/{folder}/ is another skill for {res.get('brand') or 'this brand'}: Claude may load either; taking it out is yours")
+    for folder in res.get("global_skills", []):
+        L.append(f"  warning: ~/{SKILLS_DIR}/{folder}/ is a global skill for {res.get('brand') or 'this brand'}: Claude loads it in every project; taking it out is yours")
     if res["copy"]:
         L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, then the owner files to copy or update, kit.json last):")
         L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel} (owner file, an update)" if rel in res["update_owner"]
@@ -540,7 +550,7 @@ def result_json(res: dict, kd_rel: str) -> dict:
     """One repository's entry of `kit status --json`: the keys in their order, `differ` and `owner_differ` as [{"file", "why"}], and `left_over_to` (where the files left over go,
     in the repository) only when there are some. `kd_rel` is the kit folder's path in a repository (`.claude/skills/<name>`)."""
     keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "update_owner", "owner_left_over",
-            "other_skills", "copy", "copy_owner", "read_only")
+            "other_skills", "global_skills", "copy", "copy_owner", "read_only")
     res = {**res, "left_over_to": left_over_to(kd_rel) if res["left_over"] or res["owner_left_over"] else None}
     return {k: ([{"file": rel, "why": why} for rel, why in res[k]] if k in ("differ", "owner_differ") else res[k]) for k in keys}
 
@@ -689,7 +699,7 @@ def _install(kit: Path, given: str, yes: bool, as_json: bool, today: str) -> int
         print(f"installed: {target} (version {doc['version']})")
         print(f"next: review and commit it in {root}")
     elif not yes and not done:
-        print("run again with --yes to copy")
+        print(f"--yes refuses this: {refuse}" if refuse else "run again with --yes to copy")
     elif not done:
         print("error: the copy is not current yet; what is left is listed above", file=sys.stderr)
     return 0 if done else EXIT_FAIL
