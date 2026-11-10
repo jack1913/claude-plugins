@@ -381,7 +381,7 @@ _BARE = str.maketrans({"ł": "l", "đ": "d", "ø": "o", "ı": "i", "æ": "ae", "
 
 
 def _loose(text: str) -> str:
-    """`text` as a brand name is compared: case folded, without accents (Placuje is Płacuję) and with its spaces collapsed."""
+    """`text` as a brand name is compared: case folded, without accents (Lakowo is Łąkowo) and with its spaces collapsed."""
     import unicodedata
     bare = "".join(c for c in unicodedata.normalize("NFKD", text.casefold()) if not unicodedata.combining(c))
     return " ".join(bare.translate(_BARE).split())

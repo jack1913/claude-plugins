@@ -245,7 +245,7 @@ def test_pptx_render_is_not_verified_until_the_powerpoint_answer_is_recorded(tmp
 
 - `brand-creator pdf normalise <file.pdf> [--out FILE]`: in place by default; exit 1 when pdfinfo afterwards shows
   other dates (when pdfinfo is present; NOT VERIFIED otherwise).
-- `brand-creator masters embed-fonts <deck.pptx> --font FILE.ttf [--font ...] [--out FILE]`: a port of Płacuję's
+- `brand-creator masters embed-fonts <deck.pptx> --font FILE.ttf [--font ...] [--out FILE]`: a port of Pilot's
   `rounds/r32/wzory/pptx/embed.py` (read it, never edit it; it is the proven method: PowerPoint rendered its output with the
   fonts not installed), generalised to any typeface (names from the font's `name` table); refuses a font whose `OS/2 fsType`
   forbids embedding, by name.
@@ -308,11 +308,11 @@ bring them to the site's language". Also listed by `status` among next steps.
 - Test: `tests/test_skills.py`, `tests/test_static.py`, docs checks
 
 - [ ] **Step 1:** skill and docs edits; `python3 .github/scripts/check-docs-standard.py` and markdownlint: 0 findings.
-- [ ] **Step 2:** calibration on a scratch copy of Płacuję: r32's masters as a masters round (`masters.json` written for
+- [ ] **Step 2:** calibration on a scratch copy of Pilot: r32's masters as a masters round (`masters.json` written for
   it), `masters check` (expect the canvas rows to pass and the covered row to list the stamp), `cleanup --history`
   plan (expect about 17 MB to stay of 291 MB). Record the numbers in the CHANGELOG entry.
 - [ ] **Step 3:** full release run: Mac `tests/run-all.sh --smoke`, Linux Docker pytest/node and smoke, record in
   manual-checks.md.
 - [ ] **Step 4: Commit** `brand-creator 0.10.0: masters and a smaller freeze`. Push and tag only on the owner's go
   (tag only after push-triggered checks pass).
-- [ ] **After the release (owner's yes):** `cleanup --history` on the real Płacuję project.
+- [ ] **After the release (owner's yes):** `cleanup --history` on the real Pilot project.

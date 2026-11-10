@@ -195,28 +195,28 @@ def skill(folder, name, description):
 
 
 def test_brand_name_is_read_from_the_kits_heading(tmp_path):
-    kit = tmp_path / "placuje-brand"
-    make_fake_kit(kit, {"SKILL.md": "---\nname: placuje-brand\n---\n\n# Płacuję brand\n".encode()}, {})
-    assert kitcopy.brand_name(kit) == "Płacuję"
+    kit = tmp_path / "lakowo-brand"
+    make_fake_kit(kit, {"SKILL.md": "---\nname: lakowo-brand\n---\n\n# Łąkowo brand\n".encode()}, {})
+    assert kitcopy.brand_name(kit) == "Łąkowo"
     assert kitcopy.brand_name(tmp_path / "nothing") is None
 
 
 def test_a_hand_made_skill_naming_the_brand_is_found_even_written_decomposed(tmp_path):
     skills = tmp_path / ".claude" / "skills"
-    skill(skills / "placuje", "placuje", unicodedata.normalize("NFD", "Applies the Płacuję brand to anything made for it."))
-    skill(skills / "placuje-brand", "placuje-brand", "Applies the Płacuję brand (colours, type).")
+    skill(skills / "lakowo", "lakowo", unicodedata.normalize("NFD", "Applies the Łąkowo brand to anything made for it."))
+    skill(skills / "lakowo-brand", "lakowo-brand", "Applies the Łąkowo brand (colours, type).")
     skill(skills / "other", "other", "Writes release notes.")
-    assert kitcopy.other_brand_skills(skills, "placuje-brand", "Płacuję") == ["placuje"]
+    assert kitcopy.other_brand_skills(skills, "lakowo-brand", "Łąkowo") == ["lakowo"]
 
 
 def test_a_link_among_the_skills_and_a_folder_without_skill_md_are_never_read(tmp_path):
     skills = tmp_path / ".claude" / "skills"
-    skill(tmp_path / "elsewhere", "placuje", "Applies the Płacuję brand.")
+    skill(tmp_path / "elsewhere", "lakowo", "Applies the Łąkowo brand.")
     skills.mkdir(parents=True)
     (skills / "linked").symlink_to(tmp_path / "elsewhere")
     (skills / "empty").mkdir()
-    assert kitcopy.other_brand_skills(skills, "placuje-brand", "Płacuję") == []
-    assert kitcopy.other_brand_skills(tmp_path / "no-skills-folder", "placuje-brand", "Płacuję") == []
+    assert kitcopy.other_brand_skills(skills, "lakowo-brand", "Łąkowo") == []
+    assert kitcopy.other_brand_skills(tmp_path / "no-skills-folder", "lakowo-brand", "Łąkowo") == []
 
 
 def test_compare_lists_the_other_skill_and_the_status_warns_while_the_copy_stays_current(tmp_path):
@@ -340,15 +340,15 @@ def test_a_move_aside_that_fails_stops_with_a_kit_error_naming_the_file_never_a_
 
 def test_the_brand_is_a_whole_word_in_any_spelling_also_in_a_description_over_several_lines(tmp_path):
     skills = tmp_path / ".claude" / "skills"
-    skill(skills / "plain", "plain", "Applies the Placuje brand to slides.")                            # written without its accents
+    skill(skills / "plain", "plain", "Applies the Lakowo brand to slides.")                            # written without its accents
     (skills / "block").mkdir(parents=True)
-    (skills / "block" / "SKILL.md").write_text("---\nname: block\ndescription: >-\n  Applies the house style of\n  PŁACUJĘ to every page.\n---\n\n# x\n",
+    (skills / "block" / "SKILL.md").write_text("---\nname: block\ndescription: >-\n  Applies the house style of\n  ŁĄKOWO to every page.\n---\n\n# x\n",
                                                encoding="utf-8")                                          # a YAML block, in capitals
     (skills / "wrapped").mkdir(parents=True)
-    (skills / "wrapped" / "SKILL.md").write_text("---\nname: wrapped\ndescription: Applies the house style\n  of Płacuję to every page.\n---\n\n# x\n",
+    (skills / "wrapped" / "SKILL.md").write_text("---\nname: wrapped\ndescription: Applies the house style\n  of Łąkowo to every page.\n---\n\n# x\n",
                                                  encoding="utf-8")                                        # a plain value that goes on to the next line
-    skill(skills / "placuje-brand", "placuje-brand", "Applies the Płacuję brand.")                       # the kit itself
-    assert kitcopy.other_brand_skills(skills, "placuje-brand", "Płacuję") == ["block", "plain", "wrapped"]
+    skill(skills / "lakowo-brand", "lakowo-brand", "Applies the Łąkowo brand.")                       # the kit itself
+    assert kitcopy.other_brand_skills(skills, "lakowo-brand", "Łąkowo") == ["block", "plain", "wrapped"]
     short = tmp_path / "short" / ".claude" / "skills"
     skill(short / "spacecraft", "spacecraft", "Draws spacecraft and places them.")                       # "ace" inside other words is not the brand
     skill(short / "notes", "ace-notes", "Notes.")                                                         # a whole word of the name is

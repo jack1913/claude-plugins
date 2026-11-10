@@ -414,15 +414,17 @@ runs here, before every release tag: on a Mac, where the Apple-tool tests (`sips
 **Steps.** On a Mac with Xcode 26 or later and Docker, on the release commit with a clean tree, from the repository root:
 
 ```bash
-BRAND_CREATOR_DATA=<set-up data dir> plugins/brand-creator/tests/run-all.sh --smoke
+BRAND_CREATOR_DATA=<set-up data dir> BRAND_CREATOR_DENYLIST=<denylist.json> plugins/brand-creator/tests/run-all.sh --smoke
 cd plugins/brand-creator
-BRAND_CREATOR_TEST_PARTS=pytest,node tests/docker/run.sh
+BRAND_CREATOR_DENYLIST=<denylist.json> BRAND_CREATOR_TEST_PARTS=pytest,node tests/docker/run.sh
 BRAND_CREATOR_TEST_PARTS=smoke tests/docker/run.sh --no-build
 ```
 
-It passes when the Mac's pytest reports no failure and its NOT VERIFIED banner names no Apple tool (only the denylist
-skip, when `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, both `SMOKE PASSED` and `QUICK SMOKE PASSED` are
-printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before
+A release run always sets `BRAND_CREATOR_DENYLIST` (the private list, never in the repository): without it the
+anonymisation test is skipped, and the pilot brand's name shipped in 0.10.0 to 0.11.1 because it was. It passes when the
+Mac's pytest reports no failure and no skip at all (its NOT VERIFIED banner names no Apple tool and no denylist), node
+reports `fail 0`, both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each
+Docker run ends with `LINUX RUN OK`, its pytest without the denylist skip. Record the version, the commit, the date and the counts here before
 tagging.
 
 **Last run:** 2026-11-09, brand-creator 0.11.1, macOS 27.3, on the release commit's tree (commit a1fb2fc; only this record
@@ -441,7 +443,7 @@ path (a home folder on a Mac), which `test_no_personal_paths_or_email_addresses_
 `<the shop's folder>`. Calibration on a scratch copy of the pilot brand: the kit's `SKILL.md` went from 3,812 words to 1,739
 (`brand.md` 2,114, `checklist.md` 1,430); `kit check` failed only on the e-mail signature master's `{{logo_url}}` placeholder,
 the pilot brand's own fix; `install.py` into a scratch git repository planned, copied and read current, warned about the
-hand-made `placuje` skill, updated an owner file the repository never changed, copied a recipe the owner added, and kept one
+hand-made `pilot` skill, updated an owner file the repository never changed, copied a recipe the owner added, and kept one
 the repository had changed. After the fix pass, the rebuilt kit's `install.py` updated that copy from version 4.5 to 4.6,
 kept the repository's changed file, warned again and read current.
 

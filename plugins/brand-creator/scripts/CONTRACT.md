@@ -2949,7 +2949,7 @@ repos: [{label, path, state, installed_version, project_version, differ: [{file,
 and `copy_owner` names the owner files in it, and `left_over_to` says where the files in `left_over` go in the repository (`removed-<date>/<kit folder>/`, with the literal `<date>`), `null` when none is left over.
 
 It also warns when the repository's `.claude/skills/` holds another skill for the same brand (`kitcopy.other_brand_skills`: a folder other than the kit's whose SKILL.md front matter names the brand in its `name:`
-or `description:` value, as a whole word, case folded and without accents (Placuje finds Płacuję), also when the value goes on over several lines (a YAML block); the brand is read from the kit SKILL.md's `# <brand> brand` heading): "warning: .claude/skills/<folder>/ is another skill for <brand>: Claude may
+or `description:` value, as a whole word, case folded and without accents (Lakowo finds Łąkowo), also when the value goes on over several lines (a YAML block); the brand is read from the kit SKILL.md's `# <brand> brand` heading): "warning: .claude/skills/<folder>/ is another skill for <brand>: Claude may
 load either; taking it out is yours" (`--json`: `other_skills`). Since 0.11.1 it also reads `~/.claude/skills/` the same way (`kitcopy.global_brand_skills`, a global copy of the kit itself included): "warning:
 ~/.claude/skills/<folder>/ is a global skill for <brand>: Claude loads it in every project; taking it out is yours" (`--json`: `global_skills`). Neither warning changes the state or the exit code.
 

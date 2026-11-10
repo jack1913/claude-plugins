@@ -20,7 +20,7 @@ Fixes left over from the 0.11.0 review, and a clearer message after a plugin upd
 - `install.py` writes the kit's files with normal permissions, so everyone who checks out the repository can read
   them. Before, they were readable by their owner only.
 - The warning about another skill for your brand no longer fires on the brand's letters inside another word, such as
-  "Ace" in "spacecraft". It now also finds the brand written without its accents ("Placuje" for "Płacuję") and in a
+  "Ace" in "spacecraft". It now also finds the brand written without its accents ("Lakowo" for "Łąkowo") and in a
   description that goes over several lines.
 - Two installs running at the same time now stop with a message that names the file, instead of a Python error.
 - The kit's text, the manual and the adoption guide no longer say your own files in a product's copy are never

@@ -1496,14 +1496,14 @@ def test_history_refuses_a_folder_freeze_did_not_name_and_never_puts_it_in_a_res
 
 
 def test_history_works_for_a_project_in_a_folder_of_a_bigger_repository(tmp_path):
-    """The pilot brand lives in projects-brands/placuje: git prints paths from the repository root in status and from the project in ls-files."""
-    p = frozen(tmp_path, sub="placuje")
+    """The pilot brand lives in projects-brands/pilot: git prints paths from the repository root in status and from the project in ls-files."""
+    p = frozen(tmp_path, sub="pilot")
     code = hcode(p)
     assert p.run("--history", "--static", "--record-yes", code, "--said", "tak").returncode == 0
     r = p.run("--history", "--static", "--yes", code)
     assert r.returncode == 0, r.stderr + r.stdout
     assert not (p.dir / FZ / "_lead").exists() and (p.dir / FZ / "shots" / "a.png").is_file()
-    assert "D  placuje/history/2026-10-21-approved/_lead/big.png" in p.git("status", "--porcelain").stdout
+    assert "D  pilot/history/2026-10-21-approved/_lead/big.png" in p.git("status", "--porcelain").stdout
 
 
 # ---------------------------------------------------------------- review fixes (0.10.0)

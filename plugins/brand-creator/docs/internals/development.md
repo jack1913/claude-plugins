@@ -67,7 +67,8 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - Tests that spend money (`costs_money`: OpenRouter image generation, a billed run) run only with `BRAND_CREATOR_PAID=1`. Without it,
   `tests/conftest.py` and `tests/run-all.sh` take every `OPENROUTER_*` and `USE_LLM_DESIGN_*` variable out of the run, and a lookup
   of `openrouter.ai` from a test fails.
-- The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.
+- The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it. A release run always
+  sets it ([Release run](manual-checks.md#release-run)): a skipped scan let the pilot brand's name ship in 0.10.0 to 0.11.1.
 - A set-up data directory comes from `brand-creator --data <dir> setup --yes`.
 - No run writes into the data directory it is given. pytest, node:test and each smoke give the tools a data directory of
   their own: links to the given one's npm packages and Chromium, and a scratch folder of its own. pytest keeps it with its

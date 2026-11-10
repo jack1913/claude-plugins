@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** the generated kit takes over what made Płacuję's hand-made kit work: a short entry page with a map, a review
+**Goal:** the generated kit takes over what made Pilot's hand-made kit work: a short entry page with a map, a review
 checklist, recipes for the masters, updates that reach owner files a repository never changed, and an installer the kit
 carries.
 
@@ -184,7 +184,7 @@ def test_a_copy_stopped_before_kit_json_is_finished_by_the_next_run(tmp_path): .
 
 ```python
 def test_a_hand_made_skill_naming_the_brand_is_found(tmp_path): ...
-    # skills/placuje/SKILL.md description "Applies the Płacuję brand" written NFD; brand "Płacuję" NFC -> ["placuje"]
+    # skills/pilot/SKILL.md description "Applies the Pilot brand" written NFD; brand "Pilot" NFC -> ["pilot"]
 def test_a_skill_that_does_not_name_the_brand_and_the_kit_itself_are_not_listed(tmp_path): ...
 def test_a_link_among_the_skills_is_never_read(tmp_path): ...
 def test_kit_status_warns_and_still_says_current(tmp_path): ...
@@ -425,7 +425,7 @@ def test_install_runs_from_a_copy_of_the_kit_with_no_plugin(pack, tmp_path): ...
 - [ ] **Step 1:** docs edits; `python3 .github/scripts/check-docs-standard.py` and `npx -y markdownlint-cli2@0.18
   "plugins/brand-creator/**/*.md"`: 0 findings. `skills/brand-creator/SKILL.md` stays under its top budget (19,850
   characters).
-- [ ] **Step 2: Calibration** on a scratch copy of Płacuję in the scratchpad (never the real project): `kit build --yes`;
+- [ ] **Step 2: Calibration** on a scratch copy of Pilot in the scratchpad (never the real project): `kit build --yes`;
   expect `SKILL.md` near 1,500 words and `brand.md` near 2,100 (`wc -w`), `kit check` failing only where 0.10.0 failed.
   Then a scratch `git init` repository: `install.py` plan, `--yes`, current; add `recipes/email.md` in the project, build,
   install again (copied); change `voice.md` in the project, build, install (updated); edit the repository's `voice.md`,
@@ -434,4 +434,4 @@ def test_install_runs_from_a_copy_of_the_kit_with_no_plugin(pack, tmp_path): ...
   tests/docker/run.sh && BRAND_CREATOR_TEST_PARTS=smoke tests/docker/run.sh --no-build`; record in manual-checks.md.
 - [ ] **Step 4: Commit** `brand-creator 0.11.0: one brand kit (entry page and brand.md, checklist, master recipes, owner
   updates, install.py)`. Push and tag only on the owner's go, after the push-triggered checks pass.
-- [ ] **After the release:** hand Part B of the spec to the Płacuję session.
+- [ ] **After the release:** hand Part B of the spec to the Pilot session.

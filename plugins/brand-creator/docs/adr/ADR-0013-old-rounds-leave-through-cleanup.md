@@ -52,5 +52,5 @@ record may name a round.
 
 0.10.0 adds `cleanup --history`: the same plan, yes and record flow slims frozen rounds in `history/` to what their boards show, the
 scripts that built them and their text records, and rewrites `history/MANIFEST.sha256`. A frozen round stays the record of what was
-approved; what goes is what no board of it shows (on the Płacuję project, 291 MB down to about 19 MB). `freeze` itself keeps only that
+approved; what goes is what no board of it shows (on the Pilot project, 291 MB down to about 19 MB). `freeze` itself keeps only that
 much from 0.10.0 (`--whole` keeps the old behaviour).

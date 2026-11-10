@@ -2,20 +2,20 @@
 
 - **Status:** owner's answers in (2026-11-09); ready for the plan
 - **Date:** 2026-11-09
-- **Sources:** the Płacuję brand project (`~/Dev/projects-brands/placuje`), read only on 2026-11-09: its hand-made kit
-  `skill/placuje/` (kit 1.5.0) and its generated kit `.claude/skills/placuje-brand/` (version 4.2, plugin 0.7.0);
+- **Sources:** the Pilot brand project (`~/Dev/projects-brands/pilot`), read only on 2026-11-09: its hand-made kit
+  `skill/pilot/` (kit 1.5.0) and its generated kit `.claude/skills/pilot-brand/` (version 4.2, plugin 0.7.0);
   [ADR-0011](../../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md) and its decisions D10 and D11;
-  the Płacuję feedback on 0.6.0, item 8 ("one kit path", `dev/scratch/2026-11-04-placuje-feedback-0.6.0.md`); the kit
+  the Pilot feedback on 0.6.0, item 8 ("one kit path", `dev/scratch/2026-11-04-pilot-feedback-0.6.0.md`); the kit
   baseline run G3-01 of 2026-11-01; the Claude Code guidance on skills (SKILL.md is the overview and points to files read
   when needed; under 500 lines; about 1,500 to 2,000 words for the core).
 
 ## Why
 
-### Two kits on Płacuję
+### Two kits on Pilot
 
-Płacuję has two brand kits that do the same job:
+Pilot has two brand kits that do the same job:
 
-| | Hand-made `skill/placuje/` | Generated `.claude/skills/placuje-brand/` |
+| | Hand-made `skill/pilot/` | Generated `.claude/skills/pilot-brand/` |
 | --- | --- | --- |
 | Made by | hand, refreshed by its own `scripts/sync.py` | `brand-creator kit build` |
 | Checked by | its own `scripts/check.py` | `brand-creator kit check` and `check` |
@@ -30,9 +30,9 @@ chose one kit, the generated one, and asked for the hand-made kit's good feature
 the generator").
 
 Moving now is cheap: no product repository carries either kit yet (BRAND-STATE.md, 2026-10-26: "No repository has it
-yet"; no `.claude/skills/placuje*` folder under `~/Dev` outside the brand project, searched 2026-11-09). The read-only
-mirror `inewi/brand-placuje` tells its readers to install with `skill/placuje/scripts/install.sh`
-(`placuje/README.md`, "The skill: using the brand in other projects"), so those readers need a new route.
+yet"; no `.claude/skills/pilot*` folder under `~/Dev` outside the brand project, searched 2026-11-09). The read-only
+mirror `inewi/brand-pilot` tells its readers to install with `skill/pilot/scripts/install.sh`
+(`pilot/README.md`, "The skill: using the brand in other projects"), so those readers need a new route.
 
 ### What the hand-made kit does that the generated one does not
 
@@ -59,7 +59,7 @@ Checked against both kits and the plugin's code on 2026-11-09:
 
 Not features to carry over: the hand-made kit's `--global` install (the owner, 2026-10-26: "nie chce żeby to był globalny
 skill… ma się instalować per projekt"; ADR-0011 refuses a global copy too), its `examples/` screenshots (the generated
-kit carries the masters' pictures and the reference pages' stills), and its Płacuję content (voice, components, code
+kit carries the masters' pictures and the reference pages' stills), and its Pilot content (voice, components, code
 snippets), which is the brand's, not the plugin's (Part B).
 
 ### What the generated kit already does better
@@ -79,7 +79,7 @@ recipes above are what remains of that gap.
 1. One kit per brand, the generated one, with what made the hand-made kit work: a short entry page with steps and a map,
    a review checklist, recipes for the masters, and updates that reach product repositories.
 2. A product repository gets the kit and its updates without copying file by file: an installer the kit carries (A5).
-3. Płacuję moves its content into the generated kit and retires `skill/placuje/` (Part B, in the Płacuję session).
+3. Pilot moves its content into the generated kit and retires `skill/pilot/` (Part B, in the Pilot session).
 
 ## Non-goals
 
@@ -130,7 +130,7 @@ Only the kit's `SKILL.md` changes; a project without a kit keeps today's applied
     `voice.md`, `checklist.md`, `EXTENDING.md`, `kit.json`. It names no file the owner added (as today).
 - A new generated file, `brand.md`, at the top of the kit, holds what moves out: Colour (the colours, the pairs and the
   grounds), Type, Layout, Mark (with the size bands), Motion and What may be claimed, in today's words.
-- On Płacuję this takes `SKILL.md` from 3,812 words to about 1,500 and puts about 2,100 in `brand.md`.
+- On Pilot this takes `SKILL.md` from 3,812 words to about 1,500 and puts about 2,100 in `brand.md`.
 
 ### A2. A review checklist from the rules
 
@@ -160,7 +160,7 @@ kind `ad`, and `recipes/presentation.md` when it lists one of kind `slide`, `dec
   the copy from `facts.json` and the copy rules; nothing outside the canvas and no text covered; a PowerPoint deck is
   checked in PowerPoint, never Keynote. One fill marker: when to use which direction.
 - `kit.json` `owned` lists the five files plus the scaffolds the masters call for.
-- A brand whose masters have no `masters.json` (masters placed by hand, as Płacuję's) gets no scaffold.
+- A brand whose masters have no `masters.json` (masters placed by hand, as Pilot's) gets no scaffold.
 
 ### A4. Updates reach owner files a repository never changed
 
@@ -208,10 +208,10 @@ flow), and a plugin command `kit install --repo` (still needs the plugin).
 ### A6. A second skill for the same brand
 
 `kit status` (and `install.py`) warns when the repository's `.claude/skills/` holds another skill folder whose `SKILL.md`
-front matter (`name` or `description`) names the brand, such as `placuje/` beside `placuje-brand/`: Claude may load
+front matter (`name` or `description`) names the brand, such as `pilot/` beside `pilot-brand/`: Claude may load
 either. Read only; taking the old one out is the owner's call.
 
-## Part B: Płacuję, in its own session after 0.11.0
+## Part B: Pilot, in its own session after 0.11.0
 
 1. Update the plugin to 0.11.0, run `check --refresh` (the reports still carry plugin 0.7.0), and build the kit.
 2. Fix the print templates added on 2026-11-08 (`assets/masters/druki/`, not committed yet). `email-signature.html` has
@@ -225,7 +225,7 @@ either. Read only; taking the old one out is the owner's call.
      and the hand-made `web-page` merged into the generated one;
    - `references/components.md` and `references/motion.md` into a folder of the owner's (for example `guides/`);
    - `references/voice.md` and `references/visual.md` into `voice.md` and `visual.md`; the ten golden rules into
-     `golden-rules.md`; the review checklist's Płacuję-only items into `golden-rules.md`;
+     `golden-rules.md`; the review checklist's Pilot-only items into `golden-rules.md`;
    - the snippets `guma-bar.css`, `status.html`, `reveal-once.js` and `sample-data.md` into a folder of the owner's (for
      example `code/`), with links that resolve inside the kit (`logo-theme.html`, `fonts.css` and `on-brand-ground.css`
      have generated equivalents);
@@ -235,8 +235,8 @@ either. Read only; taking the old one out is the owner's call.
    Measured with the plugin's own functions on 2026-11-09: 111 bullets without a tag and 113 lines with a value and no
    citation across those files. That rewrite is the cost; `kit check` then keeps them honest.
 4. `kit check` passes; the owner reads the kit.
-5. Retire `skill/placuje/` (the owner runs the command) and rewrite the README section "The skill: using the brand in
-   other projects" for the new installer. The skill's name changes from `placuje` to `placuje-brand` (`/placuje-brand`).
+5. Retire `skill/pilot/` (the owner runs the command) and rewrite the README section "The skill: using the brand in
+   other projects" for the new installer. The skill's name changes from `pilot` to `pilot-brand` (`/pilot-brand`).
 
 ## Decided by the owner
 
@@ -252,7 +252,7 @@ either. Read only; taking the old one out is the owner's call.
   list stay, because they are the ones a piece breaks.
 - The names `brand.md`, `checklist.md` and `install.py`, all at the top of the kit.
 - The masters scaffolds follow `masters.json` kinds; a brand without `masters.json` gets none.
-- `reveal-once.js`, the Guma bar and the status pills stay Płacuję's: "play once per session" and the pill design are
+- `reveal-once.js`, the Guma bar and the status pills stay Pilot's: "play once per session" and the pill design are
   the brand's choices, not rules every brand has.
 - The second-skill warning (A6).
 
@@ -268,6 +268,6 @@ The template layout (one applied-skill template for both cases, or a kit templat
 `kit status` and `install.py`, the exact checklist wording, the tests, and the docs: ADR-0014, the "kit" section of
 `scripts/CONTRACT.md`, the manual page `docs/manual/use/use-your-brand-kit.md`, the `templates/kit/EXTENDING.md` scaffold
 (new files, the update rule), `brand-adopt` and `agents/brand-implementer.md`, and the CHANGELOG. Calibration: a scratch
-copy of Płacuję, built on 0.11.0, with the words of `SKILL.md` and `brand.md` measured against A1, `kit check` run, and
+copy of Pilot, built on 0.11.0, with the words of `SKILL.md` and `brand.md` measured against A1, `kit check` run, and
 `install.py` used on a scratch repository: install, an owner file changed in the project, update, then a repository edit
 kept.

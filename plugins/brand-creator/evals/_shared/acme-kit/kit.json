@@ -4,7 +4,7 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.11.2",
-  "content_sha": "f199770abc449f28560ffbaae7fd2ca500e97ffaeba3db00341b4fc0bf96a033",
+  "content_sha": "0d905473b39f2b0d122c0cf0ceddb15bf89eb591caa4184b4282bfd0d43ac801",
   "generated": {
     "SKILL.md": "8de704cf162db3980f531145644e2a9b3f713e5d768407b3aa7d6f5ba3d6aade",
     "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
@@ -20,7 +20,7 @@
     "brand/assets/tokens/tokens.json": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
     "checklist.md": "c68eebe817da87c1c5c088f65119b9d907d123174b71d5a4f9bbdfc3ecb9b4a3",
     "facts.json": "15ab8ad3e2caa901c0b2bd94e9106fcbe2caa4f1097ada18ce35f1294b8ae924",
-    "install.py": "3ae98ee5b1c65387794f5622f5161cf58c6bd22ac7b97a66eb320756ebdc204d",
+    "install.py": "2db3661c2afab9d3d13d466429200f1a9e9ebb3ef050055eb471e94077c7a976",
     "rules.json": "8d05bfc7947b843ace2544184d8864a77f65744fb054837ee7b5bd8e6537678a",
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
