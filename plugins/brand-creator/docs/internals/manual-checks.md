@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-09, 0.11.1, the release commit's tree (Linux: the touched tests only, the owner's call) | passed |
+| [Release run](#release-run) | 2026-11-10, 0.11.2, the release commit's tree, with the denylist | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -427,7 +427,16 @@ reports `fail 0`, both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the 
 Docker run ends with `LINUX RUN OK`, its pytest without the denylist skip. Record the version, the commit, the date and the counts here before
 tagging.
 
-**Last run:** 2026-11-09, brand-creator 0.11.1, macOS 27.3, on the release commit's tree (commit a1fb2fc; only this record
+**Last run:** 2026-11-10, brand-creator 0.11.2, macOS 27.3, on the release commit's tree (commit bb62161; only this record
+differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3491 passed and nothing skipped (the anonymisation test ran), node 249
+pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 24
+minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3440
+passed, 51 expected skips), node (249 pass) and the smoke, in 19 minutes on 12 workers. The first Mac run, on commit
+779f4a4, failed `test_anonymisation`: the first scan with the denylist since 0.9 found the pilot brand's name in 12 shipped
+files (in the releases since 0.10.0) and other private terms in one dev spec. Commit bb62161 takes them out; the
+releases already published keep them (the owner's call: fix forward).
+
+The 0.11.1 run: 2026-11-09, brand-creator 0.11.1, macOS 27.3, on the release commit's tree (commit a1fb2fc; only this record
 differs): pytest 3471 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
 Linux ran only the tests the release touches, by the owner's decision (a full Linux run takes about 20 minutes): in the
 Docker image, after `setup --yes`, `tests/test_kit.py`, `tests/test_kitcopy.py`, `tests/test_site_board.py` and
