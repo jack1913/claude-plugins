@@ -35,9 +35,15 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   unknown part, or a choice that runs nothing, is a usage error (exit 2).
 - `ACME_SMOKE_PART=finish` (or `rest`) runs one half of the Acme smoke, as each macOS smoke job does: the build up to the
   frozen round, then `tools/finish.sh` alone, or every section after it. The default, `all`, runs both.
-- pytest runs on one worker per CPU core (`BRAND_CREATOR_TEST_WORKERS` sets another number) with `--dist worksteal`, so a
-  block of long tests never waits on one worker (the suite takes under half the time it took with the default `load`). Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
+- pytest runs on one worker per CPU core, in Docker too (`BRAND_CREATOR_TEST_WORKERS` sets another number), with `--dist
+  worksteal`, so a block of long tests never waits on one worker (the suite takes under half the time it took with the
+  default `load`). Two per core helps the page-check tests alone, which mostly wait for their page, but overloads the
+  machine in a full run. Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
   (pytest-timeout from `tests/requirements.txt`); a node test has 180 s. A hung test fails by name.
+- `node --test` runs the files side by side and the tests of one file one after another, so the slowest file sets the
+  end of the node run. Keep a file under about a minute and a half: split a longer one by what it tests, with its shared
+  helpers in a `_<name>.mjs` module (`_capture.mjs`, `_edges.mjs`, `_motion.mjs`), and point the citations of
+  `09-qa.md` at the new file.
 - The test tools are pinned, with every package they need, in `tests/requirements.txt`, compiled by uv from
   `tests/requirements.in` (the command is in both files).
 - Mutation tests prove each gate by breaking a scratch copy.
@@ -66,10 +72,10 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   last three runs. node:test and the smokes delete theirs only after a passing run; any other run keeps it, and a failing
   run prints where. node:test treats its temporary projects the same way.
 
-A quicker pytest-only run, without the smokes:
+A quicker pytest-only run, without node:test and the smokes:
 
 ```bash
-uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4 --dist worksteal
+BRAND_CREATOR_TEST_PARTS=pytest tests/run-all.sh
 ```
 
 ## Run Linux in Docker

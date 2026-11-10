@@ -89,17 +89,16 @@ def test_the_standard_chain_runs_profiles_print_posts_book_and_press_kit_in_orde
               "tierb:labels", "tierb:profiles"):
         assert ids.get(k) == "pass", (k, ids.get(k))
     assert rep["status"] == "pass"
-    # the chain is what the owner runs again after every change: a second run must pass too (a book built before the gates would be stale by now)
-    r2 = run(fin, tmp_path, TAGLINE=TAG, PRINT_REGION="EU", IMAGE_BASE_URL="https://img.example.com/brand", POST_FACTS="spare parts;repair guide;batch size")
-    assert r2.returncode == 0 and "check: PASS" in r2.stdout + r2.stderr, (r2.stdout + r2.stderr)[-3000:]
-    # a fact edited after the last lint: board-lint lists FACTS.md as an input, so its report is stale until the chain lints the board again (check would be not verified)
+    # the chain is what the owner runs again after every change, here a fact edited after the last lint: board-lint lists FACTS.md as an input, so its report is
+    # stale until the chain lints the board again (check would be not verified). The second run must pass (a book built before the gates would be stale by now)
+    # and lint the board again. One run proves both: a third chain run would cost two minutes and prove nothing more.
     linted = report(acme, "board-lint")["inputs_sha"]
     mutate(acme / "FACTS.md", "| status | the online shop is in development |", "| status | the online shop is open |")
     assert bc("check", project=acme).returncode != 0
     lint_row = next(x for x in report(acme, "check")["results"] if x["id"] == "report:board-lint")
     assert lint_row["status"] == "skipped" and "stale (FACTS.md changed)" in lint_row["detail"] and report(acme, "board-lint")["inputs_sha"] == linted, lint_row   # not verified until it is linted again
-    r3 = run(fin, tmp_path, TAGLINE=TAG, PRINT_REGION="EU", IMAGE_BASE_URL="https://img.example.com/brand", POST_FACTS="spare parts;repair guide;batch size")
-    assert r3.returncode == 0 and "check: PASS" in r3.stdout + r3.stderr, (r3.stdout + r3.stderr)[-3000:]
+    r2 = run(fin, tmp_path, TAGLINE=TAG, PRINT_REGION="EU", IMAGE_BASE_URL="https://img.example.com/brand", POST_FACTS="spare parts;repair guide;batch size")
+    assert r2.returncode == 0 and "check: PASS" in r2.stdout + r2.stderr, (r2.stdout + r2.stderr)[-3000:]
     assert report(acme, "board-lint")["inputs_sha"] != linted, "the chain did not lint the board again after the fact changed"
 
 

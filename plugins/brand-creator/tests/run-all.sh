@@ -46,8 +46,10 @@ has() { case "$parts" in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 rc=0
 ran=0
 if has pytest; then
-  # pytest-xdist spreads the tests over worker processes (BRAND_CREATOR_TEST_WORKERS, default auto: one per CPU core; 0 runs them in one process);
-  # worksteal moves waiting tests to idle workers, so a block of long tests never ends up queued on one worker
+  # pytest-xdist spreads the tests over worker processes (BRAND_CREATOR_TEST_WORKERS, default auto: one per CPU core; 0 runs them in one process; empty
+  # is the default). Two per core sped up test_page_check.py alone (144 s -> 110 s on 12 cores) but drove a full run to a load of 236, with the
+  # chain and emitter tests starting Chromium on every worker. worksteal moves waiting tests to idle workers, so a block of long tests never ends up
+  # queued on one worker
   uv run --no-project --with-requirements tests/requirements.txt python -m pytest ${files[@]+"${files[@]}"} $([ ${#files[@]} = 0 ] && echo tests) -q -n "${BRAND_CREATOR_TEST_WORKERS:-auto}" --dist worksteal || rc=1
   ran=1
 fi

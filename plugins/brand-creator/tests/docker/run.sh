@@ -9,7 +9,7 @@
 #   BRAND_CREATOR_DOCKER_DATA=<host dir>   keep the data directory (npm packages, Chromium) on the host between runs
 #                                          (default: inside the container, so every run tests `brand-creator setup` from scratch)
 #   BRAND_CREATOR_DENYLIST=<host file>     the anonymisation denylist (never shipped); mounted read-only so test_anonymisation runs
-#   BRAND_CREATOR_TEST_WORKERS=<n>         pytest-xdist workers inside the container (default 4)
+#   BRAND_CREATOR_TEST_WORKERS=<n>         pytest-xdist workers inside the container (default one per CPU the container has)
 #   BRAND_CREATOR_TEST_PARTS=<parts>       run only these parts: pytest, node, smoke, comma-separated (default all; CI runs one per job)
 #   BRAND_CREATOR_TEST_FILES="<files>"     run only these pytest files (tests/test_<name>.py, space-separated): the tests a change touches,
 #                                          with BRAND_CREATOR_TEST_PARTS=pytest; a release runs them all
@@ -42,7 +42,7 @@ fi
 
 # --init: a real PID 1 that passes signals on and reaps orphans; --ipc=host: Chromium needs more shared memory than Docker's default (Playwright's Docker guidance)
 args=(--rm --init --ipc=host ${platform[@]+"${platform[@]}"} -v "$ROOT":/src:ro -v "$WORKFLOW":/src-ci/brand-creator.yml:ro -v "$MARKET":/src-ci/marketplace.json:ro
-      -e BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-4}" -e BRAND_CREATOR_TEST_PARTS="${BRAND_CREATOR_TEST_PARTS:-}"
+      -e BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-}" -e BRAND_CREATOR_TEST_PARTS="${BRAND_CREATOR_TEST_PARTS:-}"
       -e BRAND_CREATOR_SUITE_MINUTES="${BRAND_CREATOR_SUITE_MINUTES:-45}" -e BRAND_CREATOR_TEST_FILES="${BRAND_CREATOR_TEST_FILES:-}")
 if [ -n "${BRAND_CREATOR_TEST_OUT:-}" ]; then
   mkdir -p "$BRAND_CREATOR_TEST_OUT"

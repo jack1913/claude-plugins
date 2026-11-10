@@ -45,13 +45,16 @@ rc=$?
 set -e
 [ "$rc" = 0 ] || [ "$rc" = 3 ] || { echo "prereq exited $rc" >&2; exit 1; }
 python3 - "$PLUGIN" "$DATA" <<'PY'
-import json, subprocess, sys
+import json, os, subprocess, sys
 r = subprocess.run([sys.argv[1] + "/bin/brand-creator", "--data", sys.argv[2], "prereq", "--for", "full", "--json"], capture_output=True, text=True)
 d = json.loads(r.stdout)
 missing = sorted(i["id"] for i in d["items"] if i["status"] == "MISSING")
 assert d["os"] == "linux", d["os"]
-assert missing == ["chromium", "xcode"], f"only chromium (before setup) and xcode may be MISSING on Linux, got {missing}"
-print("   ok: MISSING before setup =", missing)
+# a data directory kept from an earlier run (BRAND_CREATOR_DOCKER_DATA) is set up already, so Chromium is there: only xcode may be missing then
+kept = os.path.isfile(os.path.join(sys.argv[2], "setup.json"))
+want = ["xcode"] if kept else ["chromium", "xcode"]
+assert missing == want, f"only {' and '.join(want)} may be MISSING on Linux{' (data directory set up by an earlier run)' if kept else ' before setup'}, got {missing}"
+print("   ok: MISSING", "with the kept data directory =" if kept else "before setup =", missing)
 PY
 
 step "setup --yes (npm ci, Chromium headless shell into the data directory, uv environments, browser self-test)"
@@ -66,7 +69,8 @@ PY
 
 step "tests/run-all.sh --smoke (parts: ${BRAND_CREATOR_TEST_PARTS:-all}; no BRAND_CREATOR_REQUIRE_ALL: macOS-only tests must report NOT VERIFIED)"
 export BRAND_CREATOR_DATA="$DATA"
-export BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-4}"
+# unset or empty: tests/run-all.sh runs one worker per CPU of the container (test_page_check.py on 12 CPUs: 237 s on the old 4 workers, 121 s on 12)
+export BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-}"
 export ACME_SMOKE_DIR=/work/acme-smoke
 export PYTEST_ADDOPTS="-rs --durations=25 ${PYTEST_ADDOPTS:-}"   # the 25 slowest tests are printed in every run: where the time goes
 if [ -d /out ]; then
