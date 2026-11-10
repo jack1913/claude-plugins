@@ -299,3 +299,58 @@ def test_a_planted_temporary_name_is_never_written_through(tmp_path):
     make_fake_kit(kit, {**GEN, "SKILL.md": b"# Acme brand\nversion two\n"}, {"recipes/ad.md": b"ad"}, version="1.2")
     assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
     assert victim.read_text(encoding="utf-8") == "keep me\n" and (kd / "SKILL.md").read_bytes() == b"# Acme brand\nversion two\n"
+
+
+# ---------------------------------------------------------------- 0.11.2: the deferred minors of the 0.11.0 review
+
+import os  # noqa: E402
+import stat  # noqa: E402
+
+
+def test_installed_files_get_the_permissions_of_a_new_file_and_keep_an_executable_bit(tmp_path):
+    kit = project_kit(tmp_path)
+    (kit / "snippets" / "logo.html").chmod(0o755)                                              # an executable file of the kit stays executable
+    repo = git_repo(tmp_path)
+    old = os.umask(0o022)
+    try:
+        assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
+    finally:
+        os.umask(old)
+    kd = repo / ".claude" / "skills" / "acme-brand"
+    modes = {p.relative_to(kd).as_posix(): stat.S_IMODE(p.stat().st_mode) for p in kd.rglob("*") if p.is_file()}
+    assert modes.pop("snippets/logo.html") == 0o755, modes
+    assert modes and set(modes.values()) == {0o644}, modes                                    # never owner-only (mkstemp's 0600): a teammate's checkout reads them
+
+
+def test_a_move_aside_that_fails_stops_with_a_kit_error_naming_the_file_never_a_traceback(tmp_path, monkeypatch):
+    kit = project_kit(tmp_path)
+    repo = git_repo(tmp_path)
+    assert kitcopy._install(kit, str(repo), True, False, TODAY) == 0
+    (repo / ".claude/skills/acme-brand/brand/old.svg").write_text("<svg/>", encoding="utf-8")   # left over: moved aside to removed-<date>/
+
+    def gone(src, dst, *a, **k):                                                                   # another install moved it meanwhile
+        raise FileNotFoundError(2, "No such file or directory", src)
+    monkeypatch.setattr(shutil, "move", gone)
+    with pytest.raises(kitcopy.KitError) as e:
+        kitcopy._install(kit, str(repo), True, False, TODAY)
+    assert e.value.code == kitcopy.EXIT_FAIL, e.value.message
+    assert ".claude/skills/acme-brand/brand/old.svg" in e.value.message and "No such file or directory" in e.value.message, e.value.message
+    assert "run it again" in e.value.message, e.value.message
+
+
+def test_the_brand_is_a_whole_word_in_any_spelling_also_in_a_description_over_several_lines(tmp_path):
+    skills = tmp_path / ".claude" / "skills"
+    skill(skills / "plain", "plain", "Applies the Placuje brand to slides.")                            # written without its accents
+    (skills / "block").mkdir(parents=True)
+    (skills / "block" / "SKILL.md").write_text("---\nname: block\ndescription: >-\n  Applies the house style of\n  PŁACUJĘ to every page.\n---\n\n# x\n",
+                                               encoding="utf-8")                                          # a YAML block, in capitals
+    (skills / "wrapped").mkdir(parents=True)
+    (skills / "wrapped" / "SKILL.md").write_text("---\nname: wrapped\ndescription: Applies the house style\n  of Płacuję to every page.\n---\n\n# x\n",
+                                                 encoding="utf-8")                                        # a plain value that goes on to the next line
+    skill(skills / "placuje-brand", "placuje-brand", "Applies the Płacuję brand.")                       # the kit itself
+    assert kitcopy.other_brand_skills(skills, "placuje-brand", "Płacuję") == ["block", "plain", "wrapped"]
+    short = tmp_path / "short" / ".claude" / "skills"
+    skill(short / "spacecraft", "spacecraft", "Draws spacecraft and places them.")                       # "ace" inside other words is not the brand
+    skill(short / "notes", "ace-notes", "Notes.")                                                         # a whole word of the name is
+    skill(short / "body", "body", "Writes copy for Ace.")
+    assert kitcopy.other_brand_skills(short, "ace-brand", "Ace") == ["body", "notes"]

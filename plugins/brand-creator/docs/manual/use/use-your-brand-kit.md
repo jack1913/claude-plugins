@@ -225,6 +225,8 @@ Under "kit copies", each website or app reads:
 For the detail, ask Claude to check the copy in that folder. It only reads, and names the files that differ, are
 missing or are left over, and what to copy. A file of yours that the code never changed is updated when you change it in
 your brand project. One someone changed in that code, or added there, belongs to that code now, and an update keeps it.
+A copy updated with brand-creator 0.10 or earlier is the exception: a file of yours that the update left at an older
+version counts as changed there, so updates keep it too. To take your brand's version, copy that file from the kit by hand.
 
 The check also warns when that code holds another skill for your brand, such as an older hand-made kit: Claude may load
 either. Taking the old one out is your call.

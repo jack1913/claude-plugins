@@ -377,18 +377,44 @@ def brand_name(kit: Path) -> str | None:
     return m.group(1).strip() if m else None
 
 
-def _folded(text: str) -> str:
+_BARE = str.maketrans({"ł": "l", "đ": "d", "ø": "o", "ı": "i", "æ": "ae", "œ": "oe", "þ": "th", "ð": "d"})   # letters whose accent is no combining mark
+
+
+def _loose(text: str) -> str:
+    """`text` as a brand name is compared: case folded, without accents (Placuje is Płacuję) and with its spaces collapsed."""
     import unicodedata
-    return unicodedata.normalize("NFC", text).casefold()
+    bare = "".join(c for c in unicodedata.normalize("NFKD", text.casefold()) if not unicodedata.combining(c))
+    return " ".join(bare.translate(_BARE).split())
+
+
+def _front_values(head: list[str], keys: tuple[str, ...]) -> list[str]:
+    """The values of `keys` in the front matter lines `head`, each with the lines that go on below it (indented: a YAML block, or a plain value
+    over several lines), joined by spaces."""
+    import re
+    found: dict[str, list[str]] = {}
+    key = None
+    for line in head:
+        m = re.match(r"([A-Za-z_][\w-]*):(.*)$", line)
+        if m:
+            key = m.group(1) if m.group(1) in keys else None
+            if key:
+                found[key] = [m.group(2)]
+        elif key and line[:1] in (" ", "\t"):
+            found[key].append(line)
+        else:
+            key = None
+    return [" ".join(v) for v in found.values()]
 
 
 def other_brand_skills(skills_dir: Path, kit_name: str, brand: str) -> list[str]:
     """The folders of `skills_dir` (a repository's .claude/skills/), other than the kit's own, whose SKILL.md front matter names the brand in its `name:` or `description:` line:
-    another skill Claude may load for the same brand (a hand-made kit, say). Compared after NFC normalisation and case folding. A link, a folder without a plain SKILL.md
-    and an unreadable one are never read. Sorted folder names."""
+    another skill Claude may load for the same brand (a hand-made kit, say). The brand is looked for as a whole word, case folded and without accents (`_loose`), in
+    the whole value, also when it goes on over several lines (`_front_values`). A link, a folder without a plain SKILL.md and an unreadable one are never read. Sorted
+    folder names."""
     if not os.path.isdir(skills_dir) or os.path.islink(skills_dir):
         return []
-    want, out = _folded(brand), []
+    import re
+    want, out = re.compile(rf"(?<![^\W_]){re.escape(_loose(brand))}(?![^\W_])"), []   # a letter or digit on either side: another word
     for entry in sorted(os.listdir(skills_dir)):
         folder = skills_dir / entry
         if entry == kit_name or folder.is_symlink() or not folder.is_dir():
@@ -404,7 +430,7 @@ def other_brand_skills(skills_dir: Path, kit_name: str, brand: str) -> list[str]
             if line.strip() == "---":
                 break
             head.append(line)
-        if any(line.split(":", 1)[0].strip() in ("name", "description") and want in _folded(line.split(":", 1)[1]) for line in head if ":" in line):
+        if any(want.search(_loose(value)) for value in _front_values(head, ("name", "description"))):
             out.append(entry)
     return out
 
@@ -614,8 +640,14 @@ def apply(kit: Path, root: Path, res: dict, today: str) -> list[str]:
     if moving:
         for rel in moving:
             dest = base / kd_rel / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(kd / rel), str(dest))
+            try:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(kd / rel), str(dest))
+            except OSError as e:                                            # another install at the same time, a folder that cannot be written
+                raise KitError(EXIT_FAIL, f"cannot move {kd_rel}/{rel} aside into {base.name}/: {e.strerror or e}. The files before it are moved aside and nothing "
+                                          "of the kit is written yet: run it again once this is fixed (is another install running?)") from None
+    umask = os.umask(0)
+    os.umask(umask)
     for rel in res["copy"]:
         data, why = read_plain(kit, rel)
         if why:
@@ -627,6 +659,8 @@ def apply(kit: Path, root: Path, res: dict, today: str) -> list[str]:
             try:
                 with os.fdopen(fd, "wb") as fh:
                     fh.write(data)
+                executable = os.lstat(kit / rel).st_mode & 0o111
+                os.chmod(tmp, (0o777 if executable else 0o666) & ~umask)   # what a new file gets, never mkstemp's owner-only 0600
                 os.replace(tmp, dest)
             except BaseException:
                 if os.path.lexists(tmp):

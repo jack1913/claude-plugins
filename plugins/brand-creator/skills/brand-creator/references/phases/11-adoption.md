@@ -107,7 +107,8 @@ push are separate asks. The survey and `adoption add` do not touch a repository 
 - `adoption verify` and `check` (`adoption:data`): the pins, the numbering, the accounting and that ADOPTION.md is what adoption.json renders.
 - `check --cascade "<old name>"` treats the adoption rows as the work list (a warning), not as a leftover.
 - A Brand kit row is proved by `kit status --repo <path>` (read only, writes nothing in the repository): exit 0 means every
-  generated file of the copy is the project's bytes; the owner files are the repository's and are never overwritten.
+  generated file of the copy is the project's bytes; an owner file the repository changed or added is the repository's and is
+  never overwritten, and one it never changed is updated with the kit (ADR-0014).
 - A redesign's wiring is recorded by `adoption wiring` (read only, and it proves it: `read-only:<label>`). `--compare` exits 1 on a loss nobody
   dropped with a reason, a review with such a loss fails, and `check` fails a recorded `--after` that lost wiring nobody dropped
   (`adoption:wiring:<label>`). The record is not proof that the site works: the repository's own build and tests stay the proof.

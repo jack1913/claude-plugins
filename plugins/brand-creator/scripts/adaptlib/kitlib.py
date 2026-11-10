@@ -1353,7 +1353,8 @@ def section(version: str) -> str:
     """The kit section of SKILL.md (the template's {{kit}}): the version line and what the folder is. The files are listed in kit.json, never here."""
     return "\n".join(["## The kit", "", version_line(version), "",
                       "This folder is a brand kit and this skill is its core. `kit.json` lists every file with its hash. Never edit a generated file here: change the brand project "
-                      "and run `brand-creator kit build --yes` again. Your own files (`EXTENDING.md` says which) are never overwritten.", "",
+                      "and run `brand-creator kit build --yes` again. Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`; in a product "
+                      "repository, `install.py` updates one only while that repository has not changed it.", "",
                       "It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use "
                       "from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps."])
 

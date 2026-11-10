@@ -1738,7 +1738,7 @@ def test_the_first_build_scaffolds_the_owner_files_once(pack):
     assert not set(OWNER_FILES) & set(kj["generated"]) and not set(OWNER_FILES) & set(report(pack, "kit")["outputs"])    # not generated: check's kit:file never reads them
     assert owned_row(pack) == "5 owner files scaffolded this run, 0 kept as they are"
     skill = (kd / "SKILL.md").read_text(encoding="utf-8")
-    assert "Your own files (`EXTENDING.md` says which) are never overwritten." in skill
+    assert "Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`" in skill
     assert all(f"`{rel}`" in skill for rel in ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/"))      # the map names the owner's files (recipes/ as its folder)
     assert skill.index("## How to work") < skill.index("Your own files") < skill.index("## Map")
     # a second build has nothing to scaffold: the plan names none, and nothing is touched
@@ -5800,3 +5800,10 @@ def test_install_and_kit_status_warn_about_a_global_skill_for_the_brand(pack, tm
     assert "warning: ~/.claude/skills/acme/ is a global skill for Acme" in r.stdout, r.stdout + r.stderr
     plain = run_install_home(kit_of(pack) / INSTALL, repo, tmp_path / "nohome")              # no ~/.claude/skills at all: no warning
     assert "global skill" not in plain.stdout and json.loads(run_install_home(kit_of(pack) / INSTALL, repo, tmp_path / "nohome", "--json").stdout)["global_skills"] == []
+
+
+def test_the_kit_text_says_kit_build_never_overwrites_the_owners_files_and_install_updates_only_unchanged_ones():
+    text = kitlib.section("1.0")
+    assert "are never overwritten." not in text                                                # since 0.11.0 install.py updates the unchanged ones
+    assert "Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`" in text, text
+    assert "`install.py` updates one only while that repository has not changed it" in text, text

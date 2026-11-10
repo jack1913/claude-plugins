@@ -3,10 +3,10 @@
   "kit": "acme-brand",
   "version": "1.2",
   "edition": "1",
-  "plugin_version": "0.11.1",
-  "content_sha": "c31fbc7bea7045668b1d1d59a6c4202669ce42ade1aa5719144a88b9a3867eec",
+  "plugin_version": "0.11.2",
+  "content_sha": "f199770abc449f28560ffbaae7fd2ca500e97ffaeba3db00341b4fc0bf96a033",
   "generated": {
-    "SKILL.md": "102c559ffd0327ec3c9d3593654c5243eb66ec09566642a373aa2ffb4e6553f9",
+    "SKILL.md": "8de704cf162db3980f531145644e2a9b3f713e5d768407b3aa7d6f5ba3d6aade",
     "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
     "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
     "brand/assets/logo/grid-mark-master.png": "5cc76acd488c20da7a3cda17360ff6db0222f5bd5b44089ab25597c296886654",
@@ -20,7 +20,7 @@
     "brand/assets/tokens/tokens.json": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
     "checklist.md": "c68eebe817da87c1c5c088f65119b9d907d123174b71d5a4f9bbdfc3ecb9b4a3",
     "facts.json": "15ab8ad3e2caa901c0b2bd94e9106fcbe2caa4f1097ada18ce35f1294b8ae924",
-    "install.py": "db956950e00b91ea5dbb52828c20f80b47c46c63a3a0e8dba7031bdc3517473d",
+    "install.py": "3ae98ee5b1c65387794f5622f5161cf58c6bd22ac7b97a66eb320756ebdc204d",
     "rules.json": "8d05bfc7947b843ace2544184d8864a77f65744fb054837ee7b5bd8e6537678a",
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },

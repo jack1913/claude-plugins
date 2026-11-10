@@ -6,10 +6,25 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-11-10
+
+Fixes left over from the 0.11.0 review, and a clearer message after a plugin update.
+
 ### Changed
 
 - After a plugin update, the check's out-of-date rows for the plugin version, its code or a changed input now name
   the command that fixes them, `bash tools/finish.sh`, when your brand project has it.
+
+### Fixed
+
+- `install.py` writes the kit's files with normal permissions, so everyone who checks out the repository can read
+  them. Before, they were readable by their owner only.
+- The warning about another skill for your brand no longer fires on the brand's letters inside another word, such as
+  "Ace" in "spacecraft". It now also finds the brand written without its accents ("Placuje" for "Płacuję") and in a
+  description that goes over several lines.
+- Two installs running at the same time now stop with a message that names the file, instead of a Python error.
+- The kit's text, the manual and the adoption guide no longer say your own files in a product's copy are never
+  overwritten: since 0.11.0, a file of yours that the product never changed is updated.
 
 ## [0.11.1] - 2026-11-09
 
