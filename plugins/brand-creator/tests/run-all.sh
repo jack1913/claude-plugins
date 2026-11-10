@@ -68,9 +68,24 @@ if has node; then
   ran=1
 fi
 if [ "$smoke" = 1 ] && has smoke; then
-  bash tests/smoke/acme.sh || rc=1
-  # the Quick tier on a machine without the Apple tools and without git (its own project folder: QUICK_SMOKE_DIR)
-  bash tests/smoke/quick.sh || rc=1
+  # Three smoke runs side by side, each in a folder of its own (one after another they took about 10.5 minutes): the two halves of the Acme
+  # smoke (ACME_SMOKE_PART: each builds up to the frozen round, then finish runs tools/finish.sh and rest every other section) and the Quick
+  # tier on a machine without the Apple tools and without git. Each log is printed whole once all three have ended, then one line with the
+  # three exit codes; a run that fails fails run-all, and the others still end. Stopping run-all stops all three.
+  acme_dir="${ACME_SMOKE_DIR:-${TMPDIR:-/tmp}/brand-creator-acme-smoke}"
+  logs="$(mktemp -d "${TMPDIR:-/tmp}/brand-creator-smoke-logs.XXXXXX")"
+  ACME_SMOKE_PART=finish ACME_SMOKE_DIR="$acme_dir-finish" bash tests/smoke/acme.sh > "$logs/finish.log" 2>&1 & p_finish=$!
+  ACME_SMOKE_PART=rest ACME_SMOKE_DIR="$acme_dir-rest" bash tests/smoke/acme.sh > "$logs/rest.log" 2>&1 & p_rest=$!
+  bash tests/smoke/quick.sh > "$logs/quick.log" 2>&1 & p_quick=$!   # its own project folder: QUICK_SMOKE_DIR
+  trap 'kill "$p_finish" "$p_rest" "$p_quick" 2>/dev/null; exit 143' TERM INT
+  rc_finish=0; wait "$p_finish" || rc_finish=$?
+  rc_rest=0; wait "$p_rest" || rc_rest=$?
+  rc_quick=0; wait "$p_quick" || rc_quick=$?
+  trap - TERM INT
+  cat "$logs/finish.log" "$logs/rest.log" "$logs/quick.log"
+  rm -rf -- "$logs"
+  echo "run-all.sh: smoke: acme finish exit $rc_finish, acme rest exit $rc_rest, quick exit $rc_quick"
+  [ "$rc_finish" = 0 ] && [ "$rc_rest" = 0 ] && [ "$rc_quick" = 0 ] || rc=1
   ran=1
 fi
 if [ "$ran" = 0 ]; then

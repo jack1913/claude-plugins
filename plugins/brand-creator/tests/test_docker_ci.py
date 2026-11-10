@@ -1,6 +1,7 @@
 """The Linux validation (tests/docker) and the CI workflow (.github/workflows/brand-creator.yml at the monorepo root): static checks of the files, and the log verifier on
 logs written by hand in the shape pytest, node:test and the smoke print. Nothing here starts Docker."""
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -112,6 +113,65 @@ def test_the_verifier_fails_on_everything_else(tmp_path, mutation, why):
     r = verify(tmp_path, bad)
     assert r.returncode == 1 and why in r.stderr, r.stdout + r.stderr
     assert verify(tmp_path, GOOD, rc=1).returncode == 1   # a non-zero exit of run-all.sh alone is a failure too
+
+
+HALVES = ("SMOKE PASSED (part finish: the shared build, then tools/finish.sh): Acme at /work/acme-smoke-finish/acme\n"
+          "SMOKE PASSED (part rest: the shared build, then every section but tools/finish.sh): Acme at /work/acme-smoke-rest/acme")
+
+
+def test_the_verifier_takes_both_halves_of_the_acme_smoke_together_as_the_whole_smoke_and_never_one_alone(tmp_path):
+    whole = "SMOKE PASSED: Acme at /work/acme-smoke/acme"
+    assert whole in GOOD
+    r = verify(tmp_path, GOOD.replace(whole, HALVES))                      # tests/run-all.sh runs the two halves side by side
+    assert r.returncode == 0 and "LINUX RUN OK" in r.stdout, r.stdout + r.stderr
+    for half in HALVES.split("\n"):
+        r = verify(tmp_path, GOOD.replace(whole, half))
+        assert r.returncode == 1 and "did not print SMOKE PASSED for the whole smoke" in r.stderr, r.stdout + r.stderr
+
+
+SMOKE_STUB = """#!/usr/bin/env bash
+# a stand-in for {name}: it waits until all three smoke runs have started, so a run of them one after another fails here
+me="{name}-${{ACME_SMOKE_PART:-all}}"
+touch "$STUB_DIR/started-$me"
+for _ in $(seq 1 150); do [ "$(ls "$STUB_DIR" | grep -c '^started-')" -ge 3 ] && break; sleep 0.1; done
+[ "$(ls "$STUB_DIR" | grep -c '^started-')" -ge 3 ] || {{ echo "SMOKE FAILED: $me ran alone" >&2; exit 1; }}
+echo "$me in ${{ACME_SMOKE_DIR:-}}${{QUICK_SMOKE_DIR:-}}"
+[ "${{STUB_FAIL:-}}" = "$me" ] && {{ echo "SMOKE FAILED: $me (stub)" >&2; exit 1; }}
+echo "PASSED $me"
+"""
+
+
+def run_smokes(tmp_path, **env):
+    import os
+    plugin = tmp_path / "plugin"
+    (plugin / "tests" / "smoke").mkdir(parents=True)
+    shutil.copy2(ROOT / "tests" / "run-all.sh", plugin / "tests" / "run-all.sh")
+    for name in ("acme", "quick"):
+        (plugin / "tests" / "smoke" / f"{name}.sh").write_text(SMOKE_STUB.format(name=name))
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    base = {k: v for k, v in os.environ.items() if k not in ("ACME_SMOKE_DIR", "QUICK_SMOKE_DIR", "ACME_SMOKE_PART")}
+    return subprocess.run(["bash", str(plugin / "tests" / "run-all.sh"), "--smoke"], capture_output=True, text=True, timeout=120,
+                          env={**base, "BRAND_CREATOR_TEST_PARTS": "smoke", "STUB_DIR": str(stubs), "ACME_SMOKE_DIR": str(tmp_path / "smk"), **env})
+
+
+def test_run_all_runs_both_halves_of_the_acme_smoke_and_the_quick_smoke_side_by_side_each_in_its_own_folder_and_prints_each_log_whole(tmp_path):
+    r = run_smokes(tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    smk = tmp_path / "smk"
+    lines = [f"acme-finish in {smk}-finish", "PASSED acme-finish", f"acme-rest in {smk}-rest", "PASSED acme-rest", "quick-all in ", "PASSED quick-all"]
+    at = [out.find(x) for x in lines]
+    assert -1 not in at and at == sorted(at), (at, out)                     # each log whole, in this order: finish, rest, quick
+    assert "smoke: acme finish exit 0, acme rest exit 0, quick exit 0" in out, out
+
+
+def test_a_smoke_run_that_fails_fails_run_all_and_the_others_still_end_and_are_printed(tmp_path):
+    r = run_smokes(tmp_path, STUB_FAIL="acme-rest")
+    out = r.stdout + r.stderr
+    assert r.returncode == 1, out
+    assert "SMOKE FAILED: acme-rest (stub)" in out and "PASSED acme-finish" in out and "PASSED quick-all" in out, out
+    assert "smoke: acme finish exit 0, acme rest exit 1, quick exit 0" in out, out
 
 
 def test_the_denylist_skip_is_expected_only_when_no_denylist_was_mounted(tmp_path):
