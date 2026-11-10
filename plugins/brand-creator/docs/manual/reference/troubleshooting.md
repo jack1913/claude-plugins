@@ -12,6 +12,7 @@ What you see, and what to do. Not sure what a message means? Show it to Claude a
 | `emit apple` needs macOS with Xcode | Apple packs are built on a Mac with Xcode. Everything else works on Linux too. Windows is untested |
 | A write to an earlier round or `history/` is blocked | That's the safety lock on finished rounds. Work in the latest round, or start a new one |
 | A Python tool won't start | Put a `python3` 3.10 or newer on PATH. The message lists every interpreter it tried |
+| After you update the plugin, `/brand-creator:check` fails `staleness:plugin-version` or `staleness:emitters` | Your brand's files were made by the older version. Ask Claude to run the chain again (`bash tools/finish.sh` in your brand folder): it makes them again and records them |
 
 ## Website references and reference pages
 

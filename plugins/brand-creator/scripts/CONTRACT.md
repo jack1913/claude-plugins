@@ -1390,7 +1390,9 @@ default), or "nothing moves", recorded once by the owner. Quick decides it at G4
 - `staleness`: `tools/inputs.json` records the sha256 of every upstream input (default globs `tokens/*.json`, `assets/logo/*.svg`,
   `assets/logo/*.png`, `qa/*.json`, `FACTS.md`, `INVENTORY.md`, `tray/*.json`, plus `BRAND.md` and `DESIGN.md` once they exist, extended with `--input`), the plugin version, the sha256 of the emitter code (`scripts/emitters/*.py`,
   `platform-specs.json`, `scripts/lib/*.py`) and needle sentences that must stay in sibling documents. `staleness --write` records after a
-  build; `staleness` flags any difference (exit 1); `check` runs the comparison whenever the file exists.
+  build; `staleness` flags any difference (exit 1); `check` runs the comparison whenever the file exists. A row for a changed input,
+  plugin version or emitter code says to run `bash tools/finish.sh` again when the project has that chain, else to rebuild the pack and
+  run `staleness --write`.
 - `specs-due` (needs no project): lists the platform-spec rows that are stale (`checked` older than `stale_after_days`, from
   `BRAND_CREATOR_TODAY` or today), that become stale within `--within` days, or are status U or R; `--fail-on-due` exits 1 on a stale row. A
   row's `checked` date records a person reading the source, never a script run.

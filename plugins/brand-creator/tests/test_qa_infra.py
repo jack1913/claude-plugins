@@ -373,6 +373,26 @@ def test_a_newer_plugin_or_changed_emitter_code_makes_the_pack_stale(acme, plugi
     assert r.returncode == 1 and "staleness:plugin-version" in failing(report(acme, "staleness"))
 
 
+def test_after_a_plugin_update_the_stale_rows_name_the_chain_that_rebuilds_the_pack_when_the_project_has_one(acme, plugin_copy):
+    bc("staleness", "--write", project=acme)
+    mutate(plugin_copy / "scripts/emitters/web.py", "def ", "def  ", 1)
+    mutate_json(plugin_copy / ".claude-plugin/plugin.json", lambda d: d.__setitem__("version", "9.9.9"))
+    (acme / "assets/logo/extra.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>')
+    bc("staleness", "--write", project=acme)
+    (acme / "assets/logo/extra.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path d="M0 0h2v2z"/></svg>')
+    stale = ("staleness:plugin-version", "staleness:emitters", "staleness:input:assets/logo/extra.svg")
+    assert not (acme / "tools/finish.sh").exists()
+    assert bc("staleness", project=acme, plugin=plugin_copy).returncode == 1
+    got = rows(acme, "staleness")
+    for row in stale:  # no chain in this project: the rows say what to do by hand
+        assert "`staleness --write`" in got[row]["detail"] and "finish.sh" not in got[row]["detail"], got[row]
+    (acme / "tools/finish.sh").write_text("#!/usr/bin/env bash\n")
+    assert bc("staleness", project=acme, plugin=plugin_copy).returncode == 1
+    got = rows(acme, "staleness")
+    for row in stale:
+        assert "`bash tools/finish.sh`" in got[row]["detail"], got[row]
+
+
 def test_needles_keep_a_sibling_documents_quoted_sentence_honest(acme):
     (acme / "README.md").write_text("The pack ships a 180 px touch icon\nfor home screens.\n")
     r = bc("staleness", "--write", "--needle", "README.md::The pack ships a 180 px touch icon for home screens.", project=acme)

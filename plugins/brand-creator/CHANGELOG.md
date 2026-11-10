@@ -6,6 +6,11 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Changed
+
+- After a plugin update, the check's out-of-date rows for the plugin version, its code or a changed input now name
+  the command that fixes them, `bash tools/finish.sh`, when your brand project has it.
+
 ## [0.11.1] - 2026-11-09
 
 Fixes from moving the pilot brand onto the generated kit.
