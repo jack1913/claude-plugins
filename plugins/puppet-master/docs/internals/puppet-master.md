@@ -83,8 +83,9 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
 - **No git worktrees.** Nothing calls `EnterWorktree` or `git worktree`, and `claude rm` never gets
   `--discard-unpushed` or `--force-remove-worktree`: if it refuses, the user decides.
 - **Compaction is measured and happens at task boundaries only.** Compact an idle session at 30% or more of its window
-  when the job continues; at 50% or more, ask a working session to stop at its next boundary; never compact mid-task;
-  a finished job is closed, never compacted. An automatic threshold that can fire mid-task is not the mechanism. A
+  when the job continues, measured on each relay of a working session's message and at each `FINAL:`; at 30% or more,
+  ask a working session to stop at its next boundary; never compact mid-task; a finished job is closed (or, in a
+  window whose mod is on, cleared), never compacted. The master's own line is 40%, then each further 20%. An automatic threshold that can fire mid-task is not the mechanism. A
   background worker is compacted by `compact` where its mod is on, else by `cycle`. A window the user opened has no
   remote stop and a message cannot compact it, so, where its mod is not on, the master lets its auto-compaction run
   (2026-11-01: four hand-pasted `/compact` lines were the user's chore, while two auto-compactions did no harm) and
@@ -113,7 +114,9 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   17 and 32 minutes while the master looked elsewhere; so the master also runs `list` before each reply and leads with a
   `waiting` session.
 - **A busy worker is paused, not compacted.** `compact` refuses a busy session. The pattern that worked four times on
-  one worker on 2026-11-04: ask it to pause at its next part boundary, `compact` it with a focus, send "continue". A
+  one worker on 2026-11-04: ask it to pause at its next part boundary, wait for the idle notice
+  (`SendMessage` with `notify_when_idle`, never `compact` in the pause request's own turn), `compact` it with a focus,
+  send "continue". A
   worker pauses by itself past about 150k tokens, which is the one size a worker may report.
 - **A brief states checked facts.** The master re-reads the decisions log and any state a brief asserts just before
   sending it, checks a tool is installed before saying so, and names each step's precondition: on 2026-11-02 one

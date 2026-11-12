@@ -367,6 +367,25 @@ test("clear is only for a finished worker, between jobs, never queued, never the
   assert.match(section(skill, "When a job ends"), /`puppet clear <session>`[\s\S]{0,200}otherwise\s+give\s+the\s+user\s+`<session>: \/clear`/);
 });
 
+test("compaction lines of 2026-11-12: 30% while working, measure on each relay and at each FINAL, idle notice before compact, master at 40% (P-20261109-3, -2, -8, P-20261110-7)", () => {
+  const skill = read("SKILL.md");
+  const rule7 = skill.slice(skill.indexOf("7. **Compaction rule:**"), skill.indexOf("8. **Measured, not reported.**"));
+  assert.doesNotMatch(rule7, /working, \*\*≥ 50%\*\*/);
+  assert.match(rule7, /Each\s+time\s+you\s+relay\s+a\s+working\s+worker's\s+message,\s+`measure`\s+it/);
+  assert.match(rule7, /`notify_when_idle`/);
+  assert.match(rule7, /never\s+in\s+the\s+same\s+turn\s+as\s+the\s+pause\s+request/);
+  const userRow = skill.split("\n").find((l) => l.startsWith("   | job finished, any size"));
+  assert.match(userRow, /`finish`, then `clear` where `mod on`; never compact/);
+  const rule8 = skill.slice(skill.indexOf("8. **Measured, not reported.**"), skill.indexOf("9. **Cost.**"));
+  assert.match(rule8, /30%,\s+40%\s+and\s+50%/);
+  assert.match(rule8, /300,000,\s+400,000\s+and\s+500,000\s+tokens/);
+  const rule10 = skill.slice(skill.indexOf("10. **Your own context.**"), skill.indexOf("11. **"));
+  assert.match(rule10, /40%\s+or\s+more/);
+  assert.match(rule10, /next\s+20%/);
+  assert.doesNotMatch(rule10, /next\s+25%/);
+  assert.match(section(skill, "When a job ends"), /At\s+each\s+`FINAL:`,\s+`measure`\s+the\s+worker/);
+});
+
 test("rule 10: the master compacts itself through the mod once its turn ends, and says it is untested in a window", () => {
   const skill = read("SKILL.md");
   const rule10 = skill.slice(skill.indexOf("10. **Your own context.**"), skill.indexOf("11. **"));
@@ -456,7 +475,7 @@ test("the pause pattern: ask for a part boundary, compact with a focus, send con
   assert.match(skill, /`compact <worker>\s+<focus>`/);
   assert.match(skill, /"continue"/);
   assert.match(skill, /262k to 28k/);
-  const row = skill.split("\n").find((l) => l.startsWith("   | working, **≥ 50%**"));
+  const row = skill.split("\n").find((l) => l.startsWith("   | working, **≥ 30%**"));
   assert.match(row, /pause at its next part boundary/);
   const brief = read("worker-brief.md");
   assert.match(brief, /Pausing at a part boundary/);

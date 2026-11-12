@@ -81,9 +81,13 @@ Claude measures each session's context, and compacts only between tasks:
   - Without it, your own window is left to auto-compact. If you'd rather choose the moment, say "give me compact
     lines" once, and Claude gives you one line to paste, such as `backend-b7: /compact keep the merge state and the
     next step`. A message from another session can't run `/compact`.
-- A busy session at 50% or more is asked to pause at its next part boundary first. Claude then compacts it with a
-  focus naming the job and the next part, and tells it to continue. A worker also pauses and says so on its own
-  once it passes about 150k tokens.
+- Claude measures a working session each time it relays that session's message, and again when the session reports
+  its job done: a session that finishes a task with work left is compacted right then, and one whose job is over
+  is closed (a background worker) or cleared (a window whose mod is on).
+- A busy session at 30% or more is asked to pause at its next part boundary first. Claude waits until the session
+  is idle, then compacts it with a focus naming the job and the next part, and tells it to continue. A worker also
+  pauses and says so on its own once it passes about 150k tokens.
+- Claude's own window gets a `/compact` line from Claude at 40% or more, and again after each further 20%.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
 - Claude gives a session's size in tokens and as a share of a 1,000,000-token window, unless you tell it your
   window is another size.

@@ -108,15 +108,19 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    | Measured state | Background worker | The user's own session |
    |---|---|---|
    | idle after a finished task, **≥ 30%**, job continues | `compact <worker> <focus>` when its `list` row says `mod on`, else `cycle` | `compact <session> <focus>` when its row says `mod on`; else nothing: auto-compaction handles it, and only if the user opted in, give `<session>: /compact <focus>` to paste |
-   | working, **≥ 50%** | ask it to pause at its next part boundary (the pause pattern below), then as above | nothing, unless the user opted in or its mod is on: then as above |
+   | working, **≥ 30%** | ask it to pause at its next part boundary (the pause pattern below), then as above | nothing, unless the user opted in or its mod is on: then as above |
    | working, any size | nothing: never compact mid-task | nothing |
-   | job finished, any size | `close`: never compact a finished job | `finish`; never compact |
+   | job finished, any size | `close`: never compact a finished job | `finish`, then `clear` where `mod on`; never compact |
+
+   Each time you relay a working worker's message, `measure` it.
 
    **The pause pattern** for a worker that is still busy when it passes the line (2026-11-04, four
    times on one worker, 262k to 28k, 154k to 23k, 143k to 25k and 182k to 18k tokens). `compact`
    refuses a busy session, which is right: a pause is how you reach a boundary. (1) Message the
-   worker: "pause at your next part boundary and say so". (2) Wait for its "paused at <boundary>"
-   line, then check its `list` row reads idle (state `done`, not `waiting`). (3) `compact <worker>
+   worker: "pause at your next part boundary and say so". (2) After its "paused at <boundary>"
+   line, `SendMessage` it with `notify_when_idle`, and run `compact` only when the idle notice
+   arrives, never in the same turn as the pause request. Check its `list` row reads idle (state
+   `done`, not `waiting`). (3) `compact <worker>
    <focus>`, the focus naming the job, the parts done and the next part. (4) Message it
    "continue". A worker past about 150k tokens pauses and says so without being asked
    (`worker-brief.md`). A worker you cannot reach for a boundary is left alone.
@@ -145,18 +149,18 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 8. **Measured, not reported.** Act only on `puppet measure`. It works on any listed session, the
    user's windows included. `fresh` means no turns yet. A session's own estimate of its size ("I'm
    full") is a prompt to measure, never a reason to act. The user's rule: context is given in tokens and as a % of the 1M window, never as a share of a compaction point
-   (2026-11-06), in what you tell the user and in what you act on. The 30% and 50% above are
-   shares of that window: 300,000 and 500,000 tokens. `measure` uses `--window <tokens>`, else a
+   (2026-11-06), in what you tell the user and in what you act on. The 30%, 40% and 50% in these rules are
+   shares of that window: 300,000, 400,000 and 500,000 tokens. `measure` uses `--window <tokens>`, else a
    window `adopt --window` or a `cycle` recorded, else `PUPPET_CONTEXT_WINDOW`, else 1,000,000.
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
    to a dollar. Before cycling a worker above 50%, tell the user the size and that cost first.
    `compact` through the mod runs in the live process and reads the prompt cache (one probe: 22,470
    of 24,266 input tokens were cache reads), so it is the cheaper route; no whole-cycle figure for
    it is measured yet.
-10. **Your own context.** At each job's end, `puppet measure <your name>`. At 50% or more of your
+10. **Your own context.** At each job's end, `puppet measure <your name>`. At 40% or more of your
     window while you are idle, give the user your own `/compact <focus>` line once, unprompted: you
     cannot compact yourself, and a master left to grow makes the user notice and do it (2026-11-02:
-    a master at 434,785 tokens). Give it again only after the next 25% of growth. The roster and
+    a master at 434,785 tokens). Give it again only after the next 20% of growth. The roster and
     the logs folder hold your state, so a compaction loses nothing that matters. When your own
     `list` row says `mod on`, run `puppet compact <your name> <focus>` instead: the mod compacts you
     once your turn ends, and the helper does not wait. That a master's own compaction runs this way
@@ -210,8 +214,11 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    what it replaced, so they never review a stale page. Before you relay a visual deliverable (a
    canvas, a screenshot, an app screen), open it and look at it yourself; an overlap or clipping the
    worker flagged is fixed before the link goes to the user.
-2. `puppet finish <session>`, in the same turn as the worker's done report: an open finished job
-   drifts into an auto-compaction. `list` marks an active job whose session's last word reads as done
+2. At each `FINAL:`, `measure` the worker. If its job goes on and it is at 30% or more, compact it
+   now (rule 7's first row). If its job is over, `finish` it, then `close` a background worker, or
+   `clear` a window whose row says `mod on`, even with no next job queued (the user's yes of
+   2026-11-12). `puppet finish <session>` goes in the same turn as the worker's done report: an open
+   finished job drifts into an auto-compaction. `list` marks an active job whose session's last word reads as done
    (`FINAL:` or "job is done") `DONE? run finish`; that is a hint to read the report, never a
    finish by itself. A background worker then gets `puppet close <worker>`, or, when the
    user asked to reuse sessions and the next job is queued, `cycle <worker> <focus> --next <brief
