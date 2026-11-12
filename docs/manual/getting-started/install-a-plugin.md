@@ -66,6 +66,9 @@ To update everything you installed from here, run `/plugin`, open **Marketplaces
 `/plugin marketplace update jack1913` on its own is different: it only refreshes which versions are on offer. Your
 installed plugins stay on their current version until you update them as above.
 
+A session that's already open keeps the skill text it loaded before the update: run `/reload-plugins` in it. Typing
+the skill's command again doesn't reload it (seen with puppet-master, 2026-11-12).
+
 Curious what changed? See the changelogs for [brand-creator](../../../plugins/brand-creator/CHANGELOG.md),
 [swift](../../../plugins/swift/CHANGELOG.md) and [batbelt](../../../plugins/batbelt/CHANGELOG.md).
 

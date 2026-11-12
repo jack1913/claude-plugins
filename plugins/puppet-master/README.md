@@ -12,6 +12,9 @@ Coordinate your Claude sessions from one session: hand each job to an open sessi
 Other ways to install (from a shell, for a whole team):
 [Install a plugin](../../docs/manual/getting-started/install-a-plugin.md).
 
+After you install or update it, a window that is already open keeps the skill text it loaded: run `/reload-plugins`
+there. Typing `/puppet-master:puppet-master` again does not reload it.
+
 It needs Node.js 20 or newer, and a setting you add yourself first: see
 [Run background workers](docs/manual/use/run-background-workers.md). The optional mod (compact, switch the model,
 clear) needs Claude Code 2.1.287 or newer; without it, everything else works.

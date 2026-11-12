@@ -830,6 +830,16 @@ test("a refused switch of a busy session is told to the user at once, with the r
   assert.match(row, /tell the user at once that it is not switched, and switch it when `list --name` shows it idle/);
 });
 
+test("a running window keeps the old skill text after an update: /reload-plugins, not retyping (brainiac P-20261112-7, F-7)", () => {
+  const setup = read("references/setup-prerequisites.md");
+  assert.match(setup, /keeps the skill text it\s+loaded, yours included: tell the user to run `\/reload-plugins` in it/);
+  assert.match(setup, /Typing\s+`\/puppet-master:puppet-master` again does not refresh it/);
+  const readme = fs.readFileSync(path.join(PLUGIN_DIR, "README.md"), "utf8");
+  assert.match(section(readme, "Install"), /run `\/reload-plugins`\s+there\. Typing `\/puppet-master:puppet-master` again does not reload it/);
+  const changelog = fs.readFileSync(path.join(PLUGIN_DIR, "CHANGELOG.md"), "utf8");
+  assert.doesNotMatch(changelog, /type `\/puppet-master:puppet-master` again at a task boundary to load the new layout/);
+});
+
 test("shipped's 'never approved' row says which group's decisions were searched (brainiac P-20261112-4, F-5)", () => {
   const row = section(readSkill(), "Helper reference").split("\n").find((l) => l.startsWith("| `shipped "));
   assert.match(row, /`was never approved in group "<g>"` \(or `with no group`\) names the decisions file it searched/);

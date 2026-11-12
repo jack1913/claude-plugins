@@ -19,6 +19,10 @@ Read this when a setting, the mod's needs, a `PUPPET_*` variable or a Windows `c
   asks once at start and does nothing without a yes; `on` and `off` skip the question, and `off` also
   overrides your `--self-compact`. The helper and the mod meet in `PUPPET_MOD_DIR`, else
   `<config dir>/puppet-master/mod`.
+- After the plugin is installed or updated, a window that was already running keeps the skill text it
+  loaded, yours included: tell the user to run `/reload-plugins` in it at a task boundary. Typing
+  `/puppet-master:puppet-master` again does not refresh it (2026-11-12: it served the old `SKILL.md`
+  until `/reload-plugins` ran).
 - The helper runs `claude` without a shell, so on Windows an npm-installed `claude.cmd` shim cannot
   be launched. Use the native `claude` executable, or set `PUPPET_CLAUDE_BIN` to its full path.
 - Typing a `claude -p ... "/compact <focus>"` yourself from Git Bash needs `MSYS_NO_PATHCONV=1`, or
