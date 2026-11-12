@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { main } from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, makeDeps } from "./helpers.mjs";
 
-function closeSetup({ live = true, rm, stop } = {}) {
-  const w = agent("w1", 1);
+function closeSetup({ live = true, rm, stop, pid, sleeps } = {}) {
+  const w = agent("w1", 1, pid === null ? { pid: undefined } : {});
   const t = makeDeps({
     agents: live ? [w] : [],
     handler(args) {
@@ -15,6 +15,7 @@ function closeSetup({ live = true, rm, stop } = {}) {
     },
   });
   t.w = w;
+  if (sleeps) t.deps.sleep = async (ms) => void sleeps.push(ms);
   t.writeRegistry({
     workers: { w1: { id: w.id, sessionId: w.sessionId, cwd: "/work/repo", checkout: "/work/repo" } },
   });
@@ -72,6 +73,63 @@ test("stop failure aborts before rm", async () => {
     assert.equal(await main(["close", "w1"], t.deps), 1);
     assert.deepEqual(verbs(t), [["stop", t.w.id]]);
     assert.ok(t.readRegistry().workers.w1);
+  } finally {
+    t.cleanup();
+  }
+});
+
+// P-20261110-3. A background row with no `pid` is a process that is gone (observed 2026-11-12:
+// every running session carries a pid; the two blocked rows without one did not).
+test("a dead worker (listed, background, no pid) is removed with rm alone, no stop", async () => {
+  const t = closeSetup({ pid: null });
+  try {
+    assert.equal(await main(["close", "w1"], t.deps), 0);
+    assert.deepEqual(verbs(t), [["rm", t.w.id]]);
+    assert.deepEqual(t.readRegistry().workers, {});
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("stop failing with 'may be restarting' is retried at 2 s, 4 s and 8 s, then rm runs", async () => {
+  const sleeps = [];
+  let n = 0;
+  const t = closeSetup({
+    sleeps,
+    stop: () => (++n <= 2 ? { code: 1, stderr: "background service may be restarting" } : { stdout: "stopped\n" }),
+  });
+  try {
+    assert.equal(await main(["close", "w1"], t.deps), 0);
+    assert.deepEqual(sleeps, [2000, 4000]);
+    assert.deepEqual(verbs(t).map((a) => a[0]), ["stop", "stop", "stop", "rm"]);
+    assert.deepEqual(t.readRegistry().workers, {});
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("stop failing four times with 'may be restarting' exits 1 with one manual step and keeps the record", async () => {
+  const sleeps = [];
+  const t = closeSetup({ sleeps, stop: () => ({ code: 1, stderr: "background service may be restarting" }) });
+  try {
+    assert.equal(await main(["close", "w1"], t.deps), 1);
+    assert.deepEqual(sleeps, [2000, 4000, 8000]);
+    assert.equal(verbs(t).length, 4);
+    assert.match(t.err.join("\n"), /w1 could not be stopped: the background service may be restarting; run close w1 again in a minute \(id [0-9a-z]+; resume: /);
+    assert.doesNotMatch(t.err.join("\n"), /claude rm/);
+    assert.ok(t.readRegistry().workers.w1);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("any other stop error is not retried", async () => {
+  const sleeps = [];
+  const t = closeSetup({ sleeps, stop: () => ({ code: 1, stderr: "cannot stop" }) });
+  try {
+    assert.equal(await main(["close", "w1"], t.deps), 1);
+    assert.deepEqual(sleeps, []);
+    assert.equal(verbs(t).length, 1);
   } finally {
     t.cleanup();
   }

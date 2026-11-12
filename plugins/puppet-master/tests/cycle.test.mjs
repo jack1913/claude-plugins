@@ -85,6 +85,20 @@ test("refuses a busy worker", async () => {
   }
 });
 
+test("refuses a dead worker (background, no pid): it is not at a boundary (P-20261110-3)", async () => {
+  for (const verb of ["cycle", "compact"]) {
+    const t = cycleSetup();
+    try {
+      t.deps.agents = [{ ...t.w, pid: undefined, state: "blocked", status: undefined }];
+      assert.equal(await main([verb, "w1", "probe"], t.deps), 1);
+      assert.match(t.err.join("\n"), /not at a task boundary \(state dead\)/);
+      assert.equal(verbs(t).length, 0, "nothing may be stopped or resumed for a dead worker");
+    } finally {
+      t.cleanup();
+    }
+  }
+});
+
 test("refuses a worker parked on a dialog (state done, status waiting): it is not at a boundary", async () => {
   const t = cycleSetup();
   try {

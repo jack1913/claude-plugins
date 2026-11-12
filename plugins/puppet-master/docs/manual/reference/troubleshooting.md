@@ -14,6 +14,8 @@ Find what you see, then do what's next to it.
 | The status line, or the session itself, names the old model after a switch | Expected: both keep the model the session started with; the line `puppet-master: switched to …` under the prompt names the switch. Ask "how are my sessions?": the model column shows the one in use after its next answer |
 | `does not end with the template's last line` | The master wrote a worker's brief without the template's lines. Tell it to build the brief from `worker-brief.md`, keeping its last line |
 | `spawn: name a --tier or --effort` | The master started a worker without saying how strong it should be. Tell it the job's tier: `creative` or `mechanical` |
+| `dead` in a background worker's line | The worker's process is gone (it shows no process id in the session list). Tell Claude to close it: it removes the worker without stopping it first |
+| `could not be stopped … run close <name> again in a minute` | The background service was restarting. Wait a minute and tell Claude to close that worker again; its record is kept meanwhile |
 | `DONE? run finish` on a session's line | That session reported its job done. Tell the master to close the job |
 | `<name> is closed (resume: …)` | That session was closed. Run the resume command if you want it back, then tell Claude to adopt it |
 | `… belongs to group "<group>"; pass --group <group>` | That proposal id is another master's. Decide it in that master's session, or tell this one to use that group |

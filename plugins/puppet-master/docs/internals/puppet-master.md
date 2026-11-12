@@ -141,12 +141,12 @@ the helper calls.
 | Start | `claude --bg --name <worker> "<brief>"`, in a trusted folder | Works; an untrusted folder refuses until the user runs `claude` there once. Stdout: `backgrounded · <id> · <name>` plus hint lines. On 2.1.312 the id and hints are wrapped in ANSI colour codes, which `parseBgId` strips |
 | List | `claude agents --json` (or the `ListAgents` tool) | Background workers with `kind` `background`, `id`, `sessionId`, `cwd`, `state` and `status`. On 2.1.312 the user's windows are listed too, with `kind` `interactive`, `sessionId`, `cwd`, `status` and no `id` or `state` |
 | Compact by message (2.1.312) | `SendMessage` of `/compact <focus>` to a live session | Refused: it arrives as wrapped plain text, the session answers that it cannot run a built-in command, and no `compact_boundary` is written |
-| States | `state` in the listing | `working` (`status` `busy`), then `done` (`status` `idle`); `blocked` while waiting on a prompt. A session parked on a dialog lists as `state` `done` with `status` `waiting` (probe, 2026-11-04): the helper reports it as `waiting`, which is busy. A stopped worker drops out of the listing |
+| States | `state` in the listing | `working` (`status` `busy`), then `done` (`status` `idle`); `blocked` while waiting on a prompt. A session parked on a dialog lists as `state` `done` with `status` `waiting` (probe, 2026-11-04): the helper reports it as `waiting`, which is busy. A stopped worker drops out of the listing. On 2026-11-12 the listing held two background rows with `state` `blocked` and no `pid`, while every running session had one; the helper reports a background row with no `pid` as `dead`, even before its first turn. A live background session (a Haiku probe the helper spawned, one turn done) listed as `done`, never `dead` (**verified**: the master's probe, 2026-11-12). That the two old pidless rows are dead processes is a **hypothesis**: the list cannot say |
 | Message | `SendMessage`, both ways | Delivered, no hold |
 | Edit files | `worktree.bgIsolation: "none"` in the user's `settings.json` | Without it a background worker cannot edit until `EnterWorktree`. With it, a worker wrote into the main checkout, and no worktree appeared |
 | Compact | `claude stop <id>`, then `claude -p --resume <sessionId> --output-format json "/compact <focus>"` | The transcript gains a `compact_boundary`; the JSON result carries `modelUsage.<model>.contextWindow` |
 | Restart | `claude --bg --resume <sessionId> "<next brief>"`, from the worker's cwd | Resumes with its saved name and model, and remembers its state |
-| Close | `claude stop <id>`, then `claude rm <id>` | Works; the transcript stays resumable with `claude --resume <sessionId>` |
+| Close | `claude stop <id>`, then `claude rm <id>` | Works; the transcript stays resumable with `claude --resume <sessionId>`. A `dead` worker gets `rm` alone; a `stop` that fails with `may be restarting` is retried after 2 s, 4 s and 8 s |
 | Measure | Last main-thread assistant `usage` in `<config dir>/projects/<project>/<sessionId>.jsonl`: input + cache read + cache creation, over the context window | Matches the status line's percentage |
 
 Things that shaped the helper:
@@ -458,6 +458,9 @@ failure. There is no silent fallback.
   `FINAL:` or says "job is done": on 2026-11-01 a worker reported done at 16:27 and stayed open until it
   auto-compacted at 19:55. The flag is a hint; nothing finishes a job but `finish`.
 - `assign` and `pick` never refuse on a tier: a `MISMATCH` line is a warning.
+- `compact`, `cycle` and `clear` refuse a `dead` worker as not at a task boundary; `close` removes it with `rm` alone.
+  When `stop` still fails with `may be restarting` after the retries, `close` says to run it again in a minute and
+  keeps the record.
 - `cycle` refuses a worker that is not idle. If it fails after stopping the worker, the message says whether the worker
   was compacted and prints the `cd "<cwd>" && claude --bg --resume <sessionId>` that restarts it.
 - `close` keeps the registry record when `claude rm` fails, and prints the resume command.

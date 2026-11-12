@@ -129,6 +129,44 @@ test("list --name finds a live window nobody adopted, and a miss names the live 
   }
 });
 
+test("a background session with no pid lists as dead, in the row and in --json (P-20261110-3)", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1, { pid: undefined, state: "blocked", status: undefined })] });
+  try {
+    t.writeTranscript(t.deps.agents[0].sessionId, turn(2000));
+    assert.equal(await main(["list", "--name", "w1"], t.deps), 0);
+    assert.match(t.out[0], /^w1  2000  0\.2%  dead  /);
+    t.out.length = 0;
+    assert.equal(await main(["list", "--name", "w1", "--json"], t.deps), 0);
+    assert.equal(JSON.parse(t.out[0]).state, "dead");
+    // a session that has a pid keeps its own state
+    t.deps.agents = [agent("w1", 1, { state: "blocked", status: undefined })];
+    t.out.length = 0;
+    assert.equal(await main(["list", "--name", "w1", "--json"], t.deps), 0);
+    assert.equal(JSON.parse(t.out[0]).state, "blocked");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a pidless background session with no turns yet lists as dead, not fresh (probe of 2026-11-12: two such rows read fresh)", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1, { pid: undefined, state: "blocked", status: undefined })] });
+  try {
+    // no transcript at all
+    assert.equal(await main(["list", "--name", "w1"], t.deps), 0);
+    assert.equal(t.out[0], "w1  0  0%  dead  (no turns yet)  model none yet");
+    t.out.length = 0;
+    assert.equal(await main(["list", "--name", "w1", "--json"], t.deps), 0);
+    assert.equal(JSON.parse(t.out[0]).state, "dead");
+    // a live one with no turns stays fresh
+    t.deps.agents = [agent("w1", 1, { state: "blocked", status: undefined })];
+    t.out.length = 0;
+    assert.equal(await main(["list", "--name", "w1", "--json"], t.deps), 0);
+    assert.equal(JSON.parse(t.out[0]).state, "fresh");
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("a miss with no live session names none", async () => {
   const t = makeDeps({ agents: [] });
   try {

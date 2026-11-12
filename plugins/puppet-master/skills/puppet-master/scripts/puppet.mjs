@@ -253,6 +253,10 @@ function resumeHint(cwd, sessionId, { bg = true } = {}) {
 export function workerState(agent) {
   // `status waiting` wins over `state done`: the session is behind a dialog, not at a boundary.
   if (agent.status === "waiting") return "waiting";
+  // A background row with no `pid` is taken for a process that is gone (2026-11-12: two such
+  // rows, `state blocked`, hypothesis; a live background session probed that day had a pid and
+  // read `done`). It is in neither IDLE_STATES nor BUSY_STATES.
+  if (agent.kind === "background" && (agent.pid === undefined || agent.pid === null)) return "dead";
   return agent.state ?? agent.status ?? "unknown";
 }
 
@@ -369,7 +373,8 @@ function freshMeasure(agent) {
     percent: 0,
     window: null,
     windowSource: null,
-    state: "fresh",
+    // A session whose process is gone is dead, turns or none: that outranks "no turns yet".
+    state: workerState(agent) === "dead" ? "dead" : "fresh",
     tokenSource: "none",
     model: null,
     effort: null,
@@ -410,13 +415,14 @@ export function measureWorker(deps, key, { window } = {}) {
 }
 
 export function measureLine(m) {
-  if (m.state === "fresh") return `${m.name}  0  0%  fresh  (no turns yet)`;
+  if (m.tokenSource === "none") return `${m.name}  0  0%  ${m.state}  (no turns yet)`;
   return `${m.name}  ${m.tokens}  ${m.percent}%  ${m.state}  (window ${m.window} from ${m.windowSource})`;
 }
 
 // Model and effort of a measured session, `fresh` before its first turn.
 export function modelLine(m) {
   if (m.state === "fresh") return "fresh";
+  if (m.tokenSource === "none") return "none yet";
   return `${m.model ?? "?"} ${m.effort ?? "?"}`;
 }
 
@@ -1036,7 +1042,28 @@ export function cycleWorker(deps, key, focus, { nextBriefFile } = {}) {
 
 // --- closing: stop and remove; the transcript stays resumable --------------------------
 
-export function closeWorker(deps, key) {
+// `claude stop` while the background service restarts: wait 2 s, 4 s and 8 s between four tries.
+const STOP_RETRY_MS = [2000, 4000, 8000];
+
+async function stopWorker(deps, agent, resume) {
+  const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  for (let i = 0; ; i++) {
+    try {
+      claudeOk(deps, ["stop", agent.id]);
+      return;
+    } catch (e) {
+      if (!(e instanceof PuppetError) || !/may be restarting/i.test(e.message)) throw e;
+      if (i >= STOP_RETRY_MS.length) {
+        throw new PuppetError(
+          `${agent.name} could not be stopped: the background service may be restarting; run close ${agent.name} again in a minute (id ${agent.id}; resume: ${resume})`,
+        );
+      }
+      await sleep(STOP_RETRY_MS[i]);
+    }
+  }
+}
+
+export async function closeWorker(deps, key) {
   const agents = listAgents(deps);
   const reg = loadRoster(deps, agents);
   const live = agents.filter((a) => a.name === key || a.id === key || a.sessionId === key);
@@ -1048,7 +1075,8 @@ export function closeWorker(deps, key) {
     const agent = requireBackground(findWorker(agents, key), "closing");
     ({ name, id, sessionId } = agent);
     cwd = reg.workers[name]?.cwd ?? agent.cwd;
-    claudeOk(deps, ["stop", id]);
+    // A listed worker whose process is gone has nothing to stop: remove it, as for an unlisted one.
+    if (workerState(agent) !== "dead") await stopWorker(deps, agent, resumeHint(cwd, sessionId, { bg: false }));
   } else {
     const hit = Object.entries(reg.workers).find(
       ([n, r]) => n === key || r.id === key || r.sessionId === key,
@@ -1727,9 +1755,9 @@ async function cmdSwitch(deps, positional, flags) {
   return 0;
 }
 
-function cmdClose(deps, positional) {
+async function cmdClose(deps, positional) {
   wantPositional(positional, 1, "close");
-  const c = closeWorker(deps, positional[0]);
+  const c = await closeWorker(deps, positional[0]);
   deps.out(`closed ${c.name} (resume: ${c.resume})`);
   return 0;
 }
