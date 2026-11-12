@@ -7,14 +7,15 @@
 //
 // The switch is session-only: no settings file is written. A `turn.step` hook names the
 // override's model and effort on every main-loop model request (subagents keep theirs). The
-// status line and the session's own self-report keep the launch model; the transcript's
-// api-request records, which the helper's `list` reads, show the one sent.
+// status line the user's `statusLine` command draws and the session's own self-report keep the
+// launch model; the mod's own line under the prompt (`$.ui.status`) names the switch, and the
+// transcript's api-request records, which the helper's `list` reads, show the one sent.
 //
 // What it reads and writes, all in one folder (`<config dir>/puppet-master/mod`, or
 // PUPPET_MOD_DIR): heartbeat/<session>.json (written every tick), optin/<session>.json and
 // roles/<session>.json (the helper's), requests/<session>.json (the helper's), acks/<nonce>.json,
 // overrides/<session>.json (the switch; carried to the new session id after a clear).
-// It calls $.session.id, usage, compact, $.command.run, $.ui.ask, $.config.list and set, $.fs,
+// It calls $.session.id, usage, compact, $.command.run, $.ui.ask, $.ui.status, $.config.list and set, $.fs,
 // $.env, and one $.process.run (`claude agents --json`, to learn whether it runs in a window
 // or a worker before it asks). No shell, no network.
 
@@ -99,6 +100,9 @@ export function register(on) {
     // switched on), whether it was read since this module loaded, and the session id it was read for.
     override: null,
     overrideOn: false,
+    // The line this mod last pinned with $.ui.status (undefined: none), so a tick that changes
+    // nothing makes no call.
+    shown: undefined,
     ready: false,
     lastSid: null,
   };
@@ -260,7 +264,22 @@ async function refresh($, st) {
   st.override = override;
   st.overrideOn = source !== null;
   st.ready = true;
+  await showSwitch($, st);
   return { dir, sid, mode, optin, role, source };
+}
+
+// The mod's own status line under the prompt: the switch in force, since the status line the
+// user's `statusLine` command draws keeps naming the launch model. `--reset`, mode `off` and a
+// session with no override clear it. One call only when the line changes.
+async function showSwitch($, st) {
+  const line = st.overrideOn && st.override ? `puppet-master: switched to ${st.override.model} ${st.override.effort}` : undefined;
+  if (line === st.shown) return;
+  st.shown = line;
+  try {
+    $.ui.status(line);
+  } catch (err) {
+    await fail($, st, `status line: ${(err && err.message) || err}`);
+  }
 }
 
 async function poll($, st) {
@@ -335,6 +354,7 @@ async function poll($, st) {
     if (next) await writeJson($, file, { ...next, at: now, nonce: req.nonce });
     else await $.fs.write(file, "{}");
     st.override = next;
+    await showSwitch($, st);
     st.handled.add(req.nonce);
     // The heartbeat names the new switch before the ack, so the helper's next read sees it.
     await beat();

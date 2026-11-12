@@ -339,7 +339,12 @@ closed with the helper's `close`; the transcript's `api-request` records, read b
 
 - The status line keeps showing the launch model and effort (it showed `Haiku 5.5 low` through every switch), and
   the session names the launch model when asked (it answered "Haiku 5.5 (claude-haiku-5-5)" while Sonnet ran it).
-  `list` is the only check: its `model` column is the last request sent.
+  The mod pins its own line, `puppet-master: switched to <model> <effort>`, under the prompt with `$.ui.status`, and
+  clears it on `--reset`, mode `off` or a session with no override (the mod calls `$.ui.status` only when the line
+  changes: tested against a fake `$` in `mod.test.mjs`; that a window draws it is **verified**: on 2026-11-12 the user
+  ran `/reload-plugins` in a window on build 2.1.322 whose mod was switched on, the master switched it to sonnet
+  high, and the user said they saw the puppet-master switch line, as relayed by the master; that Claude Code 2.1.287,
+  the mod's floor, has `$.ui.status` is a **hypothesis**: the types of build 2.1.322 carry no version note). `list` stays the check: its `model` column is the last request sent.
 - The context window the status line and `$.session.usage()` report is the launch model's: the mods types call it
   "the context window of the session's model". That auto-compaction follows the launch model's window too is a
   **hypothesis**: not tested. Switching a session to a model with a smaller window than its launch model's could let
@@ -362,7 +367,8 @@ Why `turn.step` and not `/model`:
   effort, and fast mode"). So a mod running `$.command.run({ command: "model", args })` would change the default of
   every new session, and the paste lines use the `s` form. The mods API has `$.session.model()` and no setter
   (**verified**: mods types, `$.session`).
-- **A `turn.step` hook can switch a session without writing settings, but the status line does not follow.** A probe
+- **A `turn.step` hook can switch a session without writing settings, but the status line does not follow** (the mod
+  adds its own line beside it, see Known costs). A probe
   mod on a throwaway `--bg` Haiku session rewrote each main-loop request to `sonnet` at `medium`. The transcript's
   `api-request` and the reply both recorded `claude-sonnet-5-5`, and `puppet list` printed `model claude-sonnet-5-5
   medium`. The SHA-256 of the user's and the checkout's `settings.json` stayed the same across four snapshots. But

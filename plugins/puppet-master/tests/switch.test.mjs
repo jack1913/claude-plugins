@@ -78,7 +78,7 @@ test("switch --tier writes the tier's model and effort for the mod and prints wh
     assert.equal(await main(["switch", "w1", "--tier", "mechanical"], t.deps), 0);
     assert.deepEqual(t.request(), { nonce: NONCE, sessionId: t.w.sessionId, requestedAt: NOW.getTime(), action: "switch", model: "sonnet", effort: "medium", role: "worker" });
     assert.deepEqual(t.out, [
-      "switched w1 to sonnet medium (last request: claude-opus-5-5 high), from its next request on; its status line and its own answer keep naming the launch model: check with list --name w1 after its next turn",
+      "switched w1 to sonnet medium (last request: claude-opus-5-5 high), from its next request on; its status line names the launch model and the mod's line under the prompt the switch; its own answer names the launch model: check with list --name w1 after its next turn",
     ]);
     assert.equal(t.get("acks", NONCE), undefined);
   } finally {

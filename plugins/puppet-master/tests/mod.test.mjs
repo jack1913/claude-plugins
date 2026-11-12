@@ -16,7 +16,7 @@ function setup({ mode = "ask", kind = "interactive", answer = ASK_YES, files = {
   const fsMap = new Map(Object.entries(files).map(([k, v]) => [`${DIR}/${k}`, typeof v === "string" ? v : JSON.stringify(v)]));
   const handlers = {};
   const timers = { every: null, after: [] };
-  const calls = { compact: [], run: [], ask: [], set: [], log: [], process: [] };
+  const calls = { compact: [], run: [], ask: [], set: [], log: [], process: [], status: [] };
   const state = { now: 1_000_000, sid, mode };
   const $ = {
     env: { get: async (n) => (n === "PUPPET_MOD_DIR" ? DIR : undefined) },
@@ -66,6 +66,7 @@ function setup({ mode = "ask", kind = "interactive", answer = ASK_YES, files = {
         return answer;
       },
       log: (t) => calls.log.push(t),
+      status: (t) => void calls.status.push(t),
     },
     process: {
       run: async (argv) => {
@@ -469,6 +470,75 @@ test("switch: an override file outside the limits is ignored and logged", async 
   await t.tick();
   assert.equal((await t.step()).sent.effort, "high");
   assert.ok(t.calls.log.some((l) => /ignored .*overrides.*effort must be/.test(l)), t.calls.log.join("|"));
+});
+
+// --- the mod's own status line names the switch (brainiac P-20261112-1) ---
+
+const LINE = "puppet-master: switched to sonnet medium";
+
+test("status: a switch is shown under the prompt once, and ten more ticks add no call", async () => {
+  const t = setup({ mode: "on" });
+  await t.start();
+  await t.tick();
+  assert.deepEqual(t.calls.status, [], "not switched: no status call");
+  t.request(sw());
+  await t.tick();
+  assert.deepEqual(t.calls.status, [LINE]);
+  for (let i = 0; i < 10; i++) await t.tick();
+  assert.deepEqual(t.calls.status, [LINE]);
+});
+
+test("status: --reset clears the line", async () => {
+  const t = setup({ mode: "on" });
+  await t.start();
+  t.request(sw({ nonce: "sw-1" }));
+  await t.tick();
+  t.request({ action: "switch", reset: true, nonce: "rs-1" });
+  await t.tick();
+  assert.deepEqual(t.calls.status, [LINE, undefined]);
+});
+
+test("status: mode off with an override file shows nothing", async () => {
+  const t = setup({ mode: "off", files: { [`overrides/${SID}.json`]: { model: "haiku", effort: "low" }, [`optin/${SID}.json`]: { at: "x" } } });
+  await t.start();
+  await t.tick();
+  assert.deepEqual(t.calls.status, []);
+});
+
+test("status: after a reload the first tick shows the switch from the file, and a request before any tick does too", async () => {
+  const files = { [`overrides/${SID}.json`]: { model: "haiku", effort: "low" } };
+  const t = setup({ mode: "on", files });
+  await t.start();
+  await t.tick();
+  assert.deepEqual(t.calls.status, ["puppet-master: switched to haiku low"]);
+  const u = setup({ mode: "on", files });
+  await u.start();
+  await u.step();
+  assert.deepEqual(u.calls.status, ["puppet-master: switched to haiku low"]);
+});
+
+test("status: an override carried across a clear stays shown under the new session id, with no second call", async () => {
+  const t = setup({ mode: "on" });
+  t.role("worker");
+  await t.start();
+  t.request(sw({ nonce: "sw-1" }));
+  await t.tick();
+  t.request({ action: "clear", nonce: "clr-1" });
+  await t.tick();
+  await t.tick();
+  assert.equal(t.json("overrides/22222222-bbbb.json").carriedFrom, SID);
+  assert.deepEqual(t.calls.status, [LINE]);
+});
+
+test("status: a mod whose API has no $.ui.status logs it once and keeps working", async () => {
+  const t = setup({ mode: "on" });
+  t.$.ui.status = undefined;
+  await t.start();
+  t.request(sw());
+  await t.tick();
+  await t.tick();
+  assert.equal(t.ack("abcd1234").outcome, "switched");
+  assert.equal(t.calls.log.filter((l) => /status line/.test(l)).length, 1, t.calls.log.join("|"));
 });
 
 test("switch: a clear, the mod's or the user's, carries the override to the new session id", async () => {

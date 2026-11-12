@@ -54,8 +54,8 @@ there, it starts a background worker instead, on the model and effort the job's 
   moves and checks are `mechanical`: another model at medium effort or less. Your open windows get the work first.
   If a window runs the wrong model or effort and its mod is on, Claude switches it to the job's model and effort
   itself, for that window only: you see `switched backend-b7 to sonnet medium …`. Its status line keeps showing the
-  model it started with, and asked which model it is, it names that one too; Claude checks the real one in its
-  session list. Where the mod is not on, Claude takes another window or starts a background worker on the right
+  model it started with, and asked which model it is, it names that one too; the mod adds a line under the prompt,
+  `puppet-master: switched to sonnet medium`, and Claude checks the real one in its session list. Where the mod is not on, Claude takes another window or starts a background worker on the right
   model and effort. If you want that window for the job, Claude gives you lines for it: run `/model` and press `s`
   on the model's row, then `/effort` and press `s` at the level. `s` changes that session only. A typed
   `/model opus` or `/effort high` would save your default for every new session. Claude never changes your
@@ -176,7 +176,7 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 | `already editing` | Another session works in that folder. Wait for it to finish, use a second clone, or give both jobs separate folders |
 | `one job per context` | That session already did a job. Claude can reuse it while it is small; otherwise clear it and tell Claude, or let Claude start a worker |
 | `MISMATCH … tier …` | Where that window's mod is on, Claude switches it. Elsewhere, let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level |
-| The status line shows the old model after a switch | Expected: the status line and the session's own answer keep the model it started with. The session list shows the model in use |
+| The status line shows the old model after a switch | Expected: the status line and the session's own answer keep the model it started with. Look for the line `puppet-master: switched to …` under the prompt; the session list shows the model in use |
 | `no clean session for <folder>; spawn one` | None of your sessions is free there; Claude starts a worker |
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |
 | `just compacted (auto); its size is known after its next turn` | Wait for that session's next answer, then ask again |

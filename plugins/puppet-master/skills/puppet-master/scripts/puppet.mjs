@@ -1721,7 +1721,7 @@ async function cmdSwitch(deps, positional, flags) {
       : "";
   deps.out(
     s.target
-      ? `switched ${s.name} to ${to}${was}, from its next request on; its status line and its own answer keep naming the launch model: check with list --name ${s.name} after its next turn`
+      ? `switched ${s.name} to ${to}${was}, from its next request on; its status line names the launch model and the mod's line under the prompt the switch; its own answer names the launch model: check with list --name ${s.name} after its next turn`
       : `reset ${s.name}: its next request goes out on ${to}`,
   );
   return 0;

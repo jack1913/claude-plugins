@@ -42,6 +42,6 @@ Claude runs these for you. They work only on a session whose mod is on.
 | Command | What it does |
 | --- | --- |
 | `compact <session> <focus>` | The session's own mod compacts it when it is idle, keeping what the focus names |
-| `switch <session> --tier creative\|mechanical` | The session's own mod sends its requests on the tier's model and effort, that session only, from its next request on. `--model <m> --effort <e>` names them instead; `--reset` goes back to the model it started with. Its status line keeps the starting model |
+| `switch <session> --tier creative\|mechanical` | The session's own mod sends its requests on the tier's model and effort, that session only, from its next request on. `--model <m> --effort <e>` names them instead; `--reset` goes back to the model it started with. Its status line keeps the starting model; the mod's own line under the prompt names the switch |
 | `clear <worker>` | The mod clears a worker whose job is finished, then Claude keeps it as a clean session. Refused for the master, the analyst and a session with an open job |
 | `spawn … --self-compact`, `adopt … --self-compact` | Switch a worker's or a window's mod on. Claude passes it only after you said yes |
