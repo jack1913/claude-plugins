@@ -123,7 +123,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
    (`FINAL:` or "job is done") `DONE? run finish`; that is a hint to read the report, never a
    finish by itself. A background worker then gets `puppet close <worker>`, or, when the
    user asked to reuse sessions and the next job is queued, `cycle <worker> <focus> --next <brief
-   file>`. The user's own session stays in your care, done and no longer clean. If it will take the
+   file>`. `list` shows a background worker whose process is gone as `dead`: `close` it, which
+   removes it without `stop`. The user's own session stays in your care, done and no longer clean. If it will take the
    next job: for a worker whose `list` row says `mod on`, `puppet clear <session>` (only between
    jobs, as rule 7 says), which keeps it in the roster as clean; otherwise give the user
    `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
@@ -216,7 +217,11 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - "The open windows are on the wrong model, I'll open a background worker" → `switch` an opened
   window whose mod is on; a background worker only when no opened window can do the job.
 - "It says it is Haiku, so the switch failed" → its own answer and its status line name the launch
-  model; `list --name` after its next turn is the check.
+  model; the mod's line `puppet-master: switched to …` under the prompt and `list --name` after
+  its next turn are the check.
+- "I'll `claude rm` it myself" → `close`: it removes a dead worker without `stop`, and retries a
+  `stop` that fails while the background service restarts (then says to run `close` again in a
+  minute).
 
 ## Helper
 

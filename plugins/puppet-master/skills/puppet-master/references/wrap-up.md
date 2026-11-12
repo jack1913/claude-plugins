@@ -13,5 +13,6 @@ Read this when the user ends the day, and when `puppet logs` names an unreviewed
    leave it; the next start offers it.
 4. An approved proposal is a job for another time, in the plugin's own checkout. When its commit
    lands, `puppet shipped <proposal> <sha> LOGS`.
-5. `puppet close` each background worker. Tell the user which of their windows they can close, with
+5. Run `puppet list` and `close` every finished or `dead` background worker before you tell the user the day is
+   done. Tell the user which of their windows they can close, with
    each one's job.

@@ -314,7 +314,8 @@ test("dispatch rules: tiers, reuse, write scopes; context in tokens and % of the
   // only the session-only paste form (2026-11-05).
   const rule12 = rule(12);
   assert.match(rule12, /On\s+`MISMATCH`\s+where\s+the\s+session's\s+mod\s+is\s+on[\s\S]*Run\s+`puppet switch <session> --tier <tier>`\s+yourself[\s\S]*no\s+paste\s+lines,\s+no\s+new\s+worker/);
-  assert.match(rule12, /status\s+line\s+and\s+its\s+own\s+answer\s+keep\s+naming\s+the\s+launch\s+model/);
+  assert.match(rule12, /status\s+line\s+keeps\s+naming\s+the\s+launch\s+model,\s+with\s+the\s+mod's\s+line/);
+  assert.match(rule12, /its\s+own\s+answer\s+names\s+the\s+launch\s+model/);
   assert.match(rule12, /On\s+`MISMATCH`\s+where\s+the\s+mod\s+is\s+not\s+on,\s+take\s+another\s+opened\s+window\s+whose\s+mod\s+is\s+on,\s+else\s+`spawn`\s+a\s+background\s+worker\s+on\s+the\s+tier/);
   assert.doesNotMatch(rule12, /You\s+never\s+change\s+a\s+session's\s+model/);
   assert.match(rule12, /`<session>: \/model`,\s+then\s+`s`\s+on\s+the\s+`<model>`\s+row/);
@@ -800,4 +801,25 @@ test("the plugin's AGENTS.md routes new skill text, and the analyst's proposals 
   const analyst = read("analyst-brief.md");
   assert.match(analyst, /its\s+\*\*home\*\*/);
   assert.match(analyst, /the\s+core\s+or\s+the\s+reference\s+for\s+its\s+moment/);
+});
+
+// --- the text of C4 and C5, routed by the table in AGENTS.md ("Where skill text goes") ---
+
+test("dead workers are closed with close, never a raw claude rm (P-20261110-3)", () => {
+  const skill = readSkill();
+  assert.match(section(read("SKILL.md"), "When a job ends"), /`dead`:\s+`close`\s+it,\s+which\s+removes\s+it\s+without\s+`stop`/);
+  assert.match(section(skill, "Wrap-up"), /`puppet list` and `close` every finished or `dead` background worker/);
+  assert.match(section(read("SKILL.md"), "Red flags"), /"I'll `claude rm` it myself" → `close`/);
+  const rows = section(skill, "Helper reference");
+  assert.match(rows.split("\n").find((l) => l.startsWith("| `list ")), /a background worker whose process is gone shows `dead`/);
+  assert.match(rows.split("\n").find((l) => l.startsWith("| `close ")), /a `dead` worker gets `rm` alone[^|]*`may be restarting`[^|]*2, 4 and 8 s/);
+});
+
+test("rule 12: assign, switch, brief in one turn; 'switched' only once the helper printed it; the mod's line (P-20261110-4, brainiac P-20261112-1)", () => {
+  const rule12 = rule(12);
+  assert.match(rule12, /`assign`,\s+then\s+`switch`,\s+then\s+send\s+the\s+brief,\s+never\s+the\s+brief\s+first/);
+  assert.match(rule12, /only\s+after\s+the\s+helper\s+printed\s+`switched/);
+  assert.match(rule12, /`puppet-master: switched to …`\s+under\s+the\s+prompt/);
+  assert.match(rule12, /`not at a task boundary`\s+or\s+`no mod heartbeat`/);
+  assert.match(section(read("SKILL.md"), "Red flags"), /`puppet-master: switched to …`/);
 });

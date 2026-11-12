@@ -2,6 +2,15 @@
 
 Read this before every `pick`, `assign`, `spawn` or `assign --extend`, and before you turn a design or a pasted issue into a job.
 
+## Contents
+
+- Rule 3 in detail: the user's sessions first
+- Rule 4 in detail: one job per context
+- Rule 5 in detail: write scopes
+- Rule 12 in detail: every job names its tier
+- A design to relay
+- Chained jobs
+
 ## Rule 3 in detail: the user's sessions first
 
 For a job in a folder, run `pick` first:
@@ -48,11 +57,19 @@ both commit needed your relay of "git is free" (2026-11-03).
 
 - On `MISMATCH` where the session's mod is on, the helper prints "its mod is on: run
   `switch <session> --tier <tier>`". Run `puppet switch <session> --tier <tier>` yourself before
-  you send the brief: no paste lines, no new worker. The switch is that session's only: its mod
+  you send the brief: no paste lines, no new worker. In one turn: `assign`, then `switch`, then
+  send the brief, never the brief first: a session reading its brief is busy, and `switch`
+  refuses it (2026-11-10). Tell the worker or the user "switched" only after the helper printed
+  `switched <session> to <model> <effort>`. On `not at a task boundary` or `no mod heartbeat`,
+  take the fallback in the next bullet (another window whose mod is on, `spawn` on the tier, or
+  the paste lines) and tell the user the session runs on its launch model. The switch is that
+  session's only: its mod
   sends the tier's model and effort on every main-loop request and writes no settings file
   (verified 2026-11-06 on a throwaway background session: the transcript's requests, settings
-  hashes unchanged). Its status line and its own answer keep naming the launch model, so check
-  it only with `puppet list --name <session>` after its next turn: `model` is the last request
+  hashes unchanged). Its status line keeps naming the launch model, with the mod's line
+  `puppet-master: switched to …` under the prompt, and its own answer names the launch model, so
+  check the switch by that line and by `puppet list --name <session>` after its next turn:
+  `model` is the last request
   sent, and the mod column says `switched to <model> <effort>`. A switch outlives a `compact`
   and a `clear` (it moves to the new session id); `switch <session> --reset` takes the session
   back to its launch model. Your own switch is written once your turn ends.
