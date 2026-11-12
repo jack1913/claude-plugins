@@ -876,6 +876,10 @@ test("an external write the user approves is the user's ! line from the start, n
   assert.match(section(readSkill(), "Briefs"), /An external write \(a Jira create or transition, `gh pr ready`, a push\) is always a `!` line/);
 });
 
+test("the analyst brief says what a classifier-denied event is (brainiac P-20261112-8, item 4)", () => {
+  assert.match(read("analyst-brief.md"), /a `classifier-denied` one is auto mode's classifier refusing a call,\s+its excerpt `\[<category>\] <the call>`/);
+});
+
 test("shipped's 'never approved' row says which group's decisions were searched (brainiac P-20261112-4, F-5)", () => {
   const row = section(readSkill(), "Helper reference").split("\n").find((l) => l.startsWith("| `shipped "));
   assert.match(row, /`was never approved in group "<g>"` \(or `with no group`\) names the decisions file it searched/);

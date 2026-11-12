@@ -90,6 +90,7 @@ export const EVENT_KINDS = [
   "manual-cli",
   "cli-unknown",
   "permission-denied",
+  "classifier-denied",
   "compact-manual",
   "compact-auto",
 ];
@@ -113,6 +114,16 @@ function textOf(content) {
     .join("\n");
 }
 
+// Auto mode's classifier refusing a call. Its reason is a `[<category>]`, or a sentence when it
+// gave none (texts seen 2026-11-10). The refusal does not name the call, so the event does.
+const CLASSIFIER = "Permission for this action was denied by the Claude Code auto mode classifier.";
+const CATEGORY = /^Reason: \[([^\]]+)\]/;
+
+function classifierText(result, call) {
+  const category = CATEGORY.exec(result.slice(CLASSIFIER.length).trimStart())?.[1] ?? "no category";
+  return `[${category}] ${call ?? "(call not found)"}`;
+}
+
 function shellEvents(command) {
   if (command.includes("puppet.mjs")) return [];
   const words = [...command.matchAll(CLAUDE_AT)].map((m) => m[1]);
@@ -123,10 +134,11 @@ function shellEvents(command) {
 }
 
 // Events from one entry. `seen.commands` maps tool_use ids to their shell commands so a
-// failed result can be matched to what ran; `seen.asks` holds the ids of AskUserQuestion
-// calls, whose result is the user's answer.
+// failed result can be matched to what ran; `seen.calls` maps every tool_use id to its shell
+// command, or its tool name and input, for a classifier refusal; `seen.asks` holds the ids of
+// AskUserQuestion calls, whose result is the user's answer.
 function entryEvents(e, seen) {
-  const { commands, asks } = seen;
+  const { commands, calls, asks } = seen;
   const found = [];
   const add = (kind, text) => found.push({ kind, text });
   const content = e.message?.content;
@@ -147,6 +159,7 @@ function entryEvents(e, seen) {
         // format (a `cat` of SKILL.md) does not.
         if (/^puppet: /m.test(r)) add("helper-error", r);
         else if (r.startsWith("Permission to use ")) add("permission-denied", r);
+        else if (r.startsWith(CLASSIFIER)) add("classifier-denied", classifierText(r, calls.get(b.tool_use_id)));
         else if (b.is_error && r.startsWith("Exit code ")) {
           const cmd = commands.get(b.tool_use_id);
           if (cmd !== undefined && /\b(claude|git)\b|puppet\.mjs/.test(cmd)) add("command-failed", `${cmd} → ${r}`);
@@ -165,7 +178,10 @@ function entryEvents(e, seen) {
         add("message-out", `${b.input?.to}: ${m}`);
       } else if (SHELLS.has(b.name) && typeof b.input?.command === "string") {
         commands.set(b.id, b.input.command);
+        calls.set(b.id, b.input.command);
         for (const kind of shellEvents(b.input.command)) add(kind, b.input.command);
+      } else {
+        calls.set(b.id, `${b.name} ${JSON.stringify(b.input ?? {})}`);
       }
     }
   } else if (e.type === "system" && e.subtype === "compact_boundary") {
@@ -181,7 +197,7 @@ function entryEvents(e, seen) {
 export function extractEvents(text, { sessionId, session, fromLine }) {
   const lines = text.split(/\r?\n/);
   const sid = sessionId.slice(0, 8);
-  const seen = { commands: new Map(), asks: new Set() };
+  const seen = { commands: new Map(), calls: new Map(), asks: new Set() };
   const events = [];
   let nextLine = fromLine;
   for (let i = 0; i < lines.length; i++) {

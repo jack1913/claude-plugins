@@ -22,7 +22,9 @@ approve. You change nothing.
   friction you see:
   `{{helper}} finding --tag <tag> --target <target> --evidence <event id[,id]> --note "<one line>" {{logs_args}}`.
   An event id is the `id` field of an events.jsonl line, such as `6d3e35df:249` (session, then
-  transcript line), never the line number of events.jsonl.
+  transcript line), never the line number of events.jsonl. A `permission-denied` event is a
+  permission rule's refusal; a `classifier-denied` one is auto mode's classifier refusing a call,
+  its excerpt `[<category>] <the call>`.
 - **"wrap-up: …"** Harvest and record findings as above, run `{{helper}} summary {{logs_args}}`,
   then write `<logs>/<day>/report.md` (below) and answer the master with its path.
 

@@ -85,7 +85,7 @@ test("extractEvents finds each kind once in the fixture and ignores the sidechai
     fromLine: 0,
   });
   assert.deepEqual(events.map((e) => e.kind).sort(), [...EVENT_KINDS].sort());
-  assert.equal(nextLine, 23);
+  assert.equal(nextLine, 25);
   const byKind = Object.fromEntries(events.map((e) => [e.kind, e]));
   assert.equal(byKind["user-turn"].excerpt, "wait");
   assert.equal(byKind["user-turn"].id, "abcdef12:1");
@@ -96,11 +96,39 @@ test("extractEvents finds each kind once in the fixture and ignores the sidechai
   assert.match(byKind["cli-unknown"].excerpt, /claude ps/);
   assert.equal(byKind["compact-manual"].excerpt, "manual 477503→28842");
   assert.equal(byKind["compact-auto"].excerpt, "auto 218034→?");
+  assert.equal(byKind["classifier-denied"].excerpt, "[Unrequested Commit in a Connected App] gh pr ready 192 --repo acme/backend");
   for (const e of events) {
     assert.equal(e.sessionId, SID);
     assert.equal(e.session, "u1");
     assert.ok(e.ts);
   }
+});
+
+// brainiac P-20261112-8, item 4: the analyst saw no classifier refusal (the proof pass found 27 in
+// puppet sessions, harvest recorded none). The texts are real ones, from 2026-11-10.
+test("a classifier refusal is recorded with its category, or none, and the call it refused, redacted and cut", () => {
+  const l = (o) => `${JSON.stringify({ timestamp: "2026-10-27T12:00:00Z", ...o })}\n`;
+  const call = (id, name, input) => l({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } });
+  const refused = (id, text) => l({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, is_error: true, content: text }] } });
+  const NONE = "Permission for this action was denied by the Claude Code auto mode classifier. Reason: The server-side auto mode classifier judged this action dangerous (it gave no explanation). If you have other tasks";
+  const CAT = "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [External System Writes]. If you have other tasks";
+  const text =
+    call("a", "Bash", { command: "brainiac.cmd jira transition --epic EPIC-1 --to in-progress" }) +
+    refused("a", NONE) +
+    call("b", "mcp__jira__create_issue", { project: "X", summary: "a bug" }) +
+    refused("b", CAT) +
+    call("c", "Bash", { command: `curl -H "x: ATATT0fakeTokenForTests0000000000000000000000" ${"x".repeat(400)}` }) +
+    refused("c", CAT);
+  const { events } = extractEvents(text, { sessionId: SID, session: "u1", fromLine: 0 });
+  assert.deepEqual(events.map((e) => e.kind), ["classifier-denied", "classifier-denied", "classifier-denied"]);
+  assert.equal(events[0].excerpt, "[no category] brainiac.cmd jira transition --epic EPIC-1 --to in-progress");
+  assert.equal(events[1].excerpt, '[External System Writes] mcp__jira__create_issue {"project":"X","summary":"a bug"}');
+  assert.equal(events[2].excerpt, "[redacted]");
+  const long = extractEvents(call("d", "Bash", { command: "y ".repeat(400) }) + refused("d", CAT), { sessionId: SID, session: "u1", fromLine: 0 });
+  assert.equal(long.events[0].excerpt.length, 300);
+  // A near-miss: a result that only quotes the sentence (a `cat` of the proof) is no event.
+  const quoted = extractEvents(call("e", "Bash", { command: "cat proof.md" }) + refused("e", `Notes: ${CAT}`), { sessionId: SID, session: "u1", fromLine: 0 });
+  assert.deepEqual(quoted.events, []);
 });
 
 test("extractEvents stops before a partial last line and reads it on the next run", () => {
@@ -133,14 +161,14 @@ test("harvest appends events, advances offsets and adds to the day's stats", () 
   const t = harvestSetup();
   try {
     const r = harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] });
-    assert.deepEqual(r, { sessions: 1, missing: [], restarted: [], lines: 23, events: 10, day: DAY, days: [DAY] });
-    assert.equal(readJsonl(path.join(t.logs, DAY, "events.jsonl")).length, 10);
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, "offsets.json"), "utf8")), { [SID]: 23 });
+    assert.deepEqual(r, { sessions: 1, missing: [], restarted: [], lines: 25, events: 11, day: DAY, days: [DAY] });
+    assert.equal(readJsonl(path.join(t.logs, DAY, "events.jsonl")).length, 11);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, "offsets.json"), "utf8")), { [SID]: 25 });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, DAY, "harvest-stats.json"), "utf8")), {
       runs: 1,
       sessions: ["u1"],
-      lines: 23,
-      events: 10,
+      lines: 25,
+      events: 11,
     });
   } finally {
     t.cleanup();
@@ -156,7 +184,7 @@ test("harvest run twice reads nothing new the second time", () => {
     assert.equal(r.lines, 0);
     const stats = JSON.parse(fs.readFileSync(path.join(t.logs, DAY, "harvest-stats.json"), "utf8"));
     assert.equal(stats.runs, 2);
-    assert.equal(stats.events, 10);
+    assert.equal(stats.events, 11);
   } finally {
     t.cleanup();
   }
@@ -190,7 +218,7 @@ test("cli: harvest prints the one-line log", async () => {
     });
     const logs = path.join(t.dir, "my logs");
     assert.equal(await main(["harvest", "--logs", logs, "--plugin-data", "${CLAUDE_PLUGIN_DATA}", "--master", "master"], t.deps), 0);
-    assert.deepEqual(t.out, [`harvested 10 events from 1 sessions (23 new lines) into ${logs}; no transcript: u1`]);
+    assert.deepEqual(t.out, [`harvested 11 events from 1 sessions (25 new lines) into ${logs}; no transcript: u1`]);
   } finally {
     t.cleanup();
   }
@@ -219,7 +247,7 @@ test("harvest still reads a worker closed since the last harvest, once", async (
     t.writeTranscript(w1.sessionId, fixture("transcript-harvest.jsonl"));
     assert.equal(await main(["close", "w1"], t.deps), 0);
     t.deps.agents = [];
-    assert.match(await t.harvest(), /^harvested 10 events from 1 sessions/);
+    assert.match(await t.harvest(), /^harvested 11 events from 1 sessions/);
     assert.match(await t.harvest(), /^harvested 0 events from 0 sessions/);
     assert.deepEqual(t.readRegistry().pendingHarvest ?? [], []);
   } finally {
@@ -236,7 +264,7 @@ test("harvest reads a session that list dropped as gone", async () => {
     t.writeTranscript(u1.sessionId, fixture("transcript-harvest.jsonl"));
     assert.equal(await main(["list"], t.deps), 0);
     assert.equal(t.readRegistry().workers.u1, undefined);
-    assert.match(await t.harvest(), /^harvested 10 events from 1 sessions/);
+    assert.match(await t.harvest(), /^harvested 11 events from 1 sessions/);
   } finally {
     t.cleanup();
   }
@@ -253,7 +281,7 @@ test("re-adopting a cleared window still harvests its old transcript", async () 
     t.writeTranscript(oldSid, fixture("transcript-harvest.jsonl"));
     assert.equal(await main(["adopt", "u1"], t.deps), 0);
     assert.equal(t.readRegistry().workers.u1.sessionId, u1.sessionId);
-    assert.match(await t.harvest(), /^harvested 10 events from 1 sessions .*; no transcript: u1$/);
+    assert.match(await t.harvest(), /^harvested 11 events from 1 sessions .*; no transcript: u1$/);
   } finally {
     t.cleanup();
   }
@@ -303,7 +331,7 @@ test("harvest refuses while another harvest holds the lock, and takes over a sta
     assert.equal(fs.existsSync(path.join(t.logs, DAY, "events.jsonl")), false);
     const old = new Date(Date.now() - 10 * 60 * 1000);
     fs.utimesSync(lock, old, old);
-    assert.equal(harvest(t.deps, { logsDir: t.logs, sessions }).events, 10);
+    assert.equal(harvest(t.deps, { logsDir: t.logs, sessions }).events, 11);
     assert.equal(fs.existsSync(lock), false);
   } finally {
     t.cleanup();

@@ -407,8 +407,11 @@ automatically, and the report says how much it read.
 - **`harvest`** is deterministic. For every roster session, live or not, every session that left the roster since the
   last harvest (closed, dropped as `gone`, or re-adopted under a new session id: the registry's `pendingHarvest`,
   read once and cleared) and the master, it reads the transcript lines after the stored offset and appends events of
-  ten kinds: `user-turn`, `message-in`, `message-out`, `helper-error`,
-  `command-failed`, `manual-cli`, `cli-unknown`, `permission-denied`, `compact-manual` and `compact-auto`. The user's
+  eleven kinds: `user-turn`, `message-in`, `message-out`, `helper-error`,
+  `command-failed`, `manual-cli`, `cli-unknown`, `permission-denied`, `classifier-denied`, `compact-manual` and
+  `compact-auto`. `permission-denied` is a permission rule's refusal ("Permission to use … has been denied");
+  `classifier-denied` is auto mode's classifier refusing a call, recorded as `[<category>] <the call>` (`[no category]`
+  when its reason names none), since the refusal itself does not name the call. The user's
   answer to an `AskUserQuestion` dialog is a `user-turn` (a declined dialog is not), and a `SendMessage` without a
   message (a pure `notify_when_idle` subscription) is no event. Each event has an id
   `<first 8 of sessionId>:<line>` (with `.2`, `.3` when one line yields several), a timestamp and an excerpt of at
