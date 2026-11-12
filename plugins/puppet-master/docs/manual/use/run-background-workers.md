@@ -84,6 +84,13 @@ there, it starts a background worker instead, on the model and effort the job's 
   - Claude acts on everything in your message before it replies: a "go" starts the job in the same turn, and "if you
     have free workers" starts the second job or says why not. When a job ends, it also starts any item you already
     approved that needs no decision, and says so in one line.
+- Claude never writes or reads a credentials file (`.env`, a token or key file) with its edit tools, and neither does a
+  worker: the file is copied from its example by a shell command, or you get a `!` line, and you fill in the secrets.
+- A worker lists the scratch folders it made when it reports done. Claude deletes the ones under its logs folder and
+  asks you about the rest.
+- A question about a repository (what its code does, whether a branch has a commit) is a read-only job for a session,
+  not something Claude answers from the master's own window. A standing rule you state for a team (a Jira suffix, a
+  label) becomes a proposed change in that repository, never a memory.
 - A window you rename keeps its record: Claude carries its job to the new name.
 
 ## Keep it small

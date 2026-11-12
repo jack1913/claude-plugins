@@ -605,6 +605,28 @@ test("the worker's finish checklist, coupled files, read-back, long-run progress
   assert.match(brief, /end it with the helper's `close`/);
   assert.match(brief, /never a raw `claude stop` or `claude rm`/);
   assert.match(brief, /Never open a seed, config or env file to read a credential/);
+  // 2026-11-12 (P-20261110-12, P-20261109-7, P-20261110-9, P-20261109-6)
+  assert.match(brief, /Never\s+create\s+or\s+edit\s+a\s+credentials\s+file/);
+  assert.match(brief, /cp \.env\.example \.env/);
+  assert.match(brief, /inferred/);
+  assert.match(brief, /list\s+every\s+scratch\s+folder/);
+  assert.match(brief, /A\s+live\s+check\s+with\s+no\s+host,\s+database\s+or\s+test\s+account\s+named\s+here\s+is\s+a\s+miss/);
+});
+
+test("repo work, team rules, refs, live checks, credentials files and scratch folders (P-20261109-5, -6, P-20261110-9, -10, -11, -12)", () => {
+  const skill = read("SKILL.md");
+  const rule2 = skill.slice(skill.indexOf("2. **Sessions do the work.**"), skill.indexOf("3. **The user's sessions first.**"));
+  assert.match(rule2, /read-only\s+job\s+for\s+a\s+session,\s+even\s+after\s+`finish`/);
+  assert.match(rule2, /assign\s+--reuse/);
+  assert.match(rule2, /never\s+save\s+it\s+to\s+memory/);
+  const rule13 = skill.slice(skill.indexOf("13. **Never copy, write or print a config file.**"), skill.indexOf("14. **"));
+  assert.match(rule13, /Never\s+create\s+or\s+edit\s+a\s+credentials\s+file/);
+  assert.match(rule13, /cp \.env\.example \.env/);
+  const briefs = section(skill, "Briefs");
+  assert.match(briefs, /git\s+ls-remote/);
+  assert.match(briefs, /live\s+check\s+names\s+the\s+host\s+URL/);
+  assert.match(section(skill, "When a job ends"), /Delete\s+the\s+listed\s+folders\s+under\s+`<logs>\/tmp\/<session>`/);
+  assert.match(section(skill, "Red flags"), /"I'll just read the code or fetch to answer"/);
 });
 
 test("briefs keep the template's lines whole, restate the shape, ask with a purpose, and wait for go only on an open decision (carcare P-20261104-8, -14, P-20261105-11, P-20261106-6, -7)", () => {

@@ -64,7 +64,12 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
    delete, commit, push, file edit) is a job for a session. So are comparisons, overlays and
    recomputations of a session's results: you keep the judgment and the relay. Do it yourself only
-   when the user tells you to, or to run a read-only check of what a session reported.
+   when the user tells you to. Answering the user's question about a repository (reading its code,
+   `git fetch`, ancestry checks) is a read-only job for a session, even after `finish`. When `pick`
+   prints no clean session, `spawn` one; a finished session takes it only with `assign --reuse`,
+   when the user asked to reuse sessions (rule 4). A standing rule the user states for a team or a
+   product (a Jira suffix, a label, an assignee) becomes a proposed repo-side change, a job; never
+   save it to memory, which reaches no other user or machine.
 3. **The user's sessions first.** The user, 2026-11-06: "move theirs work into opened, and keep bg
    only when you cannot do with opened windows". The user's opened windows take the work first; a
    background worker only when none of them can do the job. For a job in a folder, run `pick` first:
@@ -202,7 +207,10 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
       and never read the launcher's config.
 13. **Never copy, write or print a config file.** Find out a session's model and effort only from
     the helper. Never copy, write or print any `config.json`, settings file or credentials file:
-    they may hold plaintext keys.
+    they may hold plaintext keys. Never create or edit a credentials file (`.env`, a token or key
+    file) with the Write or Edit tool, and never read one. Create it with a shell copy from the
+    example file (`cp .env.example .env`), or give the user the `!` line, and let the user fill in
+    the secrets. Check it works only through the tool's own login command.
 14. **Single-user tools are assigned.** Note which session holds the browser (Playwright) or any
     other tool only one session can use at a time. When another job needs it for a check, ask the
     holder to release it first, and tell that job's session when it is free.
@@ -228,8 +236,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
 3. Tell the analyst in one line: `job ended: <label>; harvest now`.
 4. If the job ran tests, delete its temp folder (`<logs>/tmp/<session>`, `{{test_tmp}}` under Briefs)
-   once the worker's report is in, and name it in your one-line log. Build output in the repository
-   stays: it is gitignored and part of the checkout.
+   once the worker's report is in, and name it in your one-line log. Delete the listed folders
+   under `<logs>/tmp/<session>` too; ask the user about the rest in the same message. Build output
+   in the repository stays: it is gitignored and part of the checkout.
 5. Start the open items the user already approved and that need no decision, and report them in one
    line. Rule 1 stands: the user makes every decision.
 
@@ -352,7 +361,9 @@ reviews only after that line, and starts on it without waiting for a new brief f
   - `{{preconditions}}`: the services, tools, device state and shared tools the job depends on (the
     Docker engine up, a server answering, a phone signed in, the shared browser free), each with its
     state as you checked it just now and its one recovery command where you know one (`docker
-    desktop restart`). Write "None" when it needs none.
+    desktop restart`). Write "None" when it needs none. A live check names the host URL, the
+    database and the test account, or the user's standing rule for the account, quoted with its
+    date, never a password; when you cannot name them, ask the user before the job starts.
   - `{{approvals}}`: the irreversible steps the job will need (a delete, a push, a Railway write),
     each with its exact command, and "None" when it needs none. Ordinary writes are not listed:
     the user sets the worker's window to accept-edits once, when you send the brief (Relay
@@ -366,6 +377,8 @@ reviews only after that line, and starts on it without waiting for a new brief f
   the brief states (approved or not, the branch, a dirty tree) instead of what you read at the
   start. Before a brief says a tool is or isn't installed, check it in the session. Build the steps
   on these checked facts, and name each step's precondition (what must exist or have run first).
+  A git ref the brief names goes into `{{preconditions}}` for the worker to check first (`git
+  ls-remote --heads origin <ref>`), or you check it with that read-only `git ls-remote`.
 - Fill each conditional line of the worker brief, or delete it when it doesn't apply:
   - `{{write_scope}}`: the folders of `--scope`, the report files the job's tools write by default
     (a check's result file, for example), and "run no git command" with `--no-git`. With
@@ -466,6 +479,7 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 - "It is busy, I'll compact it anyway" → ask it to pause at its next part boundary, then `compact`,
   then "continue" (the pause pattern).
 - "I'll just run the merge myself" → it is a job for a session.
+- "I'll just read the code or fetch to answer" → a read-only job for a session (rule 2).
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll try `claude <something>`" → only the calls this file names.
 - "I'll chain the two `puppet` calls in one command" → one call per command, so each outcome reads
