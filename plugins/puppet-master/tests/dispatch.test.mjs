@@ -264,9 +264,61 @@ test("the CLI: assign --extend, reopen, and their usage errors", async () => {
 test("scopes: relative folders, normalized, never outside the checkout", () => {
   const d = { platform: "win32" };
   assert.deepEqual(parseScope(d, "Brand\\Logo/, docs"), ["brand/logo", "docs"]);
-  assert.throws(() => parseScope(d, "C:\\Work"), /relative to the checkout/);
+  // 2026-11-12 (P-20261110-8): an absolute folder is kept, as an absolute posix path
+  assert.deepEqual(parseScope(d, "C:\\Work"), ["c:/work"]);
+  assert.deepEqual(parseScope(d, "D:/Development/Work/temp plans/, docs"), ["d:/development/work/temp plans", "docs"]);
+  assert.deepEqual(parseScope({ platform: "linux" }, "/tmp/Plans"), ["/tmp/Plans"]);
+  assert.throws(() => parseScope(d, "C:\\Work\\..\\x"), /leaves the checkout/);
   assert.throws(() => parseScope(d, "../x"), /leaves the checkout/);
   assert.throws(() => parseScope(d, " , "), /at least one folder/);
+});
+
+test("collision: a job whose scope folders are all absolute writes nothing in the checkout (P-20261110-8)", () => {
+  assert.equal(collision({ scope: ["d:/temp plans"], git: true }, { git: true }), null);
+  assert.equal(collision({ git: true }, { scope: ["d:/temp plans"], git: true }), null);
+  // a mixed scope: only its relative folders take part
+  assert.match(collision({ scope: ["docs", "d:/x"], git: false }, { git: true }), /unless both jobs pass --scope/);
+  assert.match(collision({ scope: ["docs", "d:/x"], git: false }, { scope: ["docs"], git: true }), /overlap at docs/);
+  assert.equal(collision({ scope: ["docs", "d:/x"], git: false }, { scope: ["src"], git: true }), null);
+  assert.equal(collision({ scope: ["d:/x"], git: true }, { scope: ["."], git: true }), null);
+});
+
+test("an absolute --scope folder inside the checkout is refused by assign, pick and spawn; outside it is allowed (P-20261110-8)", async () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2)]);
+  t.deps.platform = "win32";
+  try {
+    adoptSession(t.deps, "u1");
+    adoptSession(t.deps, "u2");
+    assert.equal(await main(["assign", "u1", "x", "--scope", "C:\\Work\\Repo\\docs"], t.deps), 2);
+    assert.match(t.err.at(-1), /--scope "c:\/work\/repo\/docs" is inside the checkout; write it relative to it/);
+    assert.throws(() => pickSession(t.deps, REPO, { scope: "c:/work/repo" }), /inside the checkout/);
+    const brief = path.join(t.dir, "b.md");
+    fs.writeFileSync(brief, "do it\n<!-- end of the puppet-master worker brief: keep this line -->\n");
+    assert.throws(() => spawnWorker(t.deps, "w9", REPO, brief, { scope: "C:/Work/Repo/x", effort: "high" }), /inside the checkout/);
+    // a sibling with the same prefix is outside it
+    assert.deepEqual(assignJob(t.deps, "u1", "x", { scope: "C:/Work/Repo2/docs" }).scope, ["c:/work/repo2/docs"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a job writing only outside the checkout does not count against the lock: assign, spawn and pick (F-6 of 2026-11-10)", async () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2)]);
+  t.deps.platform = "win32";
+  try {
+    adoptSession(t.deps, "u1");
+    adoptSession(t.deps, "u2");
+    assignJob(t.deps, "u1", "edit the whole checkout");
+    assert.throws(() => assignJob(t.deps, "u2", "plans"), /u1 is already editing/);
+    assert.equal(pickSession(t.deps, REPO, { scope: "D:/Development/Work/temp plans" }).name, "u2");
+    const brief = path.join(t.dir, "b.md");
+    fs.writeFileSync(brief, "do it\n<!-- end of the puppet-master worker brief: keep this line -->\n");
+    const w = spawnWorker(t.deps, "w9", REPO, brief, { scope: "D:/temp plans", effort: "high" });
+    assert.deepEqual(t.readRegistry().workers[w.name].scope, ["d:/temp plans"]);
+    assert.deepEqual(assignJob(t.deps, "u2", "plans", { scope: "D:/Development/Work/temp plans" }).scope, ["d:/development/work/temp plans"]);
+  } finally {
+    t.cleanup();
+  }
 });
 
 test("collision: no scope, both git, or overlapping folders collide; disjoint with one git does not", () => {

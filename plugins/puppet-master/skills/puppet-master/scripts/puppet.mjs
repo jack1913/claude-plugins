@@ -500,8 +500,9 @@ export function isEditing(rec, agents) {
 
 // --- write scopes: two jobs may share a checkout when they cannot collide -----------------
 
-// A job's write scope: folders relative to its checkout, in posix form. "." is the whole
-// checkout. An absolute path or one that climbs out with ".." is refused.
+// A job's write scope: folders in posix form, relative to its checkout ("." is the whole
+// checkout) or absolute and outside it (a temp plans folder). One that climbs out with ".."
+// is refused; the callers that know the checkout refuse an absolute one inside it.
 export function parseScope(deps, value) {
   if (value === undefined) return undefined;
   const win = (deps.platform ?? process.platform) === "win32";
@@ -511,10 +512,8 @@ export function parseScope(deps, value) {
     .filter(Boolean)
     .map((s) => {
       const p = s.replace(/\\/g, "/");
-      if (path.posix.isAbsolute(p) || /^[A-Za-z]:/.test(p)) {
-        throw new PuppetError(`--scope folders are relative to the checkout, got "${s}"`, 2);
-      }
-      const n = path.posix.normalize(p).replace(/\/+$/, "") || ".";
+      if (p.split("/").includes("..")) throw new PuppetError(`--scope "${s}" leaves the checkout`, 2);
+      const n = path.posix.normalize(p).replace(/\/+$/, "") || (isAbsoluteScope(p) ? "/" : ".");
       if (n === ".." || n.startsWith("../")) throw new PuppetError(`--scope "${s}" leaves the checkout`, 2);
       return win ? n.toLowerCase() : n;
     });
@@ -522,14 +521,35 @@ export function parseScope(deps, value) {
   return dirs;
 }
 
+const isAbsoluteScope = (s) => s.startsWith("/") || /^[A-Za-z]:/.test(s);
+
+// The callers that know the checkout: an absolute folder inside it is written relative to it,
+// so the lock sees it.
+function refuseScopeInside(deps, job, checkout) {
+  const p = pathApi(deps);
+  const root = checkoutKey(deps, checkout);
+  for (const s of job.scope ?? []) {
+    if (!isAbsoluteScope(s)) continue;
+    const abs = checkoutKey(deps, s);
+    if (abs === root || abs.startsWith(root.endsWith(p.sep) ? root : root + p.sep)) {
+      throw new PuppetError(`--scope "${s}" is inside the checkout; write it relative to it`, 2);
+    }
+  }
+}
+
 const overlaps = (x, y) => x === "." || y === "." || x === y || y.startsWith(`${x}/`) || x.startsWith(`${y}/`);
 
 // Why two jobs in one checkout would collide, or null when they cannot: both declare a
-// write scope, the scopes are disjoint, and at most one of them runs git.
+// write scope, the scopes are disjoint, and at most one of them runs git. A job whose
+// folders are all absolute writes nothing in the checkout, so it collides with nothing; in a
+// mixed scope only the relative folders take part.
 export function collision(a, b) {
+  const outside = (j) => j.scope?.length > 0 && j.scope.every(isAbsoluteScope);
+  if (outside(a) || outside(b)) return null;
   if (!a.scope || !b.scope) return "one editing session per checkout unless both jobs pass --scope";
   if (a.git !== false && b.git !== false) return "both jobs run git; pass --no-git to one of them";
-  const hit = a.scope.find((x) => b.scope.some((y) => overlaps(x, y)));
+  const inside = (j) => j.scope.filter((x) => !isAbsoluteScope(x));
+  const hit = inside(a).find((x) => inside(b).some((y) => overlaps(x, y)));
   if (hit) return `write scopes overlap at ${hit}`;
   return null;
 }
@@ -734,6 +754,7 @@ export function assignJob(deps, key, label, { reuse = false, extend = false, sco
   const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; the ${rec.role} takes no jobs`);
+  refuseScopeInside(deps, job, rec.checkout);
   if (extend) return extendJob(deps, reg, agents, agent, rec, label, job, tier, git ? true : noGit ? false : undefined);
   const reusable = reuse && rec.jobState === "done";
   if (rec.jobState !== "clean" && !reusable) {
@@ -830,6 +851,7 @@ export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
   if (tier !== undefined) tierMatch(tier, {});
   const job = jobFields(deps, { scope, noGit });
   const checkout = checkoutOf(deps, cwd);
+  refuseScopeInside(deps, job, checkout);
   const key = checkoutKey(deps, checkout);
   const agents = listAgents(deps);
   const reg = loadRoster(deps, agents);
@@ -884,6 +906,7 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
     throw new PuppetError(`a live session is already named "${name}" (id ${clash.id ?? clash.sessionId})`, 2);
   }
   const checkout = checkoutOf(deps, cwd);
+  refuseScopeInside(deps, fields, checkout);
   const key = checkoutKey(deps, checkout);
   const reg = loadRoster(deps, agents);
   for (const [other, rec] of Object.entries(reg.workers)) {

@@ -613,6 +613,14 @@ test("the worker's finish checklist, coupled files, read-back, long-run progress
   assert.match(brief, /A\s+live\s+check\s+with\s+no\s+host,\s+database\s+or\s+test\s+account\s+named\s+here\s+is\s+a\s+miss/);
 });
 
+test("rule 5: a --scope folder may be absolute and outside the checkout, and then does not count against the lock (P-20261110-8)", () => {
+  const skill = read("SKILL.md");
+  const rule5 = skill.slice(skill.indexOf("5. **Write scopes decide who shares a checkout.**"), skill.indexOf("6. **Never create a git worktree**"));
+  assert.match(rule5, /absolute\s+folder\s+outside\s+the\s+checkout/);
+  assert.match(rule5, /does\s+not\s+count\s+against\s+the\s+lock/);
+  assert.match(rule5, /read-only\s+git\s+at\s+most/);
+});
+
 test("the helper table says list --name prints one session, adopted or not (P-20261109-9)", () => {
   assert.match(read("SKILL.md"), /`--name` prints one, adopted or not/);
 });

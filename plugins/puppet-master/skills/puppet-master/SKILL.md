@@ -100,7 +100,10 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 5. **Write scopes decide who shares a checkout.** By default, one editing session per checkout:
    `assign`, `pick` and `spawn` refuse a second. Two jobs may share a checkout only when both pass
    `--scope <folder[,folder]>`, the folders don't overlap, and at most one of them runs git (the
-   other passes `--no-git`). Write the scope into the brief's `{{write_scope}}` line.
+   other passes `--no-git`). A `--scope` folder may also be an absolute folder outside the checkout
+   (a temp plans folder): a job whose folders are all outside writes nothing in the checkout and
+   does not count against the lock; its brief allows read-only git at most. Write the scope into
+   the brief's `{{write_scope}}` line.
    When `assign`, `pick` or `spawn` refuses because another job is editing the checkout, there are
    two ways out: wait for that job to end (`finish` it once it reports done), or have named both
    jobs' scopes when you assigned them, as above. A job added to a running one with `--extend`

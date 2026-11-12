@@ -55,8 +55,10 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   hand.
 - **One editing session per checkout, unless both jobs name their folders.** `assign` and `spawn` refuse a second
   session with an active job whose cwd resolves (through `git rev-parse --show-toplevel`) to the same checkout. The
-  exception: both jobs pass `--scope <folders>` (relative to the checkout, comma-separated), the folders don't
-  overlap, and at most one of the two runs git (the other passes `--no-git`). A session adopted as `unknown` counts
+  exception: both jobs pass `--scope <folders>` (relative to the checkout, or absolute outside it; comma-separated), the folders don't
+  overlap, and at most one of the two runs git (the other passes `--no-git`). A job whose folders are all absolute
+  writes nothing in the checkout and collides with nothing; in a mixed scope only the relative folders count; an
+  absolute folder inside the checkout is refused. A session adopted as `unknown` counts
   while it is not idle, since it may be editing; a clean session, a finished one, the analyst and the master do not
   count. A folder outside any repository is its own checkout; any other git failure is an error, because it would
   weaken the lock.
