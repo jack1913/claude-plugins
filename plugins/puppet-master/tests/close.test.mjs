@@ -123,6 +123,45 @@ test("stop failing four times with 'may be restarting' exits 1 with one manual s
   }
 });
 
+// brainiac P-20261112-6 (F-8): `claude rm` failed the same way three times in a minute on two dead
+// rows. The rows went at once later, with a background session running (a data point, not proof).
+test("rm failing with 'may be restarting' is retried at 2 s, 4 s and 8 s, then the worker is closed", async () => {
+  const sleeps = [];
+  let n = 0;
+  const t = closeSetup({
+    sleeps,
+    rm: () => (++n <= 2 ? { code: 1, stderr: "couldn't remove x — the background service may be restarting. Try again in a moment." } : { stdout: "removed\n" }),
+  });
+  try {
+    assert.equal(await main(["close", "w1"], t.deps), 0);
+    assert.deepEqual(sleeps, [2000, 4000]);
+    assert.deepEqual(verbs(t).map((a) => a[0]), ["stop", "rm", "rm", "rm"]);
+    assert.deepEqual(t.readRegistry().workers, {});
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("rm failing four times with 'may be restarting' keeps the record and says when to run close again", async () => {
+  const sleeps = [];
+  const t = closeSetup({
+    sleeps,
+    pid: null,
+    rm: () => ({ code: 1, stderr: "couldn't remove x — the background service may be restarting. Try again in a moment." }),
+  });
+  try {
+    assert.equal(await main(["close", "w1"], t.deps), 1);
+    assert.deepEqual(sleeps, [2000, 4000, 8000]);
+    assert.deepEqual(verbs(t).map((a) => a[0]), ["rm", "rm", "rm", "rm"]);
+    const msg = t.err.join("\n");
+    assert.match(msg, /w1 is stopped but NOT removed \(id [0-9a-z]+; resume: cd "\/work\/repo" && claude --resume [^)]+\): claude rm failed/);
+    assert.match(msg, /may be restarting[^\n]*; run close w1 again in a minute, or once a background worker is running$/);
+    assert.ok(t.readRegistry().workers.w1);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("any other stop error is not retried", async () => {
   const sleeps = [];
   const t = closeSetup({ sleeps, stop: () => ({ code: 1, stderr: "cannot stop" }) });

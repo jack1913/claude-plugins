@@ -16,6 +16,7 @@ Find what you see, then do what's next to it.
 | `spawn: name a --tier or --effort` | The master started a worker without saying how strong it should be. Tell it the job's tier: `creative` or `mechanical` |
 | `dead` in a background worker's line | The worker's process is gone (it shows no process id in the session list). Tell Claude to close it: it removes the worker without stopping it first |
 | `could not be stopped … run close <name> again in a minute` | The background service was restarting. Wait a minute and tell Claude to close that worker again; its record is kept meanwhile |
+| `stopped but NOT removed … run close <name> again in a minute, or once a background worker is running` | `claude rm` kept failing with "the background service may be restarting". Tell Claude to close it again in a minute, or once a background worker is running; the worker stays stopped and resumable meanwhile |
 | `DONE? run finish` on a session's line | That session reported its job done. Tell the master to close the job |
 | `<name> is closed (resume: …)` | That session was closed. Run the resume command if you want it back, then tell Claude to adopt it |
 | `… belongs to group "<group>"; pass --group <group>` | That proposal id is another master's. Decide it in that master's session, or tell this one to use that group |

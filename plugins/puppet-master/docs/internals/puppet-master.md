@@ -154,7 +154,7 @@ the helper calls.
 | Edit files | `worktree.bgIsolation: "none"` in the user's `settings.json` | Without it a background worker cannot edit until `EnterWorktree`. With it, a worker wrote into the main checkout, and no worktree appeared |
 | Compact | `claude stop <id>`, then `claude -p --resume <sessionId> --output-format json "/compact <focus>"` | The transcript gains a `compact_boundary`; the JSON result carries `modelUsage.<model>.contextWindow` |
 | Restart | `claude --bg --resume <sessionId> "<next brief>"`, from the worker's cwd | Resumes with its saved name and model, and remembers its state |
-| Close | `claude stop <id>`, then `claude rm <id>` | Works; the transcript stays resumable with `claude --resume <sessionId>`. A `dead` worker gets `rm` alone; a `stop` that fails with `may be restarting` is retried after 2 s, 4 s and 8 s |
+| Close | `claude stop <id>`, then `claude rm <id>` | Works; the transcript stays resumable with `claude --resume <sessionId>`. A `dead` worker gets `rm` alone; a `stop` or `rm` that fails with `may be restarting` is retried after 2 s, 4 s and 8 s |
 | Measure | Last main-thread assistant `usage` in `<config dir>/projects/<project>/<sessionId>.jsonl`: input + cache read + cache creation, over the context window | Matches the status line's percentage |
 
 Things that shaped the helper:
@@ -471,7 +471,10 @@ failure. There is no silent fallback.
 - `assign` and `pick` never refuse on a tier: a `MISMATCH` line is a warning.
 - `compact`, `cycle` and `clear` refuse a `dead` worker as not at a task boundary; `close` removes it with `rm` alone.
   When `stop` still fails with `may be restarting` after the retries, `close` says to run it again in a minute and
-  keeps the record.
+  keeps the record. When `rm` does, `close` prints the stopped-but-not-removed line with the id and the resume
+  command, and says to run it again in a minute or once a background worker is running. On 2026-11-10 and 2026-11-12
+  `rm` failed this way for minutes while no background session was running, and went through soon after one was
+  (observed twice; why is a **hypothesis**: the CLI's code was not read).
 - `cycle` refuses a worker that is not idle. If it fails after stopping the worker, the message says whether the worker
   was compacted and prints the `cd "<cwd>" && claude --bg --resume <sessionId>` that restarts it.
 - `close` keeps the registry record when `claude rm` fails, and prints the resume command.

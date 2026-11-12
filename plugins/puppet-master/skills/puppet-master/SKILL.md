@@ -225,8 +225,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   rule refused what, and offer their `!` line or skipping the step (`references/approvals.md`).
 - "I'll delete the finished job's temp folder" → it stays until the user's `!` line at wrap-up.
 - "I'll `claude rm` it myself" → `close`: it removes a dead worker without `stop`, and retries a
-  `stop` that fails while the background service restarts (then says to run `close` again in a
-  minute).
+  `stop` or `rm` that fails while the background service restarts (then says when to run `close`
+  again).
 
 ## Helper
 

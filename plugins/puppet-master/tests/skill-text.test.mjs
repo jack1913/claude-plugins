@@ -880,6 +880,12 @@ test("the analyst brief says what a classifier-denied event is (brainiac P-20261
   assert.match(read("analyst-brief.md"), /a `classifier-denied` one is auto mode's classifier refusing a call,\s+its excerpt `\[<category>\] <the call>`/);
 });
 
+test("close retries an rm that fails while the service restarts, then says when to close again (brainiac P-20261112-6, F-8)", () => {
+  const row = section(readSkill(), "Helper reference").split("\n").find((l) => l.startsWith("| `close "));
+  assert.match(row, /an `rm` failing so is retried the same way, then it prints `stopped but NOT removed` with the resume line and says to run `close` again in a minute or once a background worker is running/);
+  assert.match(section(read("SKILL.md"), "Red flags"), /retries a\s+`stop` or `rm` that fails while the background service restarts/);
+});
+
 test("shipped's 'never approved' row says which group's decisions were searched (brainiac P-20261112-4, F-5)", () => {
   const row = section(readSkill(), "Helper reference").split("\n").find((l) => l.startsWith("| `shipped "));
   assert.match(row, /`was never approved in group "<g>"` \(or `with no group`\) names the decisions file it searched/);

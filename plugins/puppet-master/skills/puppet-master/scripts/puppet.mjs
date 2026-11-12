@@ -1042,24 +1042,31 @@ export function cycleWorker(deps, key, focus, { nextBriefFile } = {}) {
 
 // --- closing: stop and remove; the transcript stays resumable --------------------------
 
-// `claude stop` while the background service restarts: wait 2 s, 4 s and 8 s between four tries.
-const STOP_RETRY_MS = [2000, 4000, 8000];
+// `claude stop` or `claude rm` while the background service restarts: wait 2 s, 4 s and 8 s
+// between four tries. The last failure is rethrown, still saying "may be restarting".
+const RESTART_RETRY_MS = [2000, 4000, 8000];
+const RESTARTING = /may be restarting/i;
 
-async function stopWorker(deps, agent, resume) {
+async function claudeRetrying(deps, args) {
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   for (let i = 0; ; i++) {
     try {
-      claudeOk(deps, ["stop", agent.id]);
-      return;
+      return claudeOk(deps, args);
     } catch (e) {
-      if (!(e instanceof PuppetError) || !/may be restarting/i.test(e.message)) throw e;
-      if (i >= STOP_RETRY_MS.length) {
-        throw new PuppetError(
-          `${agent.name} could not be stopped: the background service may be restarting; run close ${agent.name} again in a minute (id ${agent.id}; resume: ${resume})`,
-        );
-      }
-      await sleep(STOP_RETRY_MS[i]);
+      if (!(e instanceof PuppetError) || !RESTARTING.test(e.message) || i >= RESTART_RETRY_MS.length) throw e;
+      await sleep(RESTART_RETRY_MS[i]);
     }
+  }
+}
+
+async function stopWorker(deps, agent, resume) {
+  try {
+    await claudeRetrying(deps, ["stop", agent.id]);
+  } catch (e) {
+    if (!(e instanceof PuppetError) || !RESTARTING.test(e.message)) throw e;
+    throw new PuppetError(
+      `${agent.name} could not be stopped: the background service may be restarting; run close ${agent.name} again in a minute (id ${agent.id}; resume: ${resume})`,
+    );
   }
 }
 
@@ -1090,10 +1097,12 @@ export async function closeWorker(deps, key) {
   const resume = resumeHint(cwd, sessionId, { bg: false });
   // Never with --discard-unpushed / --force-remove-worktree: if rm refuses, the user decides.
   try {
-    claudeOk(deps, ["rm", id]);
+    await claudeRetrying(deps, ["rm", id]);
   } catch (e) {
     if (!(e instanceof PuppetError)) throw e;
-    throw new PuppetError(`${name} is stopped but NOT removed (id ${id}; resume: ${resume}): ${e.message}`);
+    // F-8 (2026-11-12): rm kept failing this way while no background session was running.
+    const next = RESTARTING.test(e.message) ? `; run close ${name} again in a minute, or once a background worker is running` : "";
+    throw new PuppetError(`${name} is stopped but NOT removed (id ${id}; resume: ${resume}): ${e.message.trimEnd()}${next}`);
   }
   queueHarvest(reg, name, sessionId);
   delete reg.workers[name];
