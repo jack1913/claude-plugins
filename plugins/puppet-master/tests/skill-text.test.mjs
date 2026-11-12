@@ -823,3 +823,9 @@ test("rule 12: assign, switch, brief in one turn; 'switched' only once the helpe
   assert.match(rule12, /`not at a task boundary`\s+or\s+`no mod heartbeat`/);
   assert.match(section(read("SKILL.md"), "Red flags"), /`puppet-master: switched to …`/);
 });
+
+test("a refused switch of a busy session is told to the user at once, with the retry (brainiac P-20261112-3 a)", () => {
+  const row = section(readSkill(), "Helper reference").split("\n").find((l) => l.startsWith("| `switch "));
+  assert.match(row, /`it keeps its current model and effort\. Next: run the same switch again once …`/);
+  assert.match(row, /tell the user at once that it is not switched, and switch it when `list --name` shows it idle/);
+});

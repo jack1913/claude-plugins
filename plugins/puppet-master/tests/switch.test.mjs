@@ -151,6 +151,19 @@ test("switch refuses a busy or dialog-parked session, and a missing or off mod, 
   }
 });
 
+// P-20261112-brainiac-3 (a). A busy session's refusal said only "not switching it"; the user
+// found by eye, minutes later, that the session still ran its old model (F-1).
+test("switch refusing a busy session says the session is unchanged and to retry once it is idle", async () => {
+  const t = setup({ state: "working", status: "busy" });
+  try {
+    assert.equal(await main(["switch", "w1", "--tier", "mechanical"], t.deps), 1);
+    const msg = t.err.join("\n");
+    assert.match(msg, /not switching it: it keeps its current model and effort\. Next: run the same switch again once `list --name w1` shows it idle \(its task boundary\)/);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("switch refuses at once a mod loaded before the switch existed (no override field in its heartbeat)", async () => {
   const t = setup();
   try {

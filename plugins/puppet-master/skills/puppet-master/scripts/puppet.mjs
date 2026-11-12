@@ -1176,13 +1176,14 @@ export function modLabel(hb) {
 // A session that cannot be compacted or cleared right now: not idle, or idle but parked on a
 // dialog (`status waiting`, which `state done` hides: a session can sit behind a dialog and
 // still count as idle).
-function requireBoundary(agent, verb) {
+// `busyNext` is added to the not-at-a-boundary refusal: what the master does next.
+function requireBoundary(agent, verb, busyNext = "") {
   if (agent.status === "waiting") {
     throw new PuppetError(`${agent.name} is waiting on a dialog (status waiting); not ${verb} it`);
   }
   const state = workerState(agent);
   if (!IDLE_STATES.has(state)) {
-    throw new PuppetError(`${agent.name} is not at a task boundary (state ${state}); not ${verb} it`);
+    throw new PuppetError(`${agent.name} is not at a task boundary (state ${state}); not ${verb} it${busyNext}`);
   }
 }
 
@@ -1339,7 +1340,13 @@ export async function switchSession(deps, key, opts = {}) {
     ? switchPaste(agent.name, target)
     : "none needed: where the mod is not on, no switch applies and the session runs its launch model";
   const self = rec.role === "master";
-  if (!self) requireBoundary(agent, "switching");
+  if (!self) {
+    requireBoundary(
+      agent,
+      "switching",
+      `: it keeps its current model and effort. Next: run the same switch again once \`list --name ${agent.name}\` shows it idle (its task boundary)`,
+    );
+  }
   const hb = requireMod(deps, agent, fallback);
   // A mod loaded before the switch existed beats with no `override` field and drops the request.
   if (!("override" in hb)) {
