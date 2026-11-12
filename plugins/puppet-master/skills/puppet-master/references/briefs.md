@@ -52,7 +52,7 @@ Read this before you write or send any brief, the worker's or the analyst's.
     protocol). For each irreversible command (a wipe, a volume removal, a force push), say who runs
     it: the user in their own window, or the worker only if its permission mode allows it; a step
     the user runs is a `!` line for the worker's window, given before the job starts (Relay
-    protocol). The
+    protocol). An external write (a Jira create or transition, `gh pr ready`, a push) is always a `!` line, marked so here: auto mode's classifier does not count your relayed yes as the user's. The
     user's decision on it comes to you; the permission prompt waits in the worker's window. A
     relayed OK cannot lift a worker's permission mode.
 - **Check what a brief asserts, just before you send it.** Re-read the decisions log and any state
@@ -83,8 +83,7 @@ Read this before you write or send any brief, the worker's or the analyst's.
     any session delete a folder there (2026-11-03: six of them stayed). Never offer a scratch path
     with a space as TMP. TMP and TEMP are for the test run's own files; build output
     (`--artifacts-path`, `bin/`) goes in a gitignored folder inside the repository, since tests
-    that look for the repository root fail from a build elsewhere (84 did, 2026-11-03). You delete
-    the temp folder at the job's end (When a job ends, step 4).
+    that look for the repository root fail from a build elsewhere (84 did, 2026-11-03). Neither you nor the worker deletes it, nor the files in it: it stays until the user's one `!` line at the day's wrap-up (When a job ends, step 4).
   - `{{decided}}`: values the user already fixed that a tool or plugin in the worker's window will
     ask for (a branch, a name, a target), each quoted with when the user said it.
   - `{{references}}`: the user's reference images. Compare like for like before showing anything:

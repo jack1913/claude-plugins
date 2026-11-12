@@ -554,7 +554,7 @@ test("test temp folders sit under the logs folder, never at a drive root; build 
   assert.match(briefs, /`\{\{test_tmp\}\}`[^\n]*no spaces[^\n]*`<logs>\/tmp\/<session>`/);
   assert.match(briefs, /never at a drive root/);
   assert.match(briefs, /build output\s+\(`--artifacts-path`, `bin\/`\)[^.]*inside the repository/);
-  assert.match(section(skill, "When a job ends"), /delete its temp folder \(`<logs>\/tmp\/<session>`/);
+  assert.match(section(skill, "When a job ends"), /its temp folder \(`<logs>\/tmp\/<session>`\) stays/);
   assert.match(read("worker-brief.md"), /Build output \(`--artifacts-path`, `bin\/`\)\s+goes in a gitignored folder inside the repository/);
 });
 
@@ -670,7 +670,8 @@ test("repo work, team rules, refs, live checks, credentials files and scratch fo
   const briefs = section(skill, "Briefs");
   assert.match(briefs, /git\s+ls-remote/);
   assert.match(briefs, /live\s+check\s+names\s+the\s+host\s+URL/);
-  assert.match(section(skill, "When a job ends"), /Delete\s+the\s+listed\s+folders\s+under\s+`<logs>\/tmp\/<session>`/);
+  // brainiac P-20261112-8 replaced the master's delete of the listed folders with the wrap-up `!` line.
+  assert.match(section(skill, "When a job ends"), /with\s+the\s+scratch\s+folders\s+the\s+worker\s+listed\s+in\s+it/);
   assert.match(section(skill, "Red flags"), /"I'll just read the code or fetch to answer"/);
 });
 
@@ -838,6 +839,41 @@ test("a running window keeps the old skill text after an update: /reload-plugins
   assert.match(section(readme, "Install"), /run `\/reload-plugins`\s+there\. Typing `\/puppet-master:puppet-master` again does not reload it/);
   const changelog = fs.readFileSync(path.join(PLUGIN_DIR, "CHANGELOG.md"), "utf8");
   assert.doesNotMatch(changelog, /type `\/puppet-master:puppet-master` again at a task boundary to load the new layout/);
+});
+
+// brainiac P-20261112-8. The user, 2026-11-12: "we dont want to go around permissions block but
+// we must be sure it s all desired"; every denial came from the user's own rules (the proof pass).
+test("no session deletes a temp folder during the day: the user's one ! line at wrap-up does (brainiac P-20261112-8, item 1)", () => {
+  const skill = readSkill();
+  assert.doesNotMatch(skill, /The one delete that is yours/);
+  assert.doesNotMatch(skill, /delete its temp folder|Delete the listed folders/);
+  assert.match(rule(1), /You delete nothing yourself, temp folders included/);
+  const ends = section(read("SKILL.md"), "When a job ends");
+  assert.match(ends, /its temp folder \(`<logs>\/tmp\/<session>`\) stays until the day's wrap-up/);
+  assert.match(section(skill, "Briefs"), /Neither you nor the worker deletes it/);
+  assert.match(read("worker-brief.md"), /Never delete it or anything in it, your own files included/);
+  const wrap = section(skill, "Wrap-up");
+  assert.match(wrap, /ONE `!` line/);
+  assert.match(wrap, /`! rm -rf "<logs>\/tmp\/<session>" "<logs>\/tmp\/<session>" …`/);
+  assert.match(wrap, /never the folder of a session whose job is still active/);
+  assert.match(wrap, /a folder that is no finished job's: ask the user/);
+});
+
+test("a refused command is explained to the user at once, by the kind of rule, never investigated (brainiac P-20261112-8, item 2)", () => {
+  const ap = read("references/approvals.md");
+  assert.match(ap, /"Permission to use <tool> with command … has been denied\."/);
+  assert.match(ap, /a deny rule in the user's own settings: it refuses that command in every permission mode, and in a session\s+the user starts by hand too/);
+  assert.match(ap, /offer the user's `!` line for the worker's window, or skipping the step/);
+  assert.match(ap, /auto mode classifier/);
+  assert.match(ap, /built-in Claude Code safety check/);
+  assert.match(section(read("SKILL.md"), "Red flags"), /"A worker's command was denied, I'll find out why" →/);
+});
+
+test("an external write the user approves is the user's ! line from the start, never a relayed go (brainiac P-20261112-8, item 3)", () => {
+  const ap = read("references/approvals.md");
+  assert.match(ap, /planned as the user's `!` line for the worker's window from the start/);
+  assert.match(ap, /does not take a relayed message as the user's approval/);
+  assert.match(section(readSkill(), "Briefs"), /An external write \(a Jira create or transition, `gh pr ready`, a push\) is always a `!` line/);
 });
 
 test("shipped's 'never approved' row says which group's decisions were searched (brainiac P-20261112-4, F-5)", () => {

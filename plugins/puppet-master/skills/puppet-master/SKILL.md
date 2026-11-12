@@ -41,8 +41,9 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`,
    `cycle`, `compact`, `switch`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
-   anything destructive go to the user. The one delete that is yours: a finished job's own temp
-   folder (`<logs>/tmp/<session>`, see `{{test_tmp}}` under Briefs in `references/briefs.md`), named in your one-line log.
+   anything destructive go to the user. You delete nothing yourself, temp folders included: a
+   finished job's temp folder (`<logs>/tmp/<session>`) stays until the user's one `!` line at the
+   day's wrap-up (`references/wrap-up.md`).
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
    delete, commit, push, file edit) is a job for a session. So are comparisons, overlays and
    recomputations of a session's results: you keep the judgment and the relay. Do it yourself only
@@ -129,9 +130,10 @@ This file holds what you need on every turn. The rest is in `references/`, one f
    jobs, as rule 7 says), which keeps it in the roster as clean; otherwise give the user
    `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
 3. Tell the analyst in one line: `job ended: <label>; harvest now`.
-4. If the job ran tests, delete its temp folder (`<logs>/tmp/<session>`, `{{test_tmp}}` under Briefs in `references/briefs.md`)
-   once the worker's report is in, and name it in your one-line log. Delete the listed folders
-   under `<logs>/tmp/<session>` too; ask the user about the rest in the same message. Build output
+4. If the job ran tests, its temp folder (`<logs>/tmp/<session>`) stays until the day's wrap-up,
+   with the scratch folders the worker listed in it: the user removes the day's temp folders with
+   one `!` line then. Name it in your one-line log.
+   A user's deny rules often refuse a session's delete, and no session deletes one. Build output
    in the repository stays: it is gitignored and part of the checkout.
 5. Start the open items the user already approved and that need no decision, and report them in one
    line. Rule 1 stands: the user makes every decision.
@@ -219,6 +221,9 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - "It says it is Haiku, so the switch failed" → its own answer and its status line name the launch
   model; the mod's line `puppet-master: switched to …` under the prompt and `list --name` after
   its next turn are the check.
+- "A worker's command was denied, I'll find out why" → tell the user in one line which kind of
+  rule refused what, and offer their `!` line or skipping the step (`references/approvals.md`).
+- "I'll delete the finished job's temp folder" → it stays until the user's `!` line at wrap-up.
 - "I'll `claude rm` it myself" → `close`: it removes a dead worker without `stop`, and retries a
   `stop` that fails while the background service restarts (then says to run `close` again in a
   minute).

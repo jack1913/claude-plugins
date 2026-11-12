@@ -16,3 +16,10 @@ Read this when the user ends the day, and when `puppet logs` names an unreviewed
 5. Run `puppet list` and `close` every finished or `dead` background worker before you tell the user the day is
    done. Tell the user which of their windows they can close, with
    each one's job.
+6. Give the user ONE `!` line that removes the temp folders of the day's finished jobs under
+   `<logs>/tmp/` (the logs folder `puppet logs LOGS` prints): list that folder first, then
+   `! rm -rf "<logs>/tmp/<session>" "<logs>/tmp/<session>" …`, full paths with forward slashes. It
+   holds only finished jobs' folders: never the folder of a session whose job is still active (its
+   `list` row). For a folder that is no finished job's: ask the user in the same message. No session
+   deletes these during the day: a user's deny rules often refuse a session's delete, and the line
+   the user types is theirs to run.

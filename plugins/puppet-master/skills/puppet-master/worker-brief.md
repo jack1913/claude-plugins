@@ -29,7 +29,8 @@ You are a worker started by the master session {{master_name}}.
 - **Test temp folder:** {{test_tmp}} Set it as TMP and TEMP before your first test run: a temp
   path with a space makes suites fail for no real reason. Build output (`--artifacts-path`, `bin/`)
   goes in a gitignored folder inside the repository, not in the temp folder: tests that look for the
-  repository root fail from a build elsewhere.
+  repository root fail from a build elsewhere. Never delete it or anything in it, your own files included:
+  it stays until the user's `!` line at the end of the day.
 - Do only this job. When it is finished, report and stop. Don't start other work.
 - **Questions go to the master, never to the user.** Never use AskUserQuestion in your own window.
   Send each question or decision to {{master_name}} via SendMessage, one at a time, with your
