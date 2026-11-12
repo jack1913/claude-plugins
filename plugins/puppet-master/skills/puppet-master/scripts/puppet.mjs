@@ -1674,7 +1674,12 @@ function cmdDecide(deps, positional, flags) {
 function cmdShipped(deps, positional, flags) {
   wantPositional(positional, 2, "shipped");
   checkProposalGroup(deps, positional[0]);
-  const r = markShipped(deps, { logsDir: logsDirFor(deps, flags), proposalId: positional[0], sha: positional[1] });
+  const r = markShipped(deps, {
+    logsDir: logsDirFor(deps, flags),
+    proposalId: positional[0],
+    sha: positional[1],
+    group: deps.group,
+  });
   deps.out(`${r.proposalId} shipped as ${r.changeSha}`);
   return 0;
 }

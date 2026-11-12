@@ -125,10 +125,15 @@ export function decide(deps, { logsDir, proposalId, decision, tag, target, hypot
   return row;
 }
 
-export function markShipped(deps, { logsDir, proposalId, sha }) {
+// `group` only names, in a refusal, whose decisions were searched: a legacy id approved with no
+// group is not found under --group <g> (brainiac F-5, 2026-11-12).
+export function markShipped(deps, { logsDir, proposalId, sha, group }) {
   if (!sha) throw new PuppetError("shipped needs the commit sha", 2);
   const p = foldDecisions(deps, logsDir).find((d) => d.proposalId === proposalId);
-  if (!p || p.decision !== "approve") throw new PuppetError(`${proposalId} was never approved`);
+  if (!p || p.decision !== "approve") {
+    const whose = group ? `in group "${group}"` : "with no group";
+    throw new PuppetError(`${proposalId} was never approved ${whose} (decisions searched: ${decisionsPath(logsDir)})`);
+  }
   const row = { proposalId, changeSha: sha, shippedAt: deps.now().toISOString() };
   append(deps, decisionsPath(logsDir), row);
   return row;

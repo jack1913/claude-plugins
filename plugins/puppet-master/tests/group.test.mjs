@@ -82,3 +82,28 @@ test("decide and shipped refuse an id that carries another group, and take a leg
     t.cleanup();
   }
 });
+
+// brainiac P-20261112-4 (F-5). A legacy id approved with no group was refused "was never
+// approved" under --group brainiac, and the message did not say which decisions it searched.
+test("shipped's 'never approved' names the group, or no group, and the decisions file it searched", async () => {
+  const t = setup();
+  try {
+    const d = (id, ...g) =>
+      main(["decide", id, "approve", "--tag", "other", "--target", "SKILL.md", "--logs", t.logs, ...g], t.deps);
+    const ship = (id, ...g) => main(["shipped", id, "abc1234", "--logs", t.logs, ...g], t.deps);
+    assert.equal(await d("P-20261109-3"), 0);
+    assert.equal(await ship("P-20261109-3", "--group", "brainiac"), 1);
+    assert.equal(
+      t.err.at(-1),
+      `puppet: P-20261109-3 was never approved in group "brainiac" (decisions searched: ${path.join(t.logs, "brainiac", "decisions.jsonl")})`,
+    );
+    assert.equal(await ship("P-20261109-4"), 1);
+    assert.equal(
+      t.err.at(-1),
+      `puppet: P-20261109-4 was never approved with no group (decisions searched: ${path.join(t.logs, "decisions.jsonl")})`,
+    );
+    assert.equal(await ship("P-20261109-3"), 0);
+  } finally {
+    t.cleanup();
+  }
+});

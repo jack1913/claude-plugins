@@ -829,3 +829,9 @@ test("a refused switch of a busy session is told to the user at once, with the r
   assert.match(row, /`it keeps its current model and effort\. Next: run the same switch again once …`/);
   assert.match(row, /tell the user at once that it is not switched, and switch it when `list --name` shows it idle/);
 });
+
+test("shipped's 'never approved' row says which group's decisions were searched (brainiac P-20261112-4, F-5)", () => {
+  const row = section(readSkill(), "Helper reference").split("\n").find((l) => l.startsWith("| `shipped "));
+  assert.match(row, /`was never approved in group "<g>"` \(or `with no group`\) names the decisions file it searched/);
+  assert.match(row, /run `shipped` again with the one that logged it/);
+});

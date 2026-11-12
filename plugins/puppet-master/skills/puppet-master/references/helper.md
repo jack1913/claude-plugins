@@ -24,7 +24,7 @@ Read this before a `puppet` command you have not run since your last compaction,
 | `finding --tag --target --evidence --note LOGS` | the analyst's: one finding with harvested evidence | `F-<n> <tag> → <target>` |
 | `summary [--day YYYY-MM-DD] LOGS` | the day's counts, flagged items and proposals | a headline that says how much was read, then counts |
 | `decide <proposal> approve\|reject\|defer --tag --target --hypothesis LOGS` | logs the user's decision | `<proposal> <decision> (<tag> → <target>)` |
-| `shipped <proposal> <sha> LOGS` | links an approved proposal to its commit | `<proposal> shipped as <sha>` |
+| `shipped <proposal> <sha> LOGS` | links an approved proposal to its commit | `<proposal> shipped as <sha>`; a refusal `was never approved in group "<g>"` (or `with no group`) names the decisions file it searched: an id with no group in it may have been decided under another `--group` or none, so run `shipped` again with the one that logged it |
 
 `cycle` refuses a worker that is not idle. If it fails after stopping, it says so and prints the
 `cd "<cwd>" && claude --bg --resume <sessionId>` that restarts the worker; relay that to the user.
