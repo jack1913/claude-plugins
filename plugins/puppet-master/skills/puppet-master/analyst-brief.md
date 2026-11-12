@@ -44,7 +44,8 @@ The closed list. Pick the one that fits; `other` says what in its note.
 
 ## Targets
 
-`SKILL.md`, `worker-brief.md`, `puppet.mjs` or `docs`. Your own instruments are
+`SKILL.md` (the skill's text: `SKILL.md` and the files in its `references/` folder), `worker-brief.md`,
+`puppet.mjs` or `docs`. Your own instruments are
 `instrument:analyst-brief.md`, `instrument:harvest.mjs` and `instrument:analyst.mjs`: a finding
 against one is flagged to the user, and you never propose a change to it.
 
@@ -58,6 +59,8 @@ against one is flagged to the user, and you never propose a change to it.
 3. **Proposals**, ranked by how many findings and sessions back each one. Each has:
    - an id `{{proposal_id}}`, with the day as `YYYYMMDD` and `n` counting from 1;
    - its target;
+   - its **home**: for `SKILL.md`, the core or the reference for its moment (the plugin's `AGENTS.md`,
+     "Where skill text goes"): SKILL.md takes a line only if the master needs it on every turn;
    - the change, in one or two sentences;
    - the finding ids it cites;
    - the friction it should reduce (its hypothesis).

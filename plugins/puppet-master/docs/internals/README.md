@@ -11,7 +11,7 @@ Notes for people who change puppet-master. For using it, read the [manual](../ma
 
 | What | Where |
 | --- | --- |
-| The skill | [`skills/puppet-master/SKILL.md`](../../skills/puppet-master/SKILL.md) |
+| The skill | [`skills/puppet-master/SKILL.md`](../../skills/puppet-master/SKILL.md), and its [`references/`](../../skills/puppet-master/references/_index.md) |
 | The helper | [`skills/puppet-master/scripts/`](../../skills/puppet-master/scripts/puppet.mjs): `puppet.mjs`, `harvest.mjs`, `analyst.mjs` |
 | The mod | [`hooks/puppet-mod.js`](../../hooks/puppet-mod.js), listed by [`hooks/hooks.json`](../../hooks/hooks.json) |
 | Tests | [`tests/`](../../tests/) in this plugin |
@@ -26,7 +26,7 @@ node --test tests/*.test.mjs
 ```
 
 The suite starts no real `claude` process: a fake `run` answers every CLI call. `tests/skill-text.test.mjs` checks what
-`SKILL.md` and the two briefs say.
+`SKILL.md`, its `references/` and the two briefs say, and how the skill is laid out.
 
 ## Ground rules
 

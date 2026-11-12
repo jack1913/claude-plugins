@@ -1,6 +1,6 @@
 # Setup prerequisites (the user's, never written by you)
 
-Moved out of SKILL.md to keep its body under the docs standard's 500 lines. SKILL.md points here.
+Read this when a setting, the mod's needs, a `PUPPET_*` variable or a Windows `claude` launch problem comes up. Never write the user's settings yourself.
 
 - `worktree.bgIsolation: "none"` in the user's own `settings.json`, or a background worker cannot
   edit files without a worktree.

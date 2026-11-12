@@ -11,17 +11,25 @@ sounds like coordinating sessions never starts it.
 
 ## Files
 
-- [`skills/puppet-master/SKILL.md`](../../skills/puppet-master/SKILL.md) holds the master's start-up, rules, relay
-  protocol, wrap-up and the helper reference.
+- [`skills/puppet-master/SKILL.md`](../../skills/puppet-master/SKILL.md) holds what the master needs on every turn: the
+  rules, what to do when a job ends, the core of the relay protocol, the red flags and the helper's contract, and a
+  "Files to read, and when" table. After a compaction Claude Code keeps only the first 5,000 tokens of an invoked
+  skill, so `SKILL.md` also tells the master to read itself again, and `tests/skill-text.test.mjs` fails a body over
+  300 lines.
+- [`references/`](../../skills/puppet-master/references/_index.md) holds the rest, one file per moment, moved word for
+  word out of `SKILL.md` with their section names and rule numbers kept: `on-start.md`, `jobs.md` (the detail of
+  rules 3, 4, 5 and 12, a design to relay, chained jobs), `briefs.md`, `approvals.md`, `context.md` (the detail of
+  rules 7, 9 and 10), `helper.md` (the command table) and `wrap-up.md`. Where new skill text goes is in
+  [`AGENTS.md`](../../AGENTS.md), "Where skill text goes".
 - [`worker-brief.md`](../../skills/puppet-master/worker-brief.md) is the brief every worker gets, with the placeholders
-  `{{master_name}}`, `{{job}}`, `{{commit_rules}}` and `{{standing_rules}}`, the ones `SKILL.md` explains under Briefs
-  for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{test_tmp}}`, `{{decided}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
+  `{{master_name}}`, `{{job}}`, `{{commit_rules}}` and `{{standing_rules}}`, the ones `references/briefs.md` explains
+  under Briefs for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{test_tmp}}`, `{{decided}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
   `{{references}}`, `{{fetch}}`, `{{open_premises}}` and `{{self_compact}}`.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}`, `{{logs_args}}` and `{{proposal_id}}`, the closed tag list and the report's shape.
-- [`setup-prerequisites.md`](../../skills/puppet-master/setup-prerequisites.md) holds the user's setup prerequisites
-  (settings, trusted folders, the mod's floor, `PUPPET_*` variables). `SKILL.md` points to it: its body is held under
-  the docs standard's 500 lines.
+- [`setup-prerequisites.md`](../../skills/puppet-master/references/setup-prerequisites.md) holds the user's setup
+  prerequisites (settings, trusted folders, the mod's floor, `PUPPET_*` variables). `SKILL.md`'s Files table points
+  to it.
 - [`scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) is the helper and its command line: `measure`,
   `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `compact`, `switch`, `clear`, `close`,
   `harvest`, `finding`, `summary`, `decide` and `shipped`.
@@ -288,7 +296,7 @@ background worker as described above.
 **Verified on a foreground window** (reported by the master, 2026-11-04, not re-run for this page): `finish` then
 `clear` on the live window `carcare-platform-b3` printed `cleared carcare-platform-b3: new session f824c3fb-…, clean`.
 The master also ran `compact` with a focus four times on one worker between its parts: 262k to 28k, 154k to 23k, 143k
-to 25k and 182k to 18k tokens (see the pause pattern in `SKILL.md`, rule 7). **Not yet tested in a foreground
+to 25k and 182k to 18k tokens (see the pause pattern in `references/context.md`, rule 7). **Not yet tested in a foreground
 window**: the start question and its four answers, the master's own compaction after its turn, that the mod's timer
 survives a `/clear`, and `mod on` showing in `list` through the plugin's real install. The mod runs in an environment
 with no Node and no `fs` in `claude plugin test`, so the unit tests in `tests/mod.test.mjs` drive it with a fake `$`
@@ -414,7 +422,7 @@ automatically, and the report says how much it read.
   that run's events twice.
 - **`logs`** prints the logs folder and the newest report of an earlier day whose last line is not `Reviewed: <date>`.
   The master runs it on start, so finding the folder never needs a harvest.
-- **`finding`** records a tag from the closed list, a target (`SKILL.md`, `worker-brief.md`, `puppet.mjs`, `docs`)
+- **`finding`** records a tag from the closed list, a target (`SKILL.md`, meaning the skill's text: `SKILL.md` and `references/`; `worker-brief.md`, `puppet.mjs`, `docs`)
   and evidence ids that must exist among the harvested events of today or an earlier day; the finding is filed under
   today. A target `instrument:<file>` names the analyst's own
   brief or scripts: it is flagged to the user and never proposed.
@@ -511,7 +519,8 @@ captures of a real probe worker, plus `bg-stdout-color.txt` (the coloured `--bg`
   first tick, and the carry to a new session id; the helper's `compact`, `clear`, opt-in and role files and the
   `list` column against a scripted fake mod (`selfcompact.test.mjs`); the helper's `switch`, the tier check that reads
   a switch, the line after a `MISMATCH`, and `pick` ranking a switchable window (`switch.test.mjs`);
-- the text of `SKILL.md` and both briefs (the analyst brief's tags must equal the tags in `analyst.mjs`), and the
-  `plugin.json` options.
+- the text of `SKILL.md`, `references/` and both briefs (the analyst brief's tags must equal the tags in `analyst.mjs`),
+  the skill's structure (the 300-line body and 200-line reference budgets, the Files table against `references/`, the
+  re-read line, one level of references), and the `plugin.json` options.
 
 A missing `node` (20 or newer) fails the test, never skips it.
