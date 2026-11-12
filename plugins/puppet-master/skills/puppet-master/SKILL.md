@@ -230,17 +230,25 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 4. If the job ran tests, delete its temp folder (`<logs>/tmp/<session>`, `{{test_tmp}}` under Briefs)
    once the worker's report is in, and name it in your one-line log. Build output in the repository
    stays: it is gitignored and part of the checkout.
+5. Start the open items the user already approved and that need no decision, and report them in one
+   line. Rule 1 stands: the user makes every decision.
 
 ## Relay protocol
 
 - **Quote the user verbatim.** A job, an answer or a correction you pass to a session starts with
   the user's own words in quotes, then your reading, marked "my reading: …". Never paraphrase in
-  place of the quote.
+  place of the quote. When an answer could fit more than one open topic (a short "later", "a",
+  "yes"), name the topic you read it against, and ask before relaying.
 - Relay a session's questions to the user **one at a time**, grill-style: the question, your
   recommendation, the options.
 - **Before you put a question to the user, check its premise** against the repository or the docs,
   and state the evidence in the question. For a trade-off, name the precedent or workaround already
   in use and the cost of each option, so the user can answer once.
+- **A design to relay** (a pasted issue turned into a job, or a worker's design recommendation)
+  first gets a design pass: a read-only `creative` job for a session, brainstorming, plus context7
+  where a library is involved. Show the user its short summary, then ask one question at a time.
+  Put a worker's recommendation to the user as the worker's, next to the simplest change that
+  would also work, never as your own.
 - **A worker blocked by the user's uncommitted edits or by its permission mode:** ask the user
   once, with the exact command to run in their own window. Never hand it to another session: that
   would get round the denial.
@@ -261,12 +269,16 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
   worker then runs it, and the permission prompt that waits in its own window is the user's last
   click. Tell the user which window it is and what it waits for. If a worker asked in its own
   window anyway, tell it once to send the question to you instead, and read the user's answer
-  there before you relay (the bullet above).
+  there before you relay (the bullet above). A worker's question goes to the user even when you
+  believe earlier answers settle it. State your recommendation and that reason in the question, and
+  never answer it as the master's call. Housekeeping (compaction, scope, temp folders) is the only
+  call you make alone.
 - **If something waits for the user, say so first.** The user, 2026-11-04: "if something is waiting
   for me you must ask - i cant do that especially if this comes from bg workers". Each time you
   reply to the user, run `puppet list` first. Any session whose state is `waiting` leads your reply:
   its window and what it waits for. A worker parked on a prompt sat from 17:09 to 17:26 and again
-  from 17:34 to 18:06 on 2026-11-03 because nobody looked.
+  from 17:34 to 18:06 on 2026-11-03 because nobody looked. Give each open question a short id
+  (A1, A2). Later status messages say "A2 is still open" and never ask it again.
 - **A step in an outside service you hold tools for** (the Railway tools, for one) is done by you
   or by a worker, once the user approved it where it counts (the decision in your window, then the
   prompt of an irreversible step). Only a step no tool can do goes to the user, with the click
@@ -285,6 +297,8 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 - **Before you recommend a route that depends on the user's device or setup**, check that their device or setup can do it (2026-11-06: wireless debugging on a phone too old for it).
 - **Ask, don't wait.** A decision that blocks a session goes to the user at once (AskUserQuestion),
   never held until they ask for status.
+- **Act on every instruction in the user's turn before you reply.** A "go" starts the job in the
+  same turn. A conditional ("if you have free workers") starts the second job, or says why not.
 - **The pick first.** When the user asks for a pick or a summary, answer with the pick and its one
   reason in a few lines. Tables and long comparisons go in a file.
 

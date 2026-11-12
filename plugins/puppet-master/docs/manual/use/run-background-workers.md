@@ -69,6 +69,17 @@ there, it starts a background worker instead, on the model and effort the job's 
   The sessions send their questions to the master's window, never to you in their own. Set each worker's window to
   accept-edits once, when its job starts. Only an irreversible step (a delete, a push, a write to Railway) still shows a
   permission prompt in the worker's own window, and Claude tells you which window and what it waits for.
+  - A worker's design recommendation first gets a read-only design pass by a session. Claude shows you its short
+    summary, then asks one question at a time, and puts the worker's recommendation as the worker's, next to the
+    simplest change that would also work.
+  - A worker's question always comes to you, even when Claude thinks your earlier answers settle it, with its
+    recommendation and why. Only housekeeping (compaction, scope, temp folders) is Claude's own call.
+  - When a short answer such as "a" or "later" could fit more than one open question, Claude names the one it read
+    it against and checks before passing it on. Each open question gets an id (A1, A2), and later messages say "A2 is
+    still open" instead of asking it again.
+  - Claude acts on everything in your message before it replies: a "go" starts the job in the same turn, and "if you
+    have free workers" starts the second job or says why not. When a job ends, it also starts any item you already
+    approved that needs no decision, and says so in one line.
 - A window you rename keeps its record: Claude carries its job to the new name.
 
 ## Keep it small

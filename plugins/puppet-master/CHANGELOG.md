@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A worker's brief now forbids `cd <dir> && …` chains, `sed -i` and any git command in a no-git job, and forbids running a denied command again in another shell, form or in parts. A test's temp folder goes under the logs folder and is deleted when the job ends; build output stays in a gitignored folder in the repository.
 - `assign --extend` accepts `--git`, keeps the job's git flag when neither `--git` nor `--no-git` is given, and no longer repeats a label.
 - `puppet-master` measures a working worker each time it relays that worker's message and at each `FINAL:`, asks a busy worker at 30% or more to pause at its next part boundary, compacts it only once its idle notice arrives, and clears a finished window whose mod is on even with no next job queued.
+- `puppet-master` runs a read-only design pass before it relays a design, and puts a worker's recommendation to you as the worker's, with the simplest change beside it. A worker's question always reaches you, and Claude never answers it as its own call. It names the open question a short answer fits, gives each open question an id (A1, A2), acts on every instruction in your turn (a "go" starts the job at once) and, when a job ends, starts the items you already approved.
 
 ### Fixed
 

@@ -386,6 +386,24 @@ test("compaction lines of 2026-11-12: 30% while working, measure on each relay a
   assert.match(section(skill, "When a job ends"), /At\s+each\s+`FINAL:`,\s+`measure`\s+the\s+worker/);
 });
 
+test("questions and answers of 2026-11-12: a design pass, never the master's call, name the topic, question ids, act on every instruction (P-20261109-1, -2, P-20261110-2, -5, -6)", () => {
+  const skill = read("SKILL.md");
+  const relay = section(skill, "Relay protocol");
+  assert.match(relay, /design\s+pass/);
+  assert.match(relay, /read-only\s+`creative`\s+job/);
+  assert.match(relay, /as\s+the\s+worker's/);
+  assert.match(relay, /never\s+as\s+your\s+own/);
+  assert.match(relay, /never\s+answer\s+it\s+as\s+the\s+master's\s+call/);
+  assert.match(relay, /Housekeeping\s+\(compaction,\s+scope,\s+temp\s+folders\)\s+is\s+the\s+only\s+call\s+you\s+make\s+alone/);
+  assert.match(relay, /name\s+the\s+topic\s+you\s+read\s+it\s+against/);
+  assert.match(relay, /short\s+id\s+\(A1,\s+A2\)/);
+  assert.match(relay, /"A2 is still open"/);
+  assert.match(relay, /Act\s+on\s+every\s+instruction\s+in\s+the\s+user's\s+turn\s+before\s+you\s+reply/);
+  assert.match(relay, /A\s+"go"\s+starts\s+the\s+job\s+in\s+the\s+same\s+turn/);
+  assert.match(relay, /A\s+conditional\s+\("if you have free workers"\)\s+starts\s+the\s+second\s+job,\s+or\s+says\s+why\s+not/);
+  assert.match(section(skill, "When a job ends"), /Start\s+the\s+open\s+items\s+the\s+user\s+already\s+approved\s+and\s+that\s+need\s+no\s+decision,\s+and\s+report\s+them\s+in\s+one\s+line/);
+});
+
 test("rule 10: the master compacts itself through the mod once its turn ends, and says it is untested in a window", () => {
   const skill = read("SKILL.md");
   const rule10 = skill.slice(skill.indexOf("10. **Your own context.**"), skill.indexOf("11. **"));
