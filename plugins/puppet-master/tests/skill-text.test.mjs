@@ -571,6 +571,12 @@ test("briefs keep the template's lines whole, restate the shape, ask with a purp
   assert.match(read("analyst-brief.md").trimEnd().split("\n").at(-1), /^<!-- end of the puppet-master analyst brief: keep this line -->$/);
 });
 
+test("the analyst brief says an evidence id is the event's id field, never a line number of events.jsonl (brainiac P-20261112-2)", () => {
+  const analyst = read("analyst-brief.md");
+  assert.match(analyst, /the\s+`id`\s+field\s+of\s+an\s+events\.jsonl\s+line/);
+  assert.match(analyst, /never\s+the\s+line\s+number\s+of\s+events\.jsonl/);
+});
+
 test("full paths, a look at a visual deliverable, status while the user is waited on, the device checked first (carcare P-20261106-4, P-20261104-12)", () => {
   const skill = read("SKILL.md");
   const ends = section(skill, "When a job ends");
