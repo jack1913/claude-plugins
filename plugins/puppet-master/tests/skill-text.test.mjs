@@ -613,6 +613,10 @@ test("the worker's finish checklist, coupled files, read-back, long-run progress
   assert.match(brief, /A\s+live\s+check\s+with\s+no\s+host,\s+database\s+or\s+test\s+account\s+named\s+here\s+is\s+a\s+miss/);
 });
 
+test("the helper table says list --name prints one session, adopted or not (P-20261109-9)", () => {
+  assert.match(read("SKILL.md"), /`--name` prints one, adopted or not/);
+});
+
 test("repo work, team rules, refs, live checks, credentials files and scratch folders (P-20261109-5, -6, P-20261110-9, -10, -11, -12)", () => {
   const skill = read("SKILL.md");
   const rule2 = skill.slice(skill.indexOf("2. **Sessions do the work.**"), skill.indexOf("3. **The user's sessions first.**"));

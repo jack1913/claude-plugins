@@ -214,7 +214,8 @@ reads as an active background worker. The file is written atomically (a temp fil
   already match comes first, then an unchecked one, then a mismatch; within each, the user's windows come before
   background ones. `pick` prints the name, then the tier line.
 - `list` shows every roster session: name, tokens, percent of the window, state, the
-  model column, and for a roster session its kind, role, job state and job. `--name <session>` prints that one row.
+  model column, and for a roster session its kind, role, job state and job. `--name <session>` prints that one row, for any live session, adopted or not (an unadopted window is measured like an
+  unadopted background worker); a miss names the live sessions, as every command's does.
   A session listed under a new `sessionId` (the user cleared or restarted it) is `changed`, and `assign` refuses it
   until it is adopted again. One no longer listed is `gone`, with its resume command, and its record is dropped.
   Background sessions that nobody adopted are listed too.

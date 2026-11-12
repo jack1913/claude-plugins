@@ -225,7 +225,8 @@ export function findWorker(agents, key, closed = {}) {
     if (gone) {
       throw new PuppetError(`${gone[0]} is closed (resume: ${resumeHint(gone[1].cwd, gone[1].sessionId, { bg: false })})`);
     }
-    throw new PuppetError(`no session named or numbered "${key}"`);
+    const live = agents.map((a) => a.name).filter(Boolean);
+    throw new PuppetError(`no session named or numbered "${key}"${live.length ? `; live sessions: ${live.join(", ")}` : ""}`);
   }
   if (hits.length > 1) {
     const ids = hits.map((a) => a.id ?? a.sessionId).join(", ");
@@ -1446,8 +1447,13 @@ function cmdList(deps, positional, flags) {
   let shown = rows;
   if (flags.name !== undefined) {
     shown = rows.filter((r) => r.name === flags.name);
-    // A miss says whether the name was closed, and how to resume it.
-    if (shown.length === 0) findWorker([], flags.name, reg.closed);
+    // An unadopted window the user opened is no row: match it among the live sessions like every
+    // other command does. A miss says whether the name was closed, how to resume it, or which
+    // sessions are live.
+    if (shown.length === 0) {
+      measure(findWorker(agents, flags.name, reg.closed), undefined, {});
+      shown = rows.slice(-1);
+    }
     failed = shown.some((r) => r.error);
   }
   for (const r of shown) {

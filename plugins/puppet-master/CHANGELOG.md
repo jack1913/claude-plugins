@@ -37,4 +37,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A session that only read its brief and replied counts as clean when it is adopted.
 - Adopting a session that is already in the list keeps its job and state; it only updates its role, window and mod role. `clear` on a worker whose mod has no role file now says to adopt it again with `--role worker`.
 - A session waiting on a dialog counts as busy for `cycle` and for the one-editor-per-checkout lock, as it already did for `compact` and `clear`, and `list` shows it as `waiting`.
+- `puppet list --name <window>` finds a window you opened that nobody adopted, as the other commands already did, so the master's start no longer fails on its own window. A command that finds no session by that name now lists the live ones.
 - The analyst's brief now says what an evidence id is: the `id` field of an events.jsonl line, such as `6d3e35df:249`, never the line number of the file, which `finding` refuses.

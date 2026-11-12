@@ -108,6 +108,37 @@ test("list shows model and effort, and --name prints one row", async () => {
   }
 });
 
+test("list --name finds a live window nobody adopted, and a miss names the live sessions (P-20261109-9)", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1), agent("u1", 2, { kind: "interactive" })] });
+  try {
+    t.writeTranscript(t.deps.agents[1].sessionId, request("claude-opus-5-5", "high") + turn(5000));
+    assert.equal(await main(["list", "--name", "u1"], t.deps), 0);
+    assert.equal(t.out.length, 1);
+    assert.match(t.out[0], /^u1  5000  0\.5%  done  .*model claude-opus-5-5 high/);
+    // by id too, and --json carries the row
+    t.out.length = 0;
+    assert.equal(await main(["list", "--name", t.deps.agents[1].id, "--json"], t.deps), 0);
+    assert.equal(JSON.parse(t.out[0]).name, "u1");
+    // a miss names the live sessions it saw, here and in the other commands
+    assert.equal(await main(["list", "--name", "nobody"], t.deps), 1);
+    assert.match(t.err.at(-1), /no session named or numbered "nobody"; live sessions: w1, u1$/);
+    assert.equal(await main(["measure", "nobody"], t.deps), 1);
+    assert.match(t.err.at(-1), /no session named or numbered "nobody"; live sessions: w1, u1$/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a miss with no live session names none", async () => {
+  const t = makeDeps({ agents: [] });
+  try {
+    assert.equal(await main(["list", "--name", "nobody"], t.deps), 1);
+    assert.match(t.err.at(-1), /no session named or numbered "nobody"$/);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("a closed session stays addressable: lookups say it is closed and how to resume it", async () => {
   const t = makeDeps({ agents: [agent("w1", 1)] });
   try {
