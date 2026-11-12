@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `assign --extend` accepts `--git`, keeps the job's git flag when neither `--git` nor `--no-git` is given, and no longer repeats a label.
 - `puppet-master` measures a working worker each time it relays that worker's message and at each `FINAL:`, asks a busy worker at 30% or more to pause at its next part boundary, compacts it only once its idle notice arrives, and clears a finished window whose mod is on even with no next job queued.
 - `puppet-master` runs a read-only design pass before it relays a design, and puts a worker's recommendation to you as the worker's, with the simplest change beside it. A worker's question always reaches you, and Claude never answers it as its own call. It names the open question a short answer fits, gives each open question an id (A1, A2), acts on every instruction in your turn (a "go" starts the job at once) and, when a job ends, starts the items you already approved.
+- A step a worker's permission check is likely to refuse, or that auto mode would refuse outright (an external write, a push), reaches you before the job starts as a `!` line for the worker's window. The worker's brief says such a step is never the worker's to run: it tells the master it has reached it and waits.
 
 ### Fixed
 

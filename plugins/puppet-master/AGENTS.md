@@ -15,6 +15,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | `puppet-master` (typed only) | `skills/puppet-master/SKILL.md` |
 | The worker brief template | `skills/puppet-master/worker-brief.md` |
 | The analyst brief template (its tags must equal `TAGS` in `analyst.mjs`) | `skills/puppet-master/analyst-brief.md` |
+| The user's setup prerequisites the master reads on demand (moved out of SKILL.md to keep its body under 500 lines) | `skills/puppet-master/setup-prerequisites.md` |
 | The helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs`, with `harvest.mjs` (logs folder, redaction, events) and `analyst.mjs` (findings, summary, decisions); `compact`, `clear` and the mod's files are in `puppet.mjs` ("the mod" section) |
 | Licence | `LICENSE` |
 | Changelog | `CHANGELOG.md` |

@@ -19,6 +19,9 @@ sounds like coordinating sessions never starts it.
   `{{references}}`, `{{fetch}}`, `{{open_premises}}` and `{{self_compact}}`.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}`, `{{logs_args}}` and `{{proposal_id}}`, the closed tag list and the report's shape.
+- [`setup-prerequisites.md`](../../skills/puppet-master/setup-prerequisites.md) holds the user's setup prerequisites
+  (settings, trusted folders, the mod's floor, `PUPPET_*` variables). `SKILL.md` points to it: its body is held under
+  the docs standard's 500 lines.
 - [`scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) is the helper and its command line: `measure`,
   `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `compact`, `switch`, `clear`, `close`,
   `harvest`, `finding`, `summary`, `decide` and `shipped`.

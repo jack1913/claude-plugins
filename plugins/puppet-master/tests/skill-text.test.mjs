@@ -29,7 +29,9 @@ test("frontmatter describes coordinating sessions", () => {
 });
 
 test("the body covers every helper command, the logs flags and the thresholds", () => {
-  const skill = read("SKILL.md");
+  // The setup prerequisites live in setup-prerequisites.md, which SKILL.md points to.
+  assert.match(section(read("SKILL.md"), "Setup prerequisites"), /`setup-prerequisites\.md`/);
+  const skill = read("SKILL.md") + read("setup-prerequisites.md");
   const words = [
     "measure", "list", "spawn", "cycle", "close", "adopt", "assign", "finish", "pick", "harvest",
     "finding", "summary", "decide", "shipped", "logs", "reopen", "--extend", "--window", "--next", "--job", "--role analyst",
@@ -402,6 +404,17 @@ test("questions and answers of 2026-11-12: a design pass, never the master's cal
   assert.match(relay, /A\s+"go"\s+starts\s+the\s+job\s+in\s+the\s+same\s+turn/);
   assert.match(relay, /A\s+conditional\s+\("if you have free workers"\)\s+starts\s+the\s+second\s+job,\s+or\s+says\s+why\s+not/);
   assert.match(section(skill, "When a job ends"), /Start\s+the\s+open\s+items\s+the\s+user\s+already\s+approved\s+and\s+that\s+need\s+no\s+decision,\s+and\s+report\s+them\s+in\s+one\s+line/);
+});
+
+test("steps the worker cannot run become `!` lines up front, and the worker waits for them (P-20261109-4, P-20261110-1)", () => {
+  const skill = read("SKILL.md");
+  const relay = section(skill, "Relay protocol");
+  assert.match(relay, /`!`\s+line\s+for\s+the\s+worker's\s+window\s+before\s+the\s+job\s+starts/);
+  assert.match(relay, /classifier\s+refuses/);
+  assert.match(relay, /approval\s+question\s+itself/);
+  assert.match(relay, /`SendMessage`\s+the\s+worker\s+with\s+`notify_when_idle`,\s+and\s+tell\s+the\s+user\s+when\s+it\s+moves\s+on/);
+  assert.match(section(skill, "Briefs"), /`!`\s+line\s+for\s+the\s+worker's\s+window/);
+  assert.match(read("worker-brief.md"), /ready for the user's ! line/);
 });
 
 test("rule 10: the master compacts itself through the mod once its turn ends, and says it is untested in a window", () => {
