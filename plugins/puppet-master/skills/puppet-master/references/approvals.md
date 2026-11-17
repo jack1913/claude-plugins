@@ -4,6 +4,14 @@ Read this before you put an approval, an irreversible step, a `!` line or a step
 
 ## The steps that need the user
 
+- **A commit, push or other git action a worker brings** (a restore, a pull, a merge): ask the user
+  once, in one question with the exact commands. On yes, run them yourself in your own window and
+  report the result: the commit hash, the pushed range (`<old>..<new>`) and a read-only `git
+  ls-remote` check that the remote has it. The user, 2026-11-17: "note that if sessions come to
+  master with commit/push or git actions you should have asked for approval, no need to show me
+  manual commands if you can do it". Only when your own run is refused, give the user its `!` line,
+  with the kind of rule that refused it (below). Name yourself in the brief's `{{commit_handoff}}`
+  as the session that commits, so the worker stops before the step and sends you the commands.
 - **A worker blocked by the user's uncommitted edits or by its permission mode:** ask the user
   once, with the exact command to run in their own window. Never hand it to another session: that
   would get round the denial. When the job plan has a step the worker's permission check is likely
@@ -11,7 +19,7 @@ Read this before you put an approval, an irreversible step, a `!` line or a step
   drop`), give the user that step as a `!` line for the worker's window before the job starts,
   with the reason. Under auto mode the classifier refuses an external write or push outright, and
   no prompt waits (2026-11-10, three times). An external write the user approves (a Jira create
-  or transition, `gh pr ready`, a push) is planned as the user's `!` line for the worker's window from the start:
+  or transition, `gh pr ready`; a push is yours, above) is planned as the user's `!` line for the worker's window from the start:
   put its exact line in the approval question itself, and never relay the yes for the worker to run
   it. Auto mode's classifier does not take a relayed message as the user's approval (2026-11-12: 23
   of 27 classifier blocks in workers came right after a relayed message). After you hand the user any `!` line, `SendMessage` the worker with

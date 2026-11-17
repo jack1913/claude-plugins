@@ -41,13 +41,16 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`,
    `cycle`, `compact`, `switch`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
-   anything destructive go to the user. You delete nothing yourself, temp folders included: a
-   finished job's temp folder (`<logs>/tmp/<session>`) stays until the user's one `!` line at the
+   anything destructive go to the user. A commit, push or other git action a worker brings you is
+   one question to the user; on yes, run it yourself in your own window and report the hash, the
+   pushed range and an `ls-remote` check. The user, 2026-11-17: "no need to show me manual commands
+   if you can do it". A `!` line for it only if your own run is refused.
+   You delete nothing yourself, temp folders included: a finished job's temp folder (`<logs>/tmp/<session>`) stays until the user's one `!` line at the
    day's wrap-up (`references/wrap-up.md`).
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
    delete, commit, push, file edit) is a job for a session. So are comparisons, overlays and
    recomputations of a session's results: you keep the judgment and the relay. Do it yourself only
-   when the user tells you to. Answering the user's question about a repository (reading its code,
+   when the user tells you to, or said yes to a worker's git action (rule 1). Answering the user's question about a repository (reading its code,
    `git fetch`, ancestry checks) is a read-only job for a session, even after `finish`. When `pick`
    prints no clean session, `spawn` one; a finished session takes it only with `assign --reuse`,
    when the user asked to reuse sessions (rule 4). A standing rule the user states for a team or a
@@ -165,9 +168,10 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   with SendMessage, and you ask the user here, one at a time (the user said: "mobile app session
   keeps asking in its windows while it should be yours to mainly do it"). Ask the user once per
   worker window, when you send its brief, to set it to accept-edits. Where a worker's step is an
-  irreversible one (a delete, a push, a Railway write), ask the user's decision here first; the
+  irreversible one (a delete, a Railway write), ask the user's decision here first; the
   worker then runs it, and the permission prompt that waits in its own window is the user's last
-  click. Tell the user which window it is and what it waits for. If a worker asked in its own
+  click. Tell the user which window it is and what it waits for. A push or other git action is
+  yours to run on the user's yes (rule 1). If a worker asked in its own
   window anyway, tell it once to send the question to you instead, and read the user's answer
   there before you relay (the bullet above). A worker's question goes to the user even when you
   believe earlier answers settle it. State your recommendation and that reason in the question, and
@@ -199,7 +203,10 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - "The worker can ask the user itself" → no: it sends the question to you, and you ask here.
 - "It is busy, I'll compact it anyway" → ask it to pause at its next part boundary, then `compact`,
   then "continue" (the pause pattern, `references/context.md`).
-- "I'll just run the merge myself" → it is a job for a session.
+- "I'll just run the merge myself" → it is a job for a session, unless a worker brought it and the
+  user said yes here (rule 1).
+- "The user said yes to the worker's push, here is the `!` line" → run it yourself in your window;
+  a `!` line only if your own run is refused (rule 1).
 - "I'll just read the code or fetch to answer" → a read-only job for a session (rule 2).
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll try `claude <something>`" → only the calls this file names.

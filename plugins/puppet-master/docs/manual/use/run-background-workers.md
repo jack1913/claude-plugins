@@ -67,11 +67,14 @@ there, it starts a background worker instead, on the model and effort the job's 
   overlap, and only one of them runs git. Otherwise, for a second job in the same repository, use a second clone.
 - When a session has a question, Claude asks you, one at a time, quoting your own words back before its reading of them.
   The sessions send their questions to the master's window, never to you in their own. Set each worker's window to
-  accept-edits once, when its job starts. Only an irreversible step (a delete, a push, a write to Railway) still shows a
+  accept-edits once, when its job starts. Only an irreversible step (a delete or a write to Railway) still shows a
   permission prompt in the worker's own window, and Claude tells you which window and what it waits for.
+  - A commit, push or other git step a worker reaches comes to you as one question. When you say yes, Claude runs it
+    itself in its own window and tells you the commit, what reached the remote and how it checked. You get a `!` line
+    only if Claude's own run is refused.
   - A step the worker's permission check will probably refuse (discarding a change, `rm -rf`) reaches you before the
     job starts, as a `!` line to type in the worker's window, with the reason. In auto mode nothing prompts for an
-    outside write or a push, so when you approve one, the question includes its `!` line. The worker waits for you at
+    outside write, so when you approve one, the question includes its `!` line. The worker waits for you at
     that step, and Claude tells you when it moves on.
   - A worker's design recommendation first gets a read-only design pass by a session. Claude shows you its short
     summary, then asks one question at a time, and puts the worker's recommendation as the worker's, next to the

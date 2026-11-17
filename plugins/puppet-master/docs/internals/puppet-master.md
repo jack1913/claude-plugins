@@ -47,13 +47,16 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
 
 - **Housekeeping only.** On its own the master may adopt, assign, finish and pick sessions, and start, stop, remove,
   compact and restart workers, logging each in one line. Commits (unless the user pre-authorized them for the job),
-  pushes, PR posts, approvals, live or external writes and anything destructive go to the user.
+  pushes, PR posts, approvals, live or external writes and anything destructive go to the user. A commit, push or
+  other git action a worker brings is one question to the user; on yes the master runs it in its own window and
+  reports the hash, the pushed range and an `ls-remote` check, and gives a `!` line only when its own run is refused.
+  The user, 2026-11-17: "no need to show me manual commands if you can do it".
 - **The user's sessions first.** The user works with several windows open. A job goes to a clean one of them in the
   job's checkout (`pick`), and a background worker is started only when there is none. The user, 2026-11-06: "move
   theirs work into opened, and keep bg only when you cannot do with opened windows": a window on the wrong tier whose
   mod is on is switched to the tier rather than passed over, so `pick` ranks it with the ones that match. On 2026-10-27 the master did
   merges, pushes and checkouts itself, so anything that changes a repository is a job for a session, unless the user
-  tells the master to do it or it is a read-only check of a session's report.
+  tells the master to do it, approved a worker's git action, or it is a read-only check of a session's report.
 - **One job per context, unless reused on purpose.** By default a session that held a job is not given another
   (`assign` refuses it): different work in one context gets mixed up. `assign --reuse` gives a `done` session its next
   job only while it measures under 30% of its window (1M unless given). Above that, the refusal says to `clear` it

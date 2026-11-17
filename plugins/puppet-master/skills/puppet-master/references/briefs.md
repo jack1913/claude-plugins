@@ -52,7 +52,8 @@ Read this before you write or send any brief, the worker's or the analyst's.
     protocol). For each irreversible command (a wipe, a volume removal, a force push), say who runs
     it: the user in their own window, or the worker only if its permission mode allows it; a step
     the user runs is a `!` line for the worker's window, given before the job starts (Relay
-    protocol). An external write (a Jira create or transition, `gh pr ready`, a push) is always a `!` line, marked so here: auto mode's classifier does not count your relayed yes as the user's. The
+    protocol). A commit, push or other git action is yours to run on the user's yes (rule 1), marked
+    so here. An external write (a Jira create or transition, `gh pr ready`) is always a `!` line, marked so here: auto mode's classifier does not count your relayed yes as the user's. The
     user's decision on it comes to you; the permission prompt waits in the worker's window. A
     relayed OK cannot lift a worker's permission mode.
 - **Check what a brief asserts, just before you send it.** Re-read the decisions log and any state

@@ -56,7 +56,7 @@ puppet-master adds one skill and one small mod. It adds no agents or servers.
 - It never compacts a session mid-task, never clears the master or a session with an open job, never creates a git
   worktree, and never changes your settings. The one exception is its own `self_compact` option, saved only when you
   answer "always" or "don't ask again".
-- Pushes, approvals and anything destructive stay yours.
+- Pushes, approvals and anything destructive wait for your yes. A commit or push you approve, Claude runs itself.
 - Its analyst never changes the plugin: it proposes, and you decide.
 
 ## Something off?

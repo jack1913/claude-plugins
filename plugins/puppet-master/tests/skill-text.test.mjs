@@ -873,7 +873,27 @@ test("an external write the user approves is the user's ! line from the start, n
   const ap = read("references/approvals.md");
   assert.match(ap, /planned as the user's `!` line for the worker's window from the start/);
   assert.match(ap, /does not take a relayed message as the user's approval/);
-  assert.match(section(readSkill(), "Briefs"), /An external write \(a Jira create or transition, `gh pr ready`, a push\) is always a `!` line/);
+  assert.match(section(readSkill(), "Briefs"), /An external write \(a Jira create or transition, `gh pr ready`\) is always a `!` line/);
+});
+
+// brainiac-pipeline P-20261117-14, narrowing P-20261117-1 for git actions (F-4, F-5, F-28).
+test("an approved git action is run by the master, with a `!` line only on refusal (brainiac-pipeline P-20261117-14)", () => {
+  const r1 = rule(1);
+  assert.match(r1, /A commit, push or other git action a worker brings you is\s+one question to the user; on yes, run it yourself in your own window/);
+  assert.match(r1, /the hash, the\s+pushed range and an `ls-remote` check/);
+  assert.match(r1, /A `!` line for it only if your own run is refused/);
+  assert.match(rule(2), /or said yes to a worker's git action \(rule 1\)/);
+  const ap = read("references/approvals.md");
+  assert.match(ap, /\*\*A commit, push or other git action a worker brings\*\*/);
+  assert.match(ap, /Only when your own run is refused, give the user its `!` line/);
+  assert.match(ap, /no need to show me\s+manual commands if you can do it/);
+  assert.doesNotMatch(ap, /`gh pr ready`, a push\)/);
+  const relay = section(read("SKILL.md"), "Relay protocol");
+  assert.match(relay, /A push or other git action is\s+yours to run on the user's yes \(rule 1\)/);
+  assert.doesNotMatch(relay, /irreversible one \(a delete, a push, a Railway write\)/);
+  assert.match(section(read("SKILL.md"), "Red flags"), /"The user said yes to the worker's push, here is the `!` line" →/);
+  assert.match(section(readSkill(), "Briefs"), /A commit, push or other git action is yours to run on the user's yes \(rule 1\)/);
+  assert.match(read("worker-brief.md"), /send the master `ready for the master: <commands>`/);
 });
 
 test("the analyst brief says what a classifier-denied event is (brainiac P-20261112-8, item 4)", () => {
