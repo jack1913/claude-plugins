@@ -11,13 +11,17 @@ description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; pu
   (`create` or `release` would run on a tag). `push` has
   `branches:` with exactly `main`, so a tag push runs no workflow (GitHub evaluates no path
   filter for a tag), and its `paths:` list is identical to the one under `pull_request`.
+- The one exception is a plugin's release run, `.github/workflows/<name>-release.yml` (brand-creator has one): it triggers
+  on `workflow_dispatch` and nothing else, so it starts only by hand, on the release commit. Every other bullet here holds
+  for it, except the validate step: its plugin's own workflow has that.
 - A plugin's workflow is `.github/workflows/<name>.yml`, and its filter lists
   `plugins/<name>/**` plus the workflow file itself. batbelt's also lists `tests/**` and
   `.claude-plugin/**`, because its tests live in the root `tests/` and
-  `tests/test_plugin.py` reads `.claude-plugin/marketplace.json`.
+  `tests/test_plugin.py` reads `.claude-plugin/marketplace.json`. brand-creator's also lists its release run's
+  file, because `plugins/brand-creator/tests/test_docker_ci.py` tests that file's shape.
 - Every workflow declares `permissions: contents: read` at the top level, and no job sets
-  its own permissions; jobs run on a pinned image (`ubuntu-24.04`; no job runs on macOS), never a
-  label with `latest`.
+  its own permissions; jobs run on a pinned image, never a label with `latest`: `ubuntu-24.04`, and `macos-26` only
+  in a release run (no workflow that starts on a push or a pull request runs on macOS).
 - Every job sets `timeout-minutes`, a whole number from 1 to 60 or a matrix value: GitHub's
   default is six hours, and a hung job holds its verdict, and every release tag that needs it,
   that long. A job that calls a reusable workflow cannot set one, so no job calls one.
@@ -48,20 +52,21 @@ description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; pu
   force-pushed. GitHub keeps its own copy; changing a file means changing that copy with
   `gh api` too (`docs/internals/release.md`, "The tag rulesets").
 
-`.github/scripts/check-workflows.py` enforces the triggers, the filters a plugin's workflow
+`.github/scripts/check-workflows.py` enforces the triggers (a release run's too), the filters a plugin's workflow
 needs, the permissions, the runners, the job timeouts, the concurrency groups, the
 cancellation and the verdict job of every workflow, `.yaml` files included, and the ruleset
 files; `marketplace.yml` runs it on any change under `.github/workflows/` or
-`.github/rulesets/`, with `--self-test`. It does not check batbelt's extra filters, the
+`.github/rulesets/`, with `--self-test`. It does not check batbelt's and brand-creator's extra filters, the
 docs.yml filter, the validate steps or the CLI pin, the requirements files, the uv version,
-or the rulesets on GitHub (`--live` compares those by hand, and reports a ruleset no file
-describes). Why the triggers, verdicts and rulesets:
+which image a job runs on beyond its being pinned, or the rulesets on GitHub (`--live` compares those by hand, and
+reports a ruleset no file describes). Why the triggers, verdicts and rulesets:
 `docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md`,
 `docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md`,
-`docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md`. The timeouts and the
+`docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md`; why a release run:
+`docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md`. The timeouts and the
 validate steps have no decision record: their reasons are in the bullets above.
 
 Re-derive:
-`python3 .github/scripts/check-workflows.py` (5 workflows and 4 rulesets checked, 0 errors);
+`python3 .github/scripts/check-workflows.py` (6 workflows and 4 rulesets checked, 0 errors);
 `python3 .github/scripts/check-workflows.py --self-test` (every rule broken on purpose is caught);
 `python3 .github/scripts/check-workflows.py --live` (4 rulesets on GitHub compared with their files, 0 errors).

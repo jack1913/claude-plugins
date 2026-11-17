@@ -67,8 +67,9 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - Tests that spend money (`costs_money`: OpenRouter image generation, a billed run) run only with `BRAND_CREATOR_PAID=1`. Without it,
   `tests/conftest.py` and `tests/run-all.sh` take every `OPENROUTER_*` and `USE_LLM_DESIGN_*` variable out of the run, and a lookup
   of `openrouter.ai` from a test fails.
-- The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it. A release run always
-  sets it ([Release run](manual-checks.md#release-run)): a skipped scan let the pilot brand's name ship in 0.10.0 to 0.11.1.
+- The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it. Run it with the
+  denylist before every push that changes this folder, on the machine you push from
+  ([Release run](manual-checks.md#release-run)): a skipped scan let the pilot brand's name ship in 0.10.0 to 0.11.1.
 - A set-up data directory comes from `brand-creator --data <dir> setup --yes`.
 - No run writes into the data directory it is given. pytest, node:test and each smoke give the tools a data directory of
   their own: links to the given one's npm packages and Chromium, and a scratch folder of its own. pytest keeps it with its
@@ -93,7 +94,8 @@ still checked. `BRAND_CREATOR_TEST_OUT=<dir>` keeps the run log and pytest's JUn
 
 `.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs, the verdict after the other. Each job
 that checks out the repository runs in `plugins/brand-creator/`; the verdict needs no checkout.
-It starts on a push to `main` or a pull request that changes `plugins/brand-creator/` or the workflow file, never on a tag.
+It starts on a push to `main` or a pull request that changes `plugins/brand-creator/`, the workflow file or the release run's
+(`tests/test_docker_ci.py` tests the shape of both), never on a tag.
 
 | Job | What it runs |
 | --- | --- |
@@ -102,9 +104,19 @@ It starts on a push to `main` or a pull request that changes `plugins/brand-crea
 
 The workflow never runs `claude plugin eval`: it is billed. See [Evals](evals.md).
 
-No job runs on macOS or builds the Docker image: CI is kept to a few minutes per push
+No job of this workflow runs on macOS or builds the Docker image: CI is kept to a few minutes per push
 ([ADR-0008](../../../../docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). The full suite,
-on a Mac and in the Linux Docker image, runs before each release instead ([Release run](manual-checks.md#release-run)).
+on macOS and in the Linux Docker image, runs before each release instead ([Release run](manual-checks.md#release-run)).
+
+`.github/workflows/brand-creator-release.yml` is that release run on GitHub's runners
+([ADR-0009](../../../../docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)). It starts only by hand:
+`gh workflow run brand-creator-release.yml --ref main`.
+
+| Job | What it runs |
+| --- | --- |
+| macos | on `macos-26`, with any skip a failure: pytest in three shares of the test files (`python3 tests/tiering.py shard <share> 3` deals them out by measured time, so each job ends inside its hour), and one job for node:test and the smoke; the anonymisation test is deselected by name |
+| linux | `tests/docker/run.sh` in two jobs: pytest, then node:test and the smoke |
+| brand-creator-release | the verdict: passes only when every other job passed |
 
 ## Validate
 

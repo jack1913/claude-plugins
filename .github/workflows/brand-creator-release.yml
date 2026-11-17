@@ -1,0 +1,156 @@
+# The release run of the brand-creator plugin: its full suite on GitHub's runners, started by hand on the release commit.
+# It is the "Release run" of plugins/brand-creator/docs/internals/manual-checks.md without a machine of the maintainer's own
+# (docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md). It never starts on a push, a pull
+# request or a tag: it costs hours of runner time, so it runs once per release, not once per commit.
+#
+#   gh workflow run brand-creator-release.yml --ref main
+#
+#   macos   the whole suite on macOS, where the Apple-tool tests run (sips, iconutil, actool, assetutil, the .icon pipeline):
+#           pytest in three shares of the test files (tests/tiering.py shard, so each job ends well inside the hour) and one job
+#           for node:test and the smoke (the two halves of the Acme smoke with `emit apple`, and the Quick smoke).
+#           BRAND_CREATOR_REQUIRE_ALL=1 turns any skip into a failure; the one test deselected by name is the anonymisation
+#           test, which needs the private denylist. That test runs on the machine that pushes, before the push
+#           (docs/internals/release.md): a public repository cannot hold the list, and a check after the push comes too late.
+#   linux   the same suite in the Linux Docker image (tests/docker/run.sh), on the paths that apply off macOS: one job for
+#           pytest, one for node:test and the smoke. tests/docker/verify_log.py accepts only the expected off-macOS skips.
+#   brand-creator-release  the workflow's verdict: passes only when every other job passed (a failed, cancelled or skipped job
+#           is never green). The release record names the run.
+#
+# `claude plugin eval` is never run here (it is billed); the one call the suite makes loads the cases and runs none.
+name: brand-creator-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per commit, never cancelled or replaced: it is that commit's release run.
+concurrency:
+  group: brand-creator-release-${{ github.sha }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: plugins/brand-creator
+
+env:
+  # The Claude Code version of brand-creator.yml (the same in every workflow).
+  CLAUDE_CODE_VERSION: "2.1.302"
+
+jobs:
+  macos:
+    name: "macos (${{ matrix.part }})"
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # share: which of the three shares of the pytest files the job runs; a job without one runs node:test and the smoke
+        include:
+          - part: pytest 1 of 3
+            share: "1"
+          - part: pytest 2 of 3
+            share: "2"
+          - part: pytest 3 of 3
+            share: "3"
+          - part: node and smoke
+            share: ""
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      # the uv of tests/docker/Dockerfile (UV_VERSION)
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.11"
+      - name: Install the tools the plugin documents
+        run: brew install resvg imagemagick ghostscript poppler ripgrep potrace
+      - name: Select the newest Xcode (the Icon Composer .icon pipeline needs Xcode 26 or later)
+        run: |
+          # shellcheck disable=SC2012
+          newest="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          echo "using $newest"
+          sudo xcode-select -s "$newest"
+          xcodebuild -version
+          xcrun --find actool
+      # a CLI that cannot be installed fails the job: the eval loader test must run, not skip
+      - name: Install the Claude Code CLI
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          claude --version
+      - name: brand-creator setup (npm ci, Chromium)
+        run: bin/brand-creator --data "$RUNNER_TEMP/bc-data" setup --yes
+      - name: pytest, one share of the test files (any skip fails)
+        if: matrix.share != ''
+        run: |
+          files="$(python3 tests/tiering.py shard "$SHARE" 3 | tr '\n' ' ')"
+          echo "share $SHARE of 3: $files"
+          BRAND_CREATOR_TEST_FILES="$files" tests/run-all.sh
+        env:
+          SHARE: ${{ matrix.share }}
+          BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
+          BRAND_CREATOR_TEST_PARTS: pytest
+          BRAND_CREATOR_TEST_WORKERS: "3"
+          BRAND_CREATOR_REQUIRE_ALL: "1"
+          PYTEST_ADDOPTS: "--deselect tests/test_static.py::test_anonymisation"
+      - name: node:test and the smoke (nothing may be NOT VERIFIED)
+        if: matrix.share == ''
+        run: |
+          set -o pipefail
+          tests/run-all.sh --smoke | tee "$RUNNER_TEMP/run-all.log"
+          if grep 'NOT VERIFIED' "$RUNNER_TEMP/run-all.log"; then echo "NOT VERIFIED in the node:test and smoke run" >&2; exit 1; fi
+        env:
+          BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
+          BRAND_CREATOR_TEST_PARTS: node,smoke
+          ACME_SMOKE_DIR: ${{ runner.temp }}/acme-smoke
+
+  linux:
+    name: "linux (${{ matrix.part }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # parts: what tests/run-all.sh runs inside the container, within 45 minutes; the job's hour leaves room for the image, setup and the log check
+        include:
+          - part: pytest
+            parts: pytest
+          - part: node and smoke
+            parts: node,smoke
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the Linux image and run one part of the suite inside it
+        run: tests/docker/run.sh
+        env:
+          BRAND_CREATOR_TEST_WORKERS: "4"
+          BRAND_CREATOR_TEST_PARTS: ${{ matrix.parts }}
+          BRAND_CREATOR_SUITE_MINUTES: "45"
+          BRAND_CREATOR_TEST_OUT: ${{ runner.temp }}/bc-out
+      - name: Keep the run log and the JUnit file
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ strategy.job-index }}-reports
+          path: ${{ runner.temp }}/bc-out
+          retention-days: 14
+
+  # The verdict: it runs even when a job failed or was cancelled and passes only when every job it needs passed.
+  brand-creator-release:
+    needs:
+      - macos
+      - linux
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null

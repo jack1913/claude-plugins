@@ -76,9 +76,42 @@ def fast_node_files(folder: Path, node: dict[str, dict]) -> list[str]:
     return sorted(p.name for p in folder.glob("*.test.mjs") if not slow(p.name))
 
 
-if __name__ == "__main__":      # `python3 tests/tiering.py fast-node-files`: the paths tests/run-all.sh --fast gives node --test, one a line
+def file_seconds(files: list[str], durations: dict[str, float]) -> dict[str, float]:
+    """{test file name: the seconds its slow tests took in the last measured run, plus one}: a file never measured still counts."""
+    out = {f: 1.0 for f in files}
+    for key, seconds in durations.items():
+        f = key.split("::", 1)[0]
+        if f in out:
+            out[f] += seconds
+    return out
+
+
+def shard(files: list[str], durations: dict[str, float], index: int, count: int) -> list[str]:
+    """Share `index` (1 to `count`) of the test file names `files`, dealt out so that the shares take about as long: the longest file first, each
+    to the share with the least time so far. Every file is in exactly one share, and two shares differ by no more than the longest file. Sorted
+    names. The release run on GitHub runs one share a job (.github/workflows/brand-creator-release.yml): a job there ends after an hour."""
+    if not (isinstance(index, int) and isinstance(count, int) and 1 <= index <= count):
+        raise ValueError(f"share {index} of {count}: the share is a whole number from 1 to the count")
+    seconds = file_seconds(files, durations)
+    shares = [[0.0, []] for _ in range(count)]
+    for f in sorted(files, key=lambda f: (-seconds[f], f)):
+        least = min(shares, key=lambda share: share[0])
+        least[0] += seconds[f]
+        least[1].append(f)
+    return sorted(shares[index - 1][1])
+
+
+USAGE = "usage: tiering.py fast-node-files | tiering.py shard <share> <count>"
+
+if __name__ == "__main__":      # `fast-node-files`: the paths tests/run-all.sh --fast gives node --test; `shard 2 3`: the pytest files of share 2 of 3; one a line
     import sys
-    if sys.argv[1:] != ["fast-node-files"]:
-        raise SystemExit("usage: tiering.py fast-node-files")
     here = Path(__file__).resolve().parent
-    print("\n".join(f"tests/node/{n}" for n in fast_node_files(here / "node", load_node())))
+    args = sys.argv[1:]
+    if args == ["fast-node-files"]:
+        print("\n".join(f"tests/node/{n}" for n in fast_node_files(here / "node", load_node())))
+    elif len(args) == 3 and args[0] == "shard" and args[1].isdigit() and args[2].isdigit() and 1 <= int(args[1]) <= int(args[2]):
+        names = sorted(p.name for p in here.glob("test_*.py"))
+        print("\n".join(f"tests/{n}" for n in shard(names, load(), int(args[1]), int(args[2]))))
+    else:
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)

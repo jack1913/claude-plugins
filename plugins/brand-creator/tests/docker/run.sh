@@ -3,7 +3,7 @@
 #
 #   tests/docker/run.sh [--no-build]
 #
-# The plugin and the repository workflow are mounted read-only and copied inside the container, into the monorepo layout
+# The plugin and its two repository workflows are mounted read-only and copied inside the container, into the monorepo layout
 # (/work/repo/plugins/brand-creator, /work/repo/.github/workflows, /work/repo/.claude-plugin/marketplace.json); nothing the run writes touches this checkout.
 # Environment (all optional):
 #   BRAND_CREATOR_DOCKER_DATA=<host dir>   keep the data directory (npm packages, Chromium) on the host between runs
@@ -28,6 +28,8 @@ MARKET="$ROOT/../../.claude-plugin/marketplace.json"         # tests/test_static
 [ -f "$MARKET" ] || { echo "run.sh: $MARKET not found (run from the claude-plugins monorepo)" >&2; exit 2; }
 [ -f "$WORKFLOW" ] || { echo "run.sh: $WORKFLOW not found: run this from the claude-plugins monorepo (plugins/brand-creator)" >&2; exit 2; }
 WORKFLOW="$(cd -P "$(dirname "$WORKFLOW")" && pwd)/brand-creator.yml"
+RELEASE="${WORKFLOW%.yml}-release.yml"                        # the release run's workflow: tests/test_docker_ci.py reads it too
+[ -f "$RELEASE" ] || { echo "run.sh: $RELEASE not found: run this from the claude-plugins monorepo (plugins/brand-creator)" >&2; exit 2; }
 IMAGE="${BRAND_CREATOR_DOCKER_IMAGE:-brand-creator-linux-test:debian13}"
 
 command -v docker >/dev/null || { echo "run.sh: docker is not installed or not on PATH" >&2; exit 3; }
@@ -41,7 +43,7 @@ if [ "${1:-}" != "--no-build" ]; then
 fi
 
 # --init: a real PID 1 that passes signals on and reaps orphans; --ipc=host: Chromium needs more shared memory than Docker's default (Playwright's Docker guidance)
-args=(--rm --init --ipc=host ${platform[@]+"${platform[@]}"} -v "$ROOT":/src:ro -v "$WORKFLOW":/src-ci/brand-creator.yml:ro -v "$MARKET":/src-ci/marketplace.json:ro
+args=(--rm --init --ipc=host ${platform[@]+"${platform[@]}"} -v "$ROOT":/src:ro -v "$WORKFLOW":/src-ci/brand-creator.yml:ro -v "$RELEASE":/src-ci/brand-creator-release.yml:ro -v "$MARKET":/src-ci/marketplace.json:ro
       -e BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-}" -e BRAND_CREATOR_TEST_PARTS="${BRAND_CREATOR_TEST_PARTS:-}"
       -e BRAND_CREATOR_SUITE_MINUTES="${BRAND_CREATOR_SUITE_MINUTES:-45}" -e BRAND_CREATOR_TEST_FILES="${BRAND_CREATOR_TEST_FILES:-}")
 if [ -n "${BRAND_CREATOR_TEST_OUT:-}" ]; then

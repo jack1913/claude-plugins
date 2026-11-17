@@ -16,7 +16,15 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    claude plugin validate plugins/<name> --strict
    ```
 
-3. Commit and push the changelog and version bump.
+3. Commit and push the changelog and version bump. For brand-creator, scan for private terms before every push that
+   changes its folder: the repository is public, so the scan cannot wait for CI. From `plugins/brand-creator/`, with the
+   private denylist that each machine you push from keeps outside the repository:
+
+   ```bash
+   BRAND_CREATOR_DENYLIST=<denylist.json> BRAND_CREATOR_REQUIRE_ALL=1 \
+     uv run --no-project --with-requirements tests/requirements.txt python -m pytest -q tests/test_static.py::test_anonymisation
+   ```
+
 4. Wait until every CI run of that commit on `main` has passed. A tag push runs no CI, so this run is the release's only
    check ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)), and GitHub accepts the tag
    only on a commit where the checks `<name>` and `docs` passed (the tag rulesets below):
@@ -32,8 +40,17 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    did not change never starts there, so start it by hand on `main`'s current commit with
    `gh workflow run <workflow>.yml --ref main` (`docs.yml`, or the plugin's own).
 
-   brand-creator's workflow runs only quick checks. Before its tag, run its full suite on that commit, on a Mac and in
+   brand-creator's workflow runs only quick checks. Before its tag, run its full suite on that commit, on macOS and in
    the Linux container, and record the result: [Release run](../../plugins/brand-creator/docs/internals/manual-checks.md#release-run).
+   From any machine, start it on GitHub's runners and wait for its verdict, `brand-creator-release`
+   ([ADR-0009](../adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)):
+
+   ```bash
+   gh workflow run brand-creator-release.yml --ref main
+   gh run list --workflow brand-creator-release.yml --commit "$(git rev-parse HEAD)" --json databaseId,status,conclusion
+   ```
+
+   On a Mac with Xcode and Docker you can run it yourself instead, as that page describes.
 5. Dry-run the tag, from the repository root:
 
    ```bash

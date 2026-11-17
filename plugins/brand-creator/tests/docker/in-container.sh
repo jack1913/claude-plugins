@@ -2,7 +2,7 @@
 # Runs INSIDE the Linux image (tests/docker/Dockerfile), started by tests/docker/run.sh. Not meant to be run on a developer machine.
 #
 # 1. copies the plugin from the read-only mount /src to /work/repo/plugins/brand-creator (no .git, no caches: the copy is what a user would install)
-#    and the CI workflow and the root marketplace.json from /src-ci (the monorepo layout the tests expect)
+#    and the two workflows and the root marketplace.json from /src-ci (the monorepo layout the tests expect)
 # 2. brand-creator prereq --for full, then `brand-creator setup --yes` into a data directory inside the container (npm ci, Chromium)
 # 3. tests/run-all.sh --smoke WITHOUT BRAND_CREATOR_REQUIRE_ALL (pytest, node:test, the Acme smoke on the paths that apply off macOS),
 #    only the parts BRAND_CREATOR_TEST_PARTS names, within BRAND_CREATOR_SUITE_MINUTES (past it the suite is stopped, and step 4 still runs)
@@ -33,7 +33,7 @@ printf 'fonts      %s families\n' "$(fc-list : family | sort -u | wc -l | tr -d 
 step "copy the plugin"
 rm -rf "$REPO"
 mkdir -p "$PLUGIN" "$REPO/.github/workflows" "$REPO/.claude-plugin"
-cp /src-ci/brand-creator.yml "$REPO/.github/workflows/brand-creator.yml"
+cp /src-ci/brand-creator.yml /src-ci/brand-creator-release.yml "$REPO/.github/workflows/"
 cp /src-ci/marketplace.json "$REPO/.claude-plugin/marketplace.json"
 tar -C "$SRC" --exclude=./.git --exclude=node_modules --exclude=__pycache__ --exclude=.pytest_cache --exclude=./evals/results -cf - . | tar -C "$PLUGIN" -xf -
 cd "$PLUGIN"

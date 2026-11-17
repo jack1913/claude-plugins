@@ -406,12 +406,33 @@ what fails; until then the [platform support](../manual/reference/platform-suppo
 
 ## Release run
 
-**Why manual.** CI runs only quick checks, never on macOS and never the Docker image
+**Why manual.** CI runs only quick checks on a push, never on macOS and never the Docker image
 ([ADR-0008](../../../../docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). The full suite
-runs here, before every release tag: on a Mac, where the Apple-tool tests (`sips`, `iconutil`, `actool`, `assetutil`, the
+runs here, before every release tag: on macOS, where the Apple-tool tests (`sips`, `iconutil`, `actool`, `assetutil`, the
 `.icon` pipeline) and the Acme smoke with `emit apple` run, and in the Linux Docker image, where the off-macOS paths run.
+There are two ways to make it, and the record says which ([ADR-0009](../../../../docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)).
 
-**Steps.** On a Mac with Xcode 26 or later and Docker, on the release commit with a clean tree, from the repository root:
+**Before the push, on any machine.** Scan for private terms with the denylist, from `plugins/brand-creator/`. The
+repository is public, so this runs before the release commit is pushed, never after:
+
+```bash
+BRAND_CREATOR_DENYLIST=<denylist.json> BRAND_CREATOR_REQUIRE_ALL=1 \
+  uv run --no-project --with-requirements tests/requirements.txt python -m pytest -q tests/test_static.py::test_anonymisation
+```
+
+**Steps on GitHub, from any machine.** With the release commit on `main`, start the release run and wait for its verdict:
+
+```bash
+gh workflow run brand-creator-release.yml --ref main
+gh run list --workflow brand-creator-release.yml --commit "$(git rev-parse HEAD)" --json databaseId,status,conclusion
+```
+
+It passes when the run's conclusion is `success`: every `macos` job passed with no skip (pytest in three shares, then
+node:test and the smoke), and every `linux` job ended with `LINUX RUN OK`. The workflow leaves the anonymisation test out,
+so the scan above is part of this release run. Record the version, the commit, the date and the run's number here before
+tagging.
+
+**Steps on a Mac.** On a Mac with Xcode 26 or later and Docker, on the release commit with a clean tree, from the repository root:
 
 ```bash
 BRAND_CREATOR_DATA=<set-up data dir> BRAND_CREATOR_DENYLIST=<denylist.json> plugins/brand-creator/tests/run-all.sh --smoke

@@ -48,3 +48,10 @@ Otherwise the full Linux run stands. The Mac part stays the full suite with the 
 was made. The owner chose it for 0.11.1: the full Linux run takes about 20 minutes, the limited one under 2. For daily work,
 `tests/run-all.sh --fast` leaves out every test that took a second or more in the last measured run (`tests/durations.json`)
 and says how many; it never replaces a release run.
+
+## Update 2026-11-17
+
+[ADR-0009](ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md) adds a second way to make the release run: the workflow
+`brand-creator-release.yml`, started by hand, runs the full suite on `macos-26` and in the Linux Docker image. "No workflow runs
+on macOS or builds the Docker image" now holds for the workflows that start on a push or a pull request, and a release no
+longer needs the maintainer's machine. The run on a Mac with Docker described here stays valid.

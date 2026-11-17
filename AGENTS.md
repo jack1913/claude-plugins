@@ -11,7 +11,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | --- | --- |
 | `.claude-plugin/marketplace.json` | The marketplace `jack1913`; every `source` is `./plugins/<name>` |
 | `plugins/<name>/` | One plugin: its own `.claude-plugin/plugin.json`, docs and version, and its own tests and changelog (batbelt: tests in the root `tests/`) |
-| `.github/workflows/` | One workflow per plugin, plus `marketplace.yml` and `docs.yml` (the docs standard) |
+| `.github/workflows/` | One workflow per plugin, plus `marketplace.yml`, `docs.yml` (the docs standard) and `brand-creator-release.yml` (brand-creator's release run, started by hand) |
 | `.github/scripts/` | Helpers the workflows call |
 | `.github/rulesets/` | One release-tag ruleset per plugin and one for `main`: the source of the rulesets on GitHub |
 | `tests/` | batbelt's tests (the other plugins keep theirs in their own folder) |
@@ -36,6 +36,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | Secret scanning, push protection and Dependabot alerts: what is on, and how an alert is handled | `docs/adr/ADR-0007-secret-scanning-and-dependabot-alerts.md` |
 | A plugin's version (its only home) | `plugins/<name>/.claude-plugin/plugin.json` (`version`) |
 | How each plugin is tested in CI | `.github/workflows/<name>.yml` (`run:` lines) |
+| brand-creator's release run on GitHub (full suite, macOS and Linux, started by hand) | `.github/workflows/brand-creator-release.yml`; why: `docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md` |
 | What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml`; the root manual's recorded outputs and coverage record: `docs/.onboard-captures/`, `docs/.onboard-coverage.json` |
 | batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py` |
 | onboard-repo (source of truth for the stamped skills below) | `plugins/batbelt/skills/onboard-repo/` |
@@ -57,7 +58,7 @@ unscoped rule taxes every session. Keep this table in step with `.claude/rules/`
 
 | When you need... | Where to look |
 | --- | --- |
-| CI workflow shape: push on main only, matching `paths:` filters, pinned runners, job timeouts, read-only token, one verdict job named after the workflow (`.github/workflows/*.yml`, `.github/rulesets/*.json`) | `.claude/rules/ci-workflow-per-plugin.md` |
+| CI workflow shape: push on main only (a release run: by hand only), matching `paths:` filters, pinned runners, job timeouts, read-only token, one verdict job named after the workflow (`.github/workflows/*.yml`, `.github/rulesets/*.json`) | `.claude/rules/ci-workflow-per-plugin.md` |
 
 ### Skills
 

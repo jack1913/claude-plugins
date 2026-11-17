@@ -1,5 +1,5 @@
-"""The Linux validation (tests/docker) and the CI workflow (.github/workflows/brand-creator.yml at the monorepo root): static checks of the files, and the log verifier on
-logs written by hand in the shape pytest, node:test and the smoke print. Nothing here starts Docker."""
+"""The Linux validation (tests/docker), the CI workflow and the release run (.github/workflows/brand-creator.yml and brand-creator-release.yml at the monorepo
+root): static checks of the files, and the log verifier on logs written by hand in the shape pytest, node:test and the smoke print. Nothing here starts Docker."""
 import re
 import shutil
 import subprocess
@@ -16,6 +16,16 @@ CI = ROOT.parents[1] / ".github" / "workflows" / "brand-creator.yml"   # the mon
 def ci_text() -> str:
     assert CI.is_file(), f"{CI} not found: this plugin's workflow lives at the root of the claude-plugins monorepo (tests/docker/run.sh mirrors that layout in the container)"
     return CI.read_text()
+
+
+RELEASE = CI.with_name("brand-creator-release.yml")   # the release run: the full suite on GitHub's runners, started by hand
+
+
+def release_text() -> str:
+    assert RELEASE.is_file(), f"{RELEASE} not found: the release run's workflow lives beside {CI.name} (tests/docker/run.sh mounts both)"
+    return RELEASE.read_text()
+
+
 VERIFY = DOCKER / "verify_log.py"
 PERSONAL = ("/" + "Users/", "/" + "home/", "/" + "private/")   # written in pieces: test_static scans every shipped file for these
 
@@ -150,7 +160,8 @@ def run_smokes(tmp_path, **env):
         (plugin / "tests" / "smoke" / f"{name}.sh").write_text(SMOKE_STUB.format(name=name))
     stubs = tmp_path / "stubs"
     stubs.mkdir()
-    base = {k: v for k, v in os.environ.items() if k not in ("ACME_SMOKE_DIR", "QUICK_SMOKE_DIR", "ACME_SMOKE_PART")}
+    # a run of chosen files (BRAND_CREATOR_TEST_FILES: a share of the release run, a limited Linux run) names files this copy does not hold
+    base = {k: v for k, v in os.environ.items() if k not in ("ACME_SMOKE_DIR", "QUICK_SMOKE_DIR", "ACME_SMOKE_PART", "BRAND_CREATOR_TEST_FILES")}
     return subprocess.run(["bash", str(plugin / "tests" / "run-all.sh"), "--smoke"], capture_output=True, text=True, timeout=120,
                           env={**base, "BRAND_CREATOR_TEST_PARTS": "smoke", "STUB_DIR": str(stubs), "ACME_SMOKE_DIR": str(tmp_path / "smk"), **env})
 
@@ -205,22 +216,88 @@ def test_ci_workflow_runs_only_the_quick_checks_never_macos_docker_or_the_billed
     assert "permissions:\n  contents: read" in text
     assert "working-directory: plugins/brand-creator" in text                         # every job runs in the plugin folder
     assert text.count('"plugins/brand-creator/**"') == 2 and text.count(".github/workflows/brand-creator.yml") == 2   # push and pull_request are path-filtered
+    assert text.count('"' + ".github/workflows/" + RELEASE.name + '"') == 2                # a change to the release run starts these tests of its shape
     for needle in PERSONAL:
         assert needle not in text
 
 
 def test_ci_workflow_values_are_valid_yaml():
     """GitHub rejected the first push of the workflow outright ("workflow file issue"): a step name held ': ' unquoted. Every
-    single-line `key: value` in the workflow must load as one YAML string, like the skill frontmatter."""
+    single-line `key: value` in the two workflows must load as one YAML string, like the skill frontmatter."""
     from test_skills import yaml_plain_scalar_problem
     bad = []
-    for n, line in enumerate(ci_text().splitlines(), 1):
-        m = re.match(r"^\s*(?:- )?([A-Za-z_][\w-]*):\s+(.+)$", line)
-        if m and not line.lstrip().startswith("#") and m.group(2).strip() not in ("|", ">"):
-            why = yaml_plain_scalar_problem(m.group(2).strip())
-            if why and not m.group(2).strip().startswith("${{"):
-                bad.append(f"brand-creator.yml:{n}: {m.group(1)} {why}")
+    for name, text in ((CI.name, ci_text()), (RELEASE.name, release_text())):
+        for n, line in enumerate(text.splitlines(), 1):
+            m = re.match(r"^\s*(?:- )?([A-Za-z_][\w-]*):\s+(.+)$", line)
+            if m and not line.lstrip().startswith("#") and m.group(2).strip() not in ("|", ">"):
+                why = yaml_plain_scalar_problem(m.group(2).strip())
+                if why and not m.group(2).strip().startswith("${{"):
+                    bad.append(f"{name}:{n}: {m.group(1)} {why}")
     assert not bad, "\n".join(bad)
+
+
+def test_a_test_deselected_by_name_takes_no_other_test_with_it():
+    """pytest's --deselect takes the start of a node id: a test whose name starts with a deselected one is left out with it, and nothing says so.
+    The scanner's own test was left out of CI that way, behind test_anonymisation."""
+    for name, text in ((CI.name, ci_text()), (RELEASE.name, release_text())):
+        nodes = set(re.findall(r"--deselect ([\w/.:]+)", text))
+        assert nodes, name
+        for node in nodes:
+            path, test = node.split("::")
+            tests = re.findall(r"^def (test_\w+)\(", (ROOT / path).read_text(), re.M)
+            assert [t for t in tests if t.startswith(test)] == [test], f"{name}: --deselect {node} also leaves out another test"
+
+
+# ---------------------------------------------------------------- the release run (started by hand, the full suite on macOS and in the Linux image)
+
+def test_the_release_run_starts_only_by_hand_and_no_step_runs_the_billed_eval():
+    text = release_text()
+    assert "\non:\n  workflow_dispatch:\n\npermissions:\n  contents: read\n" in text      # never on a push, a pull request or a tag: hours of runner time a run
+    assert not re.search(r"^  (push|pull_request|schedule|release|create):", text, re.M)
+    jobs = re.findall(r"^  ([\w-]+):$", text[text.index("\njobs:\n"):], re.M)
+    assert jobs == ["macos", "linux", "brand-creator-release"], jobs
+    assert "group: brand-creator-release-${{ github.sha }}\n  cancel-in-progress: false" in text   # one run a commit, never cancelled
+    assert "working-directory: plugins/brand-creator" in text
+    for ln in text.splitlines():
+        if not ln.lstrip().startswith("#"):
+            assert "plugin eval" not in ln, "the release run must not run the billed eval"
+    for uses in re.findall(r"uses:\s*(\S+)", text):
+        assert re.fullmatch(r"[\w.-]+/[\w.-]+@v\d+", uses), f"{uses}: pin actions by a version tag"
+    pin = re.search(r'CLAUDE_CODE_VERSION: "([\d.]+)"', text)
+    assert pin and f'CLAUDE_CODE_VERSION: "{pin.group(1)}"' in ci_text()                        # the CLI of the quick checks
+    for needle in PERSONAL:
+        assert needle not in text
+
+
+def test_the_release_run_on_macos_runs_every_test_file_fails_on_any_skip_and_deselects_only_the_denylist_test():
+    text = release_text()
+    macos = text[text.index("\n  macos:\n"):text.index("\n  linux:\n")]
+    assert "runs-on: macos-26\n" in macos and "latest" not in macos                          # a pinned image, with the Xcode the .icon pipeline needs
+    assert "xcrun --find actool" in macos and "claude --version" in macos                    # a missing Apple tool or CLI fails the job: nothing skips
+    shares = re.findall(r'^\s+share: "(\d*)"$', macos, re.M)
+    count = re.search(r'tests/tiering\.py shard "\$SHARE" (\d+)', macos)
+    assert count and shares == [str(i) for i in range(1, int(count.group(1)) + 1)] + [""], shares   # every share of the files has a job, and one job has none
+    pytest_step = macos[macos.index("- name: pytest, one share"):macos.index("- name: node:test and the smoke")]
+    assert 'BRAND_CREATOR_REQUIRE_ALL: "1"' in pytest_step and "BRAND_CREATOR_TEST_PARTS: pytest\n" in pytest_step
+    assert re.findall(r"--deselect ([\w/.:]+)", macos) == ["tests/test_static.py::test_anonymisation"]   # needs the private denylist: it runs before the push
+    rest = macos[macos.index("- name: node:test and the smoke"):]
+    assert "tests/run-all.sh --smoke" in rest and "BRAND_CREATOR_TEST_PARTS: node,smoke\n" in rest
+    assert "grep 'NOT VERIFIED'" in rest and "exit 1" in rest                                  # the smoke has no skip to fail on: its NOT VERIFIED lines do
+    assert "matrix.share != ''" in pytest_step and "matrix.share == ''" in rest               # each job runs exactly one of the two steps
+
+
+def test_the_release_run_on_linux_runs_every_part_in_the_image_and_its_verdict_needs_every_job():
+    text = release_text()
+    linux = text[text.index("\n  linux:\n"):text.index("\n  brand-creator-release:\n")]
+    verdict = text[text.index("\n  brand-creator-release:\n"):]
+    assert "runs-on: ubuntu-24.04\n" in linux and "run: tests/docker/run.sh\n" in linux
+    parts = sorted(p for item in re.findall(r"^\s+parts: (\S+)$", linux, re.M) for p in item.split(","))
+    assert parts == ["node", "pytest", "smoke"], parts                                       # together the whole suite, each part once
+    assert "BRAND_CREATOR_REQUIRE_ALL" not in linux                                          # off macOS the log verifier accepts exactly the expected skips
+    assert 'BRAND_CREATOR_SUITE_MINUTES: "45"' in linux and "timeout-minutes: 60\n" in linux  # the deadline inside the container ends before the job's
+    needs = re.findall(r"^      - ([\w-]+)$", verdict[:verdict.index("\n    if:")], re.M)
+    assert needs == ["macos", "linux"], needs
+    assert "if: ${{ always() }}" in verdict and """jq -e 'all(.[]; .result == "success")'""" in verdict
 
 
 # ---------------------------------------------------------------- the suite in parts (one Docker run each), its deadlines and its time limits

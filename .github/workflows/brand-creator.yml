@@ -1,9 +1,9 @@
 # Continuous integration for the brand-creator plugin, in the monorepo jack1913/claude-plugins (GitHub reads only the root .github/).
-# Every job that checks out the repository runs in plugins/brand-creator (the verdict needs no checkout); the workflow starts only on changes under that folder or to this file.
+# Every job that checks out the repository runs in plugins/brand-creator (the verdict needs no checkout); the workflow starts only on changes under that folder, to this file or to the release run's (its shape is tested here).
 #
 # CI is kept to quick checks, a few minutes per run (docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md).
-# The full suite (pytest, node and the smoke, on the Mac and in the Linux Docker image) runs on the maintainer's machine before
-# each release tag and is recorded in docs/internals/manual-checks.md ("Release run").
+# The full suite (pytest, node and the smoke, on macOS and in the Linux Docker image) runs before each release tag, in
+# brand-creator-release.yml (started by hand) or on a Mac with Docker, and is recorded in docs/internals/manual-checks.md ("Release run").
 #
 #   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm, then the quick tests: the
 #             manifest and version pins (tests/test_static.py, its validator mutation test included), the skill and agent
@@ -17,7 +17,7 @@
 #             (.github/rulesets/brand-creator-release-tags.json, docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md).
 #
 # `claude plugin eval` is never run here (it is billed); the evals are run by hand, see docs/internals/manual-checks.md.
-# No job runs on macOS or builds the Docker image.
+# No job here runs on macOS or builds the Docker image: the release run does (brand-creator-release.yml).
 name: brand-creator
 
 on:
@@ -27,10 +27,12 @@ on:
     paths:
       - "plugins/brand-creator/**"
       - ".github/workflows/brand-creator.yml"
+      - ".github/workflows/brand-creator-release.yml"
   pull_request:
     paths:
       - "plugins/brand-creator/**"
       - ".github/workflows/brand-creator.yml"
+      - ".github/workflows/brand-creator-release.yml"
   workflow_dispatch:
 
 permissions:

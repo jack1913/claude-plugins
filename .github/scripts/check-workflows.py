@@ -10,11 +10,14 @@ from the repository root.
                                                                    CI never runs it, so a change made on GitHub shows up only here)
 
 The rule is .claude/rules/ci-workflow-per-plugin.md; why: docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md,
-docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md and docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md.
+docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md, docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md and
+docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md.
 Fails when:
-  - the workflow files are not one <plugin>.yml per plugin under plugins/ plus marketplace.yml and docs.yml (a .yaml file
-    is reported too: GitHub runs both extensions);
-  - a workflow triggers on anything but push, pull_request and workflow_dispatch (create or release would run on a tag);
+  - the workflow files are not one <plugin>.yml per plugin under plugins/ plus marketplace.yml and docs.yml, and at most one
+    <plugin>-release.yml per plugin, its release run (a .yaml file is reported too: GitHub runs both extensions);
+  - a workflow triggers on anything but push, pull_request and workflow_dispatch (create or release would run on a tag), or
+    a release run on anything but workflow_dispatch (it is started by hand on the release commit, and the rules about push
+    and pull_request below do not apply to it);
   - push runs for anything but main: push.branches must be exactly main, with no tags, tags-ignore or branches-ignore
     (GitHub evaluates no path filter for a tag push, so a tag would start every workflow again);
   - push and pull_request filter on different paths, or a plugin's workflow does not filter on plugins/<name>/** and its own file;
@@ -47,6 +50,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PR_ONLY = "${{ github.event_name == 'pull_request' }}"
 TRIGGERS = {"push", "pull_request", "workflow_dispatch"}
+RELEASE_RUN = "-release.yml"   # <plugin>-release.yml: a plugin's release run, started by hand
 KEY = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
 ALWAYS = ("${{ always() }}", "always()")
 ACTIONS = 15368   # the GitHub Actions app: a check of the same name from any other source does not count
@@ -262,14 +266,22 @@ def check_verdict(f: str, text: str, jobs: dict[str, dict], verdicts: set[str]) 
     return errors
 
 
-def check_one(f: str, text: str, plugins: list[str], verdicts: set[str]) -> list[str]:
-    errors: list[str] = []
-    top, lines = read(text)
-    name = f.removesuffix(".yml")
-    on = top.get("on")
+def is_release_run(f: str, plugins: list[str]) -> bool:
+    """<plugin>-release.yml of a plugin under plugins/, unless that file is a plugin's own workflow (a plugin named <other>-release)."""
+    return f.endswith(RELEASE_RUN) and f.removesuffix(RELEASE_RUN) in plugins and f.removesuffix(".yml") not in plugins
+
+
+def check_triggers(f: str, on, plugins: list[str]) -> list[str]:
+    """A workflow's triggers: push on main only and pull_request, on the same paths, and a run by hand; a release run: by hand only."""
+    found = ", ".join(sorted(on)) if isinstance(on, dict) else repr(on)
+    if is_release_run(f, plugins):
+        if not isinstance(on, dict) or set(on) != {"workflow_dispatch"}:
+            return [f"{f}: a release run must trigger on workflow_dispatch and nothing else (found: {found}): it is started by hand on the release commit"]
+        return []
     if not isinstance(on, dict) or set(on) != TRIGGERS:
-        found = ", ".join(sorted(on)) if isinstance(on, dict) else repr(on)
         return [f"{f}: must trigger on push, pull_request and workflow_dispatch and nothing else (found: {found})"]
+    errors: list[str] = []
+    name = f.removesuffix(".yml")
     push, pr = on.get("push") or {}, on.get("pull_request") or {}
     if not isinstance(push, dict) or push.get("branches") != ["main"]:
         errors.append(f"{f}: push must run on main only (push.branches: a list of exactly main), so a tag push runs nothing")
@@ -284,6 +296,15 @@ def check_one(f: str, text: str, plugins: list[str], verdicts: set[str]) -> list
         for need in (f"plugins/{name}/**", f".github/workflows/{f}"):
             if need not in (paths or []):
                 errors.append(f"{f}: does not filter on {need}")
+    return errors
+
+
+def check_one(f: str, text: str, plugins: list[str], verdicts: set[str]) -> list[str]:
+    top, lines = read(text)
+    on = top.get("on")
+    errors = check_triggers(f, on, plugins)
+    if not isinstance(on, dict) or set(on) != ({"workflow_dispatch"} if is_release_run(f, plugins) else TRIGGERS):
+        return errors
     perms = top.get("permissions")
     if not isinstance(perms, dict) or perms.get("contents") != "read" or "write" in perms.values():
         errors.append(f"{f}: the top-level permissions must be contents: read, with no write")
@@ -402,8 +423,9 @@ def check(workflows: dict[str, str], plugins: list[str], rulesets: dict[str, str
     """Every problem with the workflows and the rulesets ({file name: text}) of a repository whose plugins are `plugins`."""
     errors = [f"{f}: use the .yml extension (GitHub runs .yaml files too, and this check reads .yml)" for f in sorted(workflows) if not f.endswith(".yml")]
     yml = {f: t for f, t in workflows.items() if f.endswith(".yml")}
-    expected = {f"{p}.yml" for p in plugins} | {"marketplace.yml", "docs.yml"}
-    errors += [f"{f} is not a plugin's workflow, marketplace.yml or docs.yml" for f in sorted(set(yml) - expected)]
+    expected = {f"{p}.yml" for p in plugins} | {"marketplace.yml", "docs.yml"} | {f for f in yml if is_release_run(f, plugins)}
+    errors += [f"{f} is not a plugin's workflow, a plugin's release run (<plugin>{RELEASE_RUN}), marketplace.yml or docs.yml"
+               for f in sorted(set(yml) - expected)]
     errors += [f"plugins/{p} has no workflow .github/workflows/{p}.yml" for p in sorted(plugins) if f"{p}.yml" not in yml]
     errors += ["plugins/main: no plugin may be named main: --ruleset main prints main's branch ruleset"] if "main" in plugins else []
     verdicts = {f.removesuffix(".yml") for f in yml}
@@ -445,6 +467,16 @@ MUTATIONS = [
     ("a plugin workflow misses its folder", "swift.yml", '      - "plugins/swift/**"\n', "", "does not filter on plugins/swift/**"),
     ("a flow list the reader does not read", "swift.yml", "    branches:\n      - main\n", "    branches: [main]\n", "unreadable"),
     ("a stray workflow", None, "stray.yml", "name: stray\n", "stray.yml is not a plugin's workflow"),
+    ("a release run of no plugin", None, "stray-release.yml", "name: stray-release\n", "stray-release.yml is not a plugin's workflow"),
+    ("a release run that starts on a push", "brand-creator-release.yml", "on:\n  workflow_dispatch:\n",
+     "on:\n  push:\n    branches:\n      - main\n  workflow_dispatch:\n", "a release run must trigger on workflow_dispatch and nothing else"),
+    ("a release run on a floating macOS image", "brand-creator-release.yml", "runs-on: macos-26", "runs-on: macos-latest", "floating runner image"),
+    ("a release run without its verdict", "brand-creator-release.yml", "\n  brand-creator-release:\n", "\n  verdict:\n",
+     "brand-creator-release.yml: has no job brand-creator-release"),
+    ("a release run whose verdict skips a job", "brand-creator-release.yml", "      - macos\n      - linux\n", "      - linux\n", "does not need macos"),
+    ("a release run that can be cancelled", "brand-creator-release.yml", "cancel-in-progress: false", "cancel-in-progress: true", "can cancel a run on main"),
+    ("a release run job without a timeout", "brand-creator-release.yml", "    runs-on: macos-26\n    timeout-minutes: 60\n", "    runs-on: macos-26\n",
+     "job macos sets no timeout-minutes"),
     ("a .yaml workflow", None, "release.yaml", "name: release\n", "release.yaml: use the .yml extension"),
     ("a plugin without a workflow", None, "swift.yml", None, "plugins/swift has no workflow"),
     ("a workflow without its verdict", "swift.yml", "\n  swift:\n", "\n  test:\n", "swift.yml: has no job swift"),

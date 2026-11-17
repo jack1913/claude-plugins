@@ -22,7 +22,7 @@ $ python3 .github/scripts/check-marketplace.py
 ```
 
 The workflow check, which also checks the rulesets, runs from the repository root too. A pass prints
-`5 workflows and 4 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
+`6 workflows and 4 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
 
 ```bash
 python3 .github/scripts/check-workflows.py
@@ -69,8 +69,10 @@ run, `tests/durations.json`) and the smoke, and says how many it left out: under
 
 CI runs only quick checks (`.github/workflows/brand-creator.yml`): `claude plugin validate --strict` and the static tests,
 about a minute, where any skip fails. Its verdict, the `brand-creator` check, passes only when every job passed. The full
-suite runs before each release tag, on a Mac and in the Linux container (`tests/docker/run.sh`)
-([ADR-0008](../adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). More:
+suite runs before each release tag, on macOS and in the Linux container (`tests/docker/run.sh`): on GitHub's runners,
+started by hand (`.github/workflows/brand-creator-release.yml`), or on a Mac with Docker
+([ADR-0008](../adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md),
+[ADR-0009](../adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)). More:
 [its development notes](../../plugins/brand-creator/docs/internals/development.md).
 
 Without the data directory, the tests that need it print a "NOT VERIFIED" banner. A skip is not a pass.

@@ -7,7 +7,8 @@ plugin plus `marketplace.yml` and `docs.yml`, one release-tag ruleset per plugin
 | Path | What it holds |
 | --- | --- |
 | `.claude-plugin/marketplace.json` | The marketplace `jack1913`; every `source` is `./plugins/<name>` |
-| `.github/workflows/<plugin>.yml` | That plugin's CI, run on a push to `main` or a pull request that changes its folder or its workflow file (batbelt: also `tests/**` and `.claude-plugin/**`), or by hand; never on a tag |
+| `.github/workflows/<plugin>.yml` | That plugin's CI, run on a push to `main` or a pull request that changes its folder or its workflow file (batbelt: also `tests/**` and `.claude-plugin/**`; brand-creator: also its release run's file), or by hand; never on a tag |
+| `.github/workflows/brand-creator-release.yml` | brand-creator's release run: its full suite on macOS and in the Linux Docker image, started only by hand, before a release tag |
 | `.github/workflows/marketplace.yml` | Checks `marketplace.json` (also with `claude plugin validate`), the shape of every workflow and the rulesets |
 | `.github/workflows/docs.yml` | Checks the docs against the [docs standard](docs-standard.md), and runs the workflow check, because every release-tag ruleset requires its job |
 | `.github/scripts/` | The checks those two workflows run: `check-marketplace.py`, `check-workflows.py`, `check-docs-standard.py` |

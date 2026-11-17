@@ -81,7 +81,7 @@ def _scan(deny: dict, files, root: Path) -> list[str]:
     return hits
 
 
-def test_anonymisation_scanner_catches_planted_terms(tmp_path):
+def test_the_anonymisation_scanner_catches_planted_terms(tmp_path):
     """Mutation test for the scanner itself, with a synthetic denylist (nothing real is stored here)."""
     deny = {"terms": ["Zorblax Industries", "dluga fraza"], "hex": ["#123abc"], "allow": ["zorblaxes"]}
     f = tmp_path / "doc.md"

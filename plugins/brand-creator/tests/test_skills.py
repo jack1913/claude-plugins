@@ -303,14 +303,29 @@ def _status_cmd(data):
     return shlex.split(cmd.replace("${CLAUDE_PLUGIN_ROOT}", str(ROOT)).replace("${CLAUDE_PLUGIN_DATA}", str(data)))
 
 
+UV_NAMES = ("uv", "uvx")
+
+
 def _path_without_uv(tmp_path):
-    """bin/ of the plugin (as Claude Code puts it on PATH), python3 and the system folders, but no uv."""
+    """bin/ of the plugin (as Claude Code puts it on PATH), python3 and the system folders, but no uv. A system folder that holds uv
+    (a Linux distribution's package puts it in /usr/bin) is replaced by a folder of links to everything in it but uv."""
     tools = tmp_path / "pathbin"
     tools.mkdir()
     py = shutil.which("python3")
     assert py, "python3 is needed for this test"
     (tools / "python3").symlink_to(py)
-    path = os.pathsep.join([str(tools), str(ROOT / "bin"), "/usr/bin", "/bin"])
+    system = []
+    for d in dict.fromkeys(os.path.realpath(x) for x in ("/usr/bin", "/bin")):   # /bin is a link to /usr/bin on most Linux systems
+        if not any(os.path.lexists(os.path.join(d, n)) for n in UV_NAMES):
+            system.append(d)
+            continue
+        shadow = tmp_path / f"system{len(system)}"
+        shadow.mkdir()
+        for e in os.scandir(d):
+            if e.name not in UV_NAMES:
+                (shadow / e.name).symlink_to(e.path)
+        system.append(str(shadow))
+    path = os.pathsep.join([str(tools), str(ROOT / "bin"), *system])
     assert shutil.which("uv", path=path) is None, "precondition: uv must be hidden, or this test proves nothing"
     assert shutil.which("brand-creator", path=path) == str(ROOT / "bin" / "brand-creator")
     return path

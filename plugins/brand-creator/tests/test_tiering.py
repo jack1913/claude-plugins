@@ -104,3 +104,35 @@ def test_run_all_fast_runs_only_the_fast_node_files_and_says_so():
     r = run_all("--fast", BRAND_CREATOR_TEST_PARTS="node")
     assert r.returncode == 0, r.stdout + r.stderr
     assert re.search(r"FAST TIER: node runs \d+ of \d+ files", r.stdout) and "capture.test.mjs" in r.stdout, r.stdout
+
+
+# ---------------------------------------------------------------- the shares of the release run on GitHub (one job each)
+
+@pytest.mark.parametrize("count", [1, 2, 3, 5])
+def test_the_shares_hold_every_test_file_once_and_differ_by_no_more_than_the_longest_file(count):
+    names = sorted(p.name for p in (ROOT / "tests").glob("test_*.py"))
+    durations = tiering.load()
+    seconds = tiering.file_seconds(names, durations)
+    shares = [tiering.shard(names, durations, i, count) for i in range(1, count + 1)]
+    assert sorted(f for share in shares for f in share) == names                                  # every file, in exactly one share
+    totals = [sum(seconds[f] for f in share) for share in shares]
+    assert max(totals) - min(totals) <= max(seconds.values()), totals
+    assert shares == [tiering.shard(names, durations, i, count) for i in range(1, count + 1)]    # the same shares on every machine and run
+
+
+def test_a_file_never_measured_still_lands_in_a_share_and_a_share_outside_the_count_is_refused():
+    assert tiering.shard(["test_new.py", "test_old.py"], {"test_old.py::test_a": 60.0}, 1, 2) == ["test_old.py"]
+    assert tiering.shard(["test_new.py", "test_old.py"], {"test_old.py::test_a": 60.0}, 2, 2) == ["test_new.py"]
+    for index, count in ((0, 3), (4, 3), (1, 0)):
+        with pytest.raises(ValueError, match="whole number from 1 to the count"):
+            tiering.shard(["test_a.py"], {}, index, count)
+
+
+def test_the_shard_command_prints_test_files_run_all_takes_and_refuses_anything_else():
+    script = str(ROOT / "tests" / "tiering.py")
+    r = subprocess.run([sys.executable, script, "shard", "2", "3"], capture_output=True, text=True)
+    files = r.stdout.split()
+    assert r.returncode == 0 and files and all(re.fullmatch(r"tests/test_\w+\.py", f) and (ROOT / f).is_file() for f in files), r.stdout
+    for bad in (["shard", "4", "3"], ["shard", "0", "3"], ["shard", "a", "3"], ["shard", "1"], ["shards", "1", "3"], []):
+        r = subprocess.run([sys.executable, script, *bad], capture_output=True, text=True)
+        assert r.returncode == 2 and "usage: tiering.py" in r.stderr and not r.stdout, (bad, r.stdout, r.stderr)
