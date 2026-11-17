@@ -110,8 +110,8 @@ website's code gets a copy of it, so whoever builds the next page has everything
    > Write the brand kit
 
 2. Claude shows what it will write. Say go.
-3. Three short pages in the kit are yours to write: how your brand sounds, how it looks beyond the colours, and the few
-   rules every piece keeps. Claude drafts them with you from your brand book. You correct them. A recipe you add
+3. Three short pages in the kit are yours to write: how your brand sounds, how it looks beyond the colours, and what
+   every piece keeps and what it may change. Claude drafts them with you from your brand book. You correct them. A recipe you add
    yourself travels with the kit too.
 4. Then ask:
 

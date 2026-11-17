@@ -207,3 +207,11 @@ are. Each adds files to what a bullet covers, and says so.
 owner's request: D10 for one file, the `install.py` every kit now carries (the plugin's own scripts still write only inside
 the brand project), and D11's "copies an owner file only where the repository has none" (an owner file the repository never
 changed since it was copied is now updated). Everything else here stands, including "never copied into a global skills folder".
+
+## Update 2026-11-17
+
+[ADR-0015](ADR-0015-the-kit-states-three-weights.md) restates the kit's text; the kit's shape stands. The web-page recipe
+still holds seven numbered steps and no value, now under `## Defaults` as the brand's own practice, between `## Fixed` and
+`## Examples`. It tests the page's idea with a competitor's name, no longer one "the owner names". The generated `SKILL.md`
+opens with the three weights, and no generated text sends a choice to the owner: three things are never made up (a new
+brand colour, a claim `facts.json` does not hold, a redrawn logo), and the rest is the maker's to decide and to state.

@@ -42,9 +42,12 @@ the text alone, which keeps the problem.
   is an illustration. There is no third tag value: one recorded rule can hold a fixed statement and a default one (a
   smallest text size and the usual weights of a font, in the pilot brand), so the weight belongs to a line, not to a rule
   id.
-- **Where no heading says the weight,** a rule is fixed, a choice made for a reference page (`[rule: site:<id>]`) is a
-  default, numbered steps are practice, and an `[example]` line is an example. A rule nobody sorted is fixed, so a kit
-  whose owner has not sorted anything binds exactly as before.
+- **Where no heading says the weight, the tag decides.** A `[rule: <id>]` line is fixed, numbered or not; a choice made
+  for a reference page (`[rule: site:<id>]`) is a default; an `[example]` line is an example; numbered steps with no tag
+  are practice. A rule nobody sorted is fixed, so a kit whose owner has not sorted anything binds exactly as before.
+- **Token values beyond colour are defaults.** Spacing, radius and motion timing are the brand's usual pattern; an owner
+  who wants one kept writes it under Fixed. The signature move, where a brand has one, is fixed with the logo files, and
+  so are the copy rules the owner approved with the masters.
 - **The steps stay, as practice.** `## How to work` in `SKILL.md` and `### How we usually make one` in the scaffolded
   recipes keep their numbered steps under one sentence: this is the brand's own practice; follow it, or use a better way
   of your own. The page check is named for where brand-creator and the brand project are at hand, with what to do without
@@ -67,10 +70,15 @@ the text alone, which keeps the problem.
   says: it checks that the id exists. A rule id stretched over a line the rule never decided still passes. `EXTENDING.md`
   warns the owner.
 - "Claims are fixed" and "every colour is a token role" are prose: neither has a rule id a line could cite.
-- `brand.md` still says "ask the owner" where the tokens lack a value. It shares that text with the applied skill, whose
-  bytes do not change; `SKILL.md` says who the owner is.
+- A kit's `brand.md` says, like its `SKILL.md`, that a ground colour the tokens lack is built from the token colours and
+  that a layout value they lack is chosen in line with those listed. The kit hands those words to the shared builder,
+  so the applied skill keeps "ask the owner" and its bytes. For a brand with no font family in its tokens, `brand.md`
+  still says to ask the owner.
+- The sort lives in `golden-rules.md`, an owner file. A product repository that edits its copy keeps it on update, and
+  `kit status` still calls the copy current, so in that repository a rule can change weight unseen. Carrying the sort
+  in generated data would close this.
 - A kit that exists keeps its own recipes and its own `golden-rules.md`: a scaffold is written only where the file is
   absent. Its `SKILL.md` and `checklist.md` change at the next build, so the build number goes up and a product's copy
   reads as behind until it is updated.
 - Left for later records: a check that the heading and the tag agree, rule ids for claims and token colours, the web and
-  social files in the kit, rules as structured data, and a check that ships inside the kit.
+  social files in the kit, rules and their weights as structured data, and a check that ships inside the kit.

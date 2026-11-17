@@ -4,10 +4,10 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.12.1",
-  "content_sha": "2d42a0fcc307bd187db1466ec11c3e7071927b83a131b5d03158fd5f3e7a5a70",
+  "content_sha": "2fc94b6784c660030a477048092a66d834682e1fed3f35e78876c6b39036dd73",
   "generated": {
-    "SKILL.md": "62fac52ba5cd4dd6fa3c0803eb7a653d25f5bd167bc2dd5082e408a3b23cde9f",
-    "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
+    "SKILL.md": "c39b2a35dbebd7078f801e20302980b98eb66cc4d33616822f6b13fb2dd54f32",
+    "brand.md": "eb89deb3f0905235c00d6a5784a6e993e9eec12c2fd31a729db8bc835e5ab8ae",
     "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
     "brand/assets/logo/grid-mark-master.png": "5cc76acd488c20da7a3cda17360ff6db0222f5bd5b44089ab25597c296886654",
     "brand/assets/logo/grid-mark.svg": "435e6815517f458fea97bac5fb777d712032b0bcff32f2ea7e223479e2e56c88",
@@ -25,9 +25,9 @@
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
   "owned": {
-    "EXTENDING.md": "594a770e4a95f1cc6d13708a6c472d467676ca56028bb356ab7a8a3958748225",
-    "golden-rules.md": "f76a3051a84690bdfc589c7ec718beb0c7c6592dc40cc36827dd24f975739341",
-    "recipes/web-page.md": "ac348723a205e69a89cdbc9addd4397fefc0bbe26dd5a918a96c7053fd6e65ec",
+    "EXTENDING.md": "189819501f4df35b08c6c3d702bd11d4ba6012155b61d8b52ac3e973c1726c20",
+    "golden-rules.md": "2b2ce058d827f525da1c8f86ffbbb583683ecc2c18dae0ef7047c7a2360ccc74",
+    "recipes/web-page.md": "669c2c82b9a205c9f2172a4fb1212cbee82e51dd28915b78523c85ea05403e82",
     "visual.md": "9498f424fa5ffeef9bac272fce456520c5c484db52623895dbbfaa8682a61a95",
     "voice.md": "4b4b3d6d38f18a005665a95bf35f1f6e01ba82f7081d5419b3df6d43d021aafe"
   },

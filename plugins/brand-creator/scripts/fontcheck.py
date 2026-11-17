@@ -209,7 +209,11 @@ def main() -> int:
         except Exception as e:  # fontTools raises several types for unreadable fonts
             rep.add(f"font:{shown}", "fail", "readable font file", detail=f"cannot read {shown}: {e}")
             continue
-        identity = face(font, p.stem)
+        try:
+            identity = face(font, p.stem)
+        except Exception as e:  # fontTools decodes a table on first use: a name, OS/2, head or fvar table that cannot be read shows here
+            rep.add(f"font:{shown}", "fail", "readable font file", detail=f"cannot read {shown}: {type(e).__name__}: {e}")
+            continue
         families.setdefault(identity["family"], []).append(shown)
         cmap = font.getBestCmap()
         all_required = ""

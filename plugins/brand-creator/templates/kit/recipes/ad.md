@@ -4,7 +4,7 @@ What an ad for this brand keeps, and how we usually make one. `SKILL.md` explain
 
 ## Fixed
 
-Everything fixed in `SKILL.md` and `golden-rules.md` holds in an ad. Claims are fixed too: every number, feature, price, client and date an ad states is in `facts.json`.
+Everything fixed in `SKILL.md` and `golden-rules.md` holds in an ad. So do the copy rules of the masters' README (`brand/assets/masters/README.md`), which the owner approved with the masters. Claims are fixed too: every number, feature, price, client and date an ad states is in `facts.json`.
 
 ## Defaults
 

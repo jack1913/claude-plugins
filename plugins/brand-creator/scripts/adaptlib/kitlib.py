@@ -252,9 +252,11 @@ def _why_not(rows: dict | None, row: dict | None, has_text: bool) -> str | None:
         return "the fontcheck report has no family name: run `brand-creator fontcheck` again"
     if not _is_weight(row.get("weight")) or row.get("style") not in ("normal", "italic"):   # a weight CSS takes: a report from before fontcheck took 0 as 400 is no weight
         return "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"
-    rng = row.get("weight_range")   # [lowest, highest] of a variable font; None for a static one, absent in a report from before fontcheck read it
+    if "weight_range" not in row:   # a report from before fontcheck read it: a variable font would be declared with one weight, and the browser would fake the bolder ones
+        return "the fontcheck report was written before fontcheck read the weight range of a variable font: run `brand-creator fontcheck` again"
+    rng = row["weight_range"]       # [lowest, highest] of a variable font; None for a static one
     if rng is not None and not (isinstance(rng, list) and len(rng) == 2 and all(_is_weight(v) for v in rng) and rng[0] < rng[1]):   # a range CSS takes
-        return "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"
+        return "the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again"
     return None
 
 
@@ -271,7 +273,7 @@ def font_face(rel: str, row: dict) -> str:
     """The @font-face of one copied font (`rel` its project path): family, source (the path percent-encoded where a URL needs it), weight and style as the fontcheck
     report reads them, and `font-display: swap` (text shows in a fallback font while the file loads). A variable font declares its weight range, `font-weight: <lowest>
     <highest>`: with one weight the browser would hold the font at that weight and fake the bolder ones."""
-    rng = row.get("weight_range")   # [lowest, highest] of a variable font; None for a static one, absent in a report from before fontcheck read it
+    rng = row["weight_range"]       # [lowest, highest] of a variable font; None for a static one (`_why_not` refused a row without it)
     return ("@font-face {\n"
             f'  font-family: "{_css(row["family"])}";\n'
             f'  src: url("../{quote(PREFIX + rel)}") format("{FONT_FORMATS[Path(rel).suffix.lower()]}");\n'
@@ -1126,7 +1128,8 @@ def note_text(text: str, *, values: bool = False) -> str:
     return s
 
 
-CHOICES_LEAD = "What was chosen for this page. A choice is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. The page itself is an example."
+CHOICES_LEAD = ("What was chosen for this page. A choice tagged `[rule: site:<id>]` is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. "
+                "A choice tagged `[example]` is an example, as the page itself is.")
 
 
 def notes_md(page: dict, site: dict, stills: list[tuple[str, str]]) -> str:
@@ -1455,6 +1458,9 @@ def _holds(files, prefix: str) -> bool:
     return any(rel.startswith(prefix) for rel in files)
 
 
+# brand.md's words for a value the tokens lack, in line with SKILL.md: a missing role is built from the token colours, and what the brand has not decided is the maker's to decide and to state
+TOKEN_GAPS = {"missing": "missing", "then": "build it from the token colours, never from a new colour, and say what you chose",
+              "undefined": "choose one in line with these, and say what you chose"}
 HOW_LEAD = "This is the brand's own practice. Follow it, or use a better way of your own: the fixed parts hold either way."   # the steps have the Default weight
 
 
@@ -1472,7 +1478,7 @@ def how_md(files) -> str:
     if _holds(files, PREFIX + "assets/logo/"):
         steps.append("Take the logo from its files in `" + PREFIX + "assets/logo/` as they are: never redrawn, recoloured or typed out."
                      + (" `" + LOGO_HTML + "` places it in light and dark." if LOGO_HTML in files else ""))
-    steps += ["Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave it out or leave a visible placeholder, and tell whoever maintains the brand.",
+    steps += ["Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder marked as a sample, or leave the claim out, and tell whoever maintains the brand.",
               "Anything else the brand has not decided (a layout, a use of colour, an animation, a line of copy) is yours to decide, in line with the fixed parts: say what you decided."]
     if "checklist.md" in files:
         steps.append("Before you hand anything over, go through `checklist.md`.")
@@ -1501,7 +1507,7 @@ def map_md(files, own=()) -> str:
             ("the signature move", [PREFIX + MOTION_SPEC] if PREFIX + MOTION_SPEC in files else []),
             ("the web icons, social images and profile pictures", [PREFIX + f"assets/{d}/" for d in PLATFORM_EMITTERS if _holds(files, PREFIX + f"assets/{d}/")]),
             ("how to make one kind of material", ["recipes/"]),
-            ("the rules every piece keeps", ["golden-rules.md"]),
+            ("what every piece keeps, and what it may change", ["golden-rules.md"]),
             ("how the brand looks and sounds", ["visual.md", "voice.md"]),
             ("the owner's own folders and files", list(own)),
             ("the check before handing over", ["checklist.md"] if "checklist.md" in files else []),
@@ -1543,7 +1549,7 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
             if files.setdefault(rel, data) != data:   # a file a page loads is a file the kit copies already (the tokens, a logo, a master): the same project file, so the same bytes
                 fail(EXIT_FAIL, f"{rel} is planned twice with different bytes: the kit copies one project file to one place")
     held = {*files, SKILL_FILE, KIT_FILE, BRAND_MD, *OWNED_FILES}           # what the kit holds once it is written: the steps and the map name only these
-    kit = {"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER), "how": how_md(held), "map": map_md(held, own_entries(kit_dir(project)))}
+    kit = {"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER), "how": how_md(held), "map": map_md(held, own_entries(kit_dir(project))), "gaps": TOKEN_GAPS}
     root = plugin_root() / KIT_TEMPLATES
     skill = adapt.applied_skill_md(project, (root / "kit-SKILL.md").read_text(encoding="utf-8"), kit=kit)
     brand = adapt.applied_skill_md(project, (root / "kit-brand.md").read_text(encoding="utf-8"), kit=kit)

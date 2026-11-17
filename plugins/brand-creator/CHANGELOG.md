@@ -18,10 +18,10 @@ Your brand kit now says how much each part binds, so a product team keeps its ow
   better way. The page check is named for where the plugin and your brand project are at hand.
 - The kit no longer tells whoever builds to ask you before every choice your brand hasn't made. Three things stay with
   you: a new brand colour, a claim your facts don't hold, and a redrawn logo. The rest they decide in line with what is
-  fixed, and say what they decided.
+  fixed, and say what they decided. A missing fact stays a marked sample or is left out, and you are told.
 - The starter `golden-rules.md` asks for your rules sorted under Fixed, Defaults and Examples, and the starter recipes
   have the same three headings. A rule you don't sort counts as fixed. Files you already have are left as they are.
-- The note on each reference page says its choices are defaults and the page itself is an example.
+- The note on each reference page says which of its choices are defaults and which are examples, as the page itself is.
 - After this update, the next build changes `SKILL.md` and `checklist.md` of every kit, so its version goes up by one and
   a product's copy is behind until you update it.
 
@@ -29,7 +29,10 @@ Your brand kit now says how much each part binds, so a product team keeps its ow
 
 - The kit's font code now declares the full weight range of a variable font. Before, it named one weight, so a browser
   held the font there and faked the bolder ones. It also shows text in a fallback font while yours loads
-  (`font-display: swap`). Run the font check again, then build the kit, to get the corrected code.
+  (`font-display: swap`). Run the font check again, then build the kit. Until you do, the build leaves your fonts out
+  of the kit and says why, because a font check made before this update did not read the weight range.
+- The font check no longer stops on a font file with a damaged table. It reports that one font as unreadable and goes
+  on with the others.
 
 ## [0.12.1] - 2026-11-18
 

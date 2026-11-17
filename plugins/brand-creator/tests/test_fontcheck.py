@@ -325,6 +325,31 @@ def test_the_licence_row_holds_the_weight_range_of_a_variable_font_and_none_for_
         "r-part": [401, 700], "r-point": None, "r-wide": [1, 1000], "r-thin": None, "r-none": None, "r-static": None}
 
 
+BROKEN_FVAR = """
+import sys
+from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables.DefaultTable import DefaultTable
+f = TTFont(sys.argv[2])
+table = DefaultTable("fvar")
+table.data = b"abc"                                  # too short to be an fvar table
+f["fvar"] = table
+f.save(sys.argv[1] + "/r-broken.ttf")
+"""
+
+
+def test_a_font_whose_fvar_table_cannot_be_read_fails_its_own_row_and_the_others_keep_theirs(proj, tmp_path):
+    """fontTools decodes a table on first use, so a malformed fvar shows when the weight range is read. It is one unreadable font: the run goes on, the report keeps the
+    rows of every other font, and the kit can still copy them."""
+    from helpers import fonttools
+    made = fonttools(BROKEN_FVAR, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    r = fc(proj, "--lang", "pl", "--font", str(tmp_path / "r-broken.ttf"))                 # the good test font and the broken one in one run
+    assert r.returncode == 1, r.stdout + r.stderr
+    res = results(proj)
+    assert res["font:r-broken.ttf"]["status"] == "fail" and res["font:r-broken.ttf"]["detail"].startswith("cannot read r-broken.ttf: ")
+    assert "licence:r-broken.ttf" not in res and res[f"licence:{TEST_FONT.name}"]["weight_range"] == [100, 900]
+
+
 WEIGHT_VARIANTS = """
 import sys
 from fontTools.ttLib import TTFont

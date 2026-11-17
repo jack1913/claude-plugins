@@ -278,19 +278,19 @@ def ground_gaps(doc: dict, entries: list[dict]) -> list[str]:
     return out
 
 
-def grounds_lines(doc: dict) -> list[str]:
+def grounds_lines(doc: dict, *, missing: str = GROUND_MISSING, then: str = "do not choose one") -> list[str]:
     """The `### Grounds` block of BRAND.md and of the applied skill's colour section: one row per ground and mode, a cell being the role and its colour, or
-    "missing: ask the owner" where the tokens give none. [] when the tokens hold no grounds."""
+    `missing` ("missing: ask the owner") where the tokens give none, under a sentence that says what to do then (`then`). [] when the tokens hold no grounds."""
     named, entries = grounds_of(doc)
     if not entries:
         return []
     L = ["### Grounds", "", "The colours text sits on, each with the colours that go with it, from `grounds` of the built design tokens. " + named_sentence(named)
-         + f" A colour shown as \"{GROUND_MISSING}\" is not defined: do not choose one.", "",
+         + f" A colour shown as \"{missing}\" is not defined: {then}.", "",
          "| ground | mode | text | action | on-action | focus | border |", "|---|---|---|---|---|---|---|"]
     for e in entries:
         for mode in ("light", "dark"):
             got = ground_colours(doc, e, mode)
-            cells = [f"{role(got[r])} {mode_hex(doc, mode, got[r])}" if got[r] else GROUND_MISSING for r in ("ground", *GROUND_ROLES)]
+            cells = [f"{role(got[r])} {mode_hex(doc, mode, got[r])}" if got[r] else missing for r in ("ground", *GROUND_ROLES)]
             L.append(f"| {cells[0]} | {mode} | " + " | ".join(cells[1:]) + " |")
     return L
 
@@ -573,7 +573,8 @@ def skill_name(project: Path) -> str:
 
 def applied_skill_md(project: Path, template: str, *, kit: dict | None = None) -> str:
     """The applied skill's text. `kit` is {"prefix": "brand/", "section": "<markdown>"} when the skill is the core of a brand kit: every file the
-    skill names is then at prefix + its project path (the kit mirrors project paths) and the section fills {{kit}}. With `kit=None` the skill sits
+    skill names is then at prefix + its project path (the kit mirrors project paths) and the section fills {{kit}}. A kit may add `how` and `map` (its steps and its map)
+    and `gaps` ({"missing", "then", "undefined"}: its words for a ground colour or a layout value the tokens lack, in place of "ask the owner"). With `kit=None` the skill sits
     in .claude/skills/<name>/ of the project, its paths climb out of it (`../../../`), and a template's {{kit}} line is dropped."""
     v = view(project)
     doc, _ = bookdata.tokens(project)
@@ -593,9 +594,11 @@ def applied_skill_md(project: Path, template: str, *, kit: dict | None = None) -
              else [band_line(b) for b in rules.get("bands", [])])
     lines = motion_lines(project, doc)
     motion = "\n".join(["## Motion", "", *lines]) if lines else ""
-    grounds = grounds_lines(doc)
+    gaps = (kit or {}).get("gaps") or {}   # a kit's own words for a value the tokens lack (kitlib.TOKEN_GAPS: its SKILL.md says who decides what the brand has not); without them, "ask the owner"
+    grounds = grounds_lines(doc, **{k: gaps[k] for k in ("missing", "then") if k in gaps})
     values = layout_lines(doc)
-    layout = "\n".join(["## Layout", "", "Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: ask the owner.", "",
+    undefined = gaps.get("undefined", "ask the owner")
+    layout = "\n".join(["## Layout", "", f"Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: {undefined}.", "",
                          *values]) if values else ""
     never = ["Do not stretch, squash or rotate the mark.", "Do not recolour the mark outside the palette's roles, or put it on its own colour.",
              "Do not crowd the mark: keep its clear space free."] + [f"Never write: {t}." for t in v["forbidden"]]

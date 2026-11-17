@@ -4,7 +4,7 @@ What a deck for this brand keeps, and how we usually make one. `SKILL.md` explai
 
 ## Fixed
 
-Everything fixed in `SKILL.md` and `golden-rules.md` holds in a deck. Claims are fixed too: every number, feature, price, client and date a slide states is in `facts.json`, and a figure that is only an example is labelled as sample data.
+Everything fixed in `SKILL.md` and `golden-rules.md` holds in a deck. So do the copy rules of the masters' README (`brand/assets/masters/README.md`), which the owner approved with the masters. Claims are fixed too: every number, feature, price, client and date a slide states is in `facts.json`, and a figure that is only an example is labelled as sample data.
 
 ## Defaults
 

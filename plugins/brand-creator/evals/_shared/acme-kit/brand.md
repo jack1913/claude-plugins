@@ -33,7 +33,7 @@ Text and component pairs, with the ratio each reaches (WCAG 2.2 AA; logos are ex
 
 ## Layout
 
-Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: ask the owner.
+Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: choose one in line with these, and say what you chose.
 
 - dimension.space-1: `4px`
 - dimension.space-2: `8px`

@@ -738,7 +738,8 @@ def test_a_fontcheck_report_with_a_weight_that_is_no_weight_copies_no_font(pack)
 
 def test_a_variable_font_declares_its_weight_range_and_every_font_swaps(pack):
     """The first adoption of a kit: a variable font declared with one weight is held at that weight by the browser, which fakes the bolder ones. fontcheck reads the `wght` axis and the
-    @font-face says `font-weight: <lowest> <highest>`; a report from before fontcheck read it (no `weight_range`) keeps the one weight; a range CSS would not take copies no font."""
+    @font-face says `font-weight: <lowest> <highest>`. A report from before fontcheck read it (no `weight_range`) copies no font and says to run fontcheck again: the one weight it
+    holds would be written as if nothing were wrong. A range CSS would not take copies no font either, and says so."""
     with_font(pack)
     path = pack / "assets" / "_checks" / "fontcheck.json"
     row = "licence:assets/fonts/TestFont-subset.ttf"
@@ -749,14 +750,15 @@ def test_a_variable_font_declares_its_weight_range_and_every_font_swaps(pack):
         mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight_range", stored))
         assert build(pack).returncode == 0, stored
         assert line in css.read_text(encoding="utf-8") and "  font-display: swap;\n" in css.read_text(encoding="utf-8"), stored
+    not_copied = lambda why: [{"file": "assets/fonts/TestFont-subset.ttf", "reason": why}]                                # noqa: E731
     mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).pop("weight_range"))                      # a report from before: the key is not there
-    assert build(pack).returncode == 0 and "  font-weight: 400;\n" in css.read_text(encoding="utf-8")
+    assert build(pack).returncode == 0 and not css.exists() and fonts_row(pack)["status"] == "warn"
+    assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report was written before fontcheck read the weight range of a variable font: run `brand-creator fontcheck` again")
     for stored in ([900, 100], [400, 400], [0, 900], [100, 1001], [400], [100, 400, 900], "100 900", [100.0, 900.0], [True, 900], 400):
         mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight_range", stored))
         assert build(pack).returncode == 0, stored
         assert not css.exists(), stored
-        assert kit_json(pack)["fonts"]["not_copied"] == [{"file": "assets/fonts/TestFont-subset.ttf",
-                                                          "reason": "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"}], stored
+        assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again"), stored
 
 
 def test_a_band_drawing_that_is_missing_or_outside_the_project_stops_the_build(pack, tmp_path):
@@ -3557,7 +3559,7 @@ Stills: [1440-light](../../brand/site/start/shots/1440-light.png), [1440-dark](.
 
 ## Choices
 
-What was chosen for this page. A choice is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. The page itself is an example.
+What was chosen for this page. A choice tagged `[rule: site:<id>]` is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. A choice tagged `[example]` is an example, as the page itself is.
 
 - The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)
 - Plans sit under the steps [example]
@@ -3940,7 +3942,7 @@ def test_each_choice_of_a_reference_page_is_tagged_in_its_notes(pack):
     assert r.returncode == 0, r.stdout + r.stderr
     notes = lambda pid: (kit_of(pack) / "reference-pages" / pid / "notes.md").read_text(encoding="utf-8")        # noqa: E731
     start, pricing = notes("start"), notes("pricing")
-    lead = "What was chosen for this page. A choice is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. The page itself is an example.\n\n"
+    lead = "What was chosen for this page. A choice tagged `[rule: site:<id>]` is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. A choice tagged `[example]` is an example, as the page itself is.\n\n"
     assert start.split("## Choices\n\n" + lead)[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
                                               "- Plans sit under the steps [example]\n"
                                               "- Every page ends with the contact line [example]\n")
@@ -5322,7 +5324,12 @@ def test_the_kits_skill_has_steps_rules_never_and_a_map_and_no_file_list(pack):
     assert all(f"\n| {w} | " in read for w in ("Fixed", "Default", "Example")) and "ask the owner" not in text
     assert section_text(text, "## Rules the owner decided").startswith("\n`golden-rules.md` sorts these by weight; a rule it does not sort is fixed.\n\n")
     assert "never made up: a new brand colour, a claim that `facts.json` does not hold, and a redrawn logo" in read and "is whoever maintains the brand" in read
-    assert "a rule is fixed, a choice made for a reference page (`[rule: site:<id>]`) is a default, numbered steps are practice" in read
+    assert ("a line tagged `[rule: <id>]` is fixed, numbered or not; a choice made for a reference page (`[rule: site:<id>]`) is a default; a line tagged `[example]` is an example. "
+            "Numbered steps with no tag are practice.") in read
+    assert "the other token values (spacing, radius, motion timing)" in read and "or with a visible placeholder marked as a sample" in read
+    assert "| what every piece keeps, and what it may change | `golden-rules.md` |" in section_text(text, "## Map")
+    brand = (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8")                          # the kit's brand.md sends no choice to the owner either, where the tokens lack a value
+    assert "A value that is not listed is not defined: choose one in line with these, and say what you chose." in brand and "ask the owner" not in brand
     how = section_text(text, "## How to work")                                             # the steps are the brand's practice, not a gate
     assert how.startswith("\nThis is the brand's own practice. Follow it, or use a better way of your own: the fixed parts hold either way.\n\n1. ")
     assert "is yours to decide, in line with the fixed parts: say what you decided." in how and "tell whoever maintains the brand" in how

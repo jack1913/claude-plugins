@@ -15,13 +15,13 @@ Every line in the kit has one of three weights.
 
 | Weight | What it is | What you do with it |
 | --- | --- | --- |
-| Fixed | the identity: the logo files, the token colours and their contrast, the type, the "never" list below, claims that are true, and each rule below that `golden-rules.md` does not sort as a default | keep it in every piece |
-| Default | the brand's usual pattern and its practice: the steps below and in the recipes, the checklist | use it, or do better; leaving it needs no permission, only a reason you can state |
+| Fixed | the identity: the logo files (and the signature move, when the brand has one), the token colours and their contrast, the type, the "never" list below, claims that are true, and each rule below that `golden-rules.md` does not sort as a default | keep it in every piece |
+| Default | the brand's usual pattern and its practice: the other token values (spacing, radius, motion timing), the steps below and in the recipes, the checklist | use it, or do better; leaving it needs no permission, only a reason you can state |
 | Example | one good application: a reference page, an approved ad or deck, a sample layout, sample copy | take what helps |
 
-In the brand's own files the heading a line stands under (Fixed, Defaults, Examples) says its weight, and `golden-rules.md` sorts the brand's rules that way. The tag at the end of a line says where the line comes from: `[rule: <id>]` is a decision the brand recorded, `[example]` is an illustration. Where no heading says the weight: a rule is fixed, a choice made for a reference page (`[rule: site:<id>]`) is a default, numbered steps are practice, and a line tagged `[example]` is an example.
+In the brand's own files the heading a line stands under (Fixed, Defaults, Examples) says its weight, and `golden-rules.md` sorts the brand's rules that way. The tag at the end of a line says where the line comes from: `[rule: <id>]` is a decision the brand recorded, `[example]` is an illustration. Where no heading says the weight, the tag decides: a line tagged `[rule: <id>]` is fixed, numbered or not; a choice made for a reference page (`[rule: site:<id>]`) is a default; a line tagged `[example]` is an example. Numbered steps with no tag are practice.
 
-Three things change the brand for everyone, so they are never made up: a new brand colour, a claim that `facts.json` does not hold, and a redrawn logo. When the work needs one, finish without it and tell whoever maintains the brand what was missing. Anything else the kit does not cover is yours to decide, in line with the fixed parts: say what you decided. "The owner" in this kit is whoever maintains the brand.
+Three things change the brand for everyone, so they are never made up: a new brand colour, a claim that `facts.json` does not hold, and a redrawn logo. When the work needs one, finish without it, or with a visible placeholder marked as a sample, and tell whoever maintains the brand what was missing. Anything else the kit does not cover is yours to decide, in line with the fixed parts: say what you decided. "The owner" in this kit is whoever maintains the brand.
 
 A weak spot in the kit is never a reason to ship that weak spot. Where an example or a snippet breaks a fixed line, or you can simply do better, do better in your own copy.
 
@@ -34,7 +34,7 @@ This is the brand's own practice. Follow it, or use a better way of your own: th
 3. Open the recipe for that material in `recipes/`, one file per kind of material. When none fits, work from `brand.md` and say what no recipe covers.
 4. Take colours, type, spacing and motion from the tokens (`brand/assets/tokens/tokens.css`). A new brand colour is never made up; a role the tokens lack (a state colour, a raised surface, a shadow) is built from the colours they have.
 5. Take the logo from its files in `brand/assets/logo/` as they are: never redrawn, recoloured or typed out. `snippets/logo.html` places it in light and dark.
-6. Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave it out or leave a visible placeholder, and tell whoever maintains the brand.
+6. Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder marked as a sample, or leave the claim out, and tell whoever maintains the brand.
 7. Anything else the brand has not decided (a layout, a use of colour, an animation, a line of copy) is yours to decide, in line with the fixed parts: say what you decided.
 8. Before you hand anything over, go through `checklist.md`.
 
@@ -67,7 +67,7 @@ No G4 rules are recorded yet.
 | the logo files | `brand/assets/logo/`, `snippets/logo.html` |
 | the rules and the facts as data | `rules.json`, `facts.json` |
 | how to make one kind of material | `recipes/` |
-| the rules every piece keeps | `golden-rules.md` |
+| what every piece keeps, and what it may change | `golden-rules.md` |
 | how the brand looks and sounds | `visual.md`, `voice.md` |
 | the check before handing over | `checklist.md` |
 | how to change or extend this kit | `EXTENDING.md` |
