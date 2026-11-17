@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-10, 0.11.2, the release commit's tree, with the denylist | passed |
+| [Release run](#release-run) | 2026-11-17, 0.12.0, the release commit's tree, with the denylist | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -427,7 +427,15 @@ reports `fail 0`, both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the 
 Docker run ends with `LINUX RUN OK`, its pytest without the denylist skip. Record the version, the commit, the date and the counts here before
 tagging.
 
-**Last run:** 2026-11-10, brand-creator 0.11.2, macOS 27.3, on the release commit's tree (commit bb62161; only this record
+**Last run:** 2026-11-17, brand-creator 0.12.0, macOS 27.3, on the release commit's tree (commit 893626e; only this record
+differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3522 passed and nothing skipped (the anonymisation test ran), node 249
+pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 24
+minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3471
+passed, 51 expected skips), node (249 pass) and the smoke, in 17.5 minutes. A pytest run before it found
+`test_evals.py::test_the_real_loader_accepts_every_case` failing on Claude Code 2.1.326, which words the summary of
+case files it cannot load differently ("Couldn't load N case files"); the test now accepts both wordings.
+
+The 0.11.2 run: 2026-11-10, brand-creator 0.11.2, macOS 27.3, on the release commit's tree (commit bb62161; only this record
 differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3491 passed and nothing skipped (the anonymisation test ran), node 249
 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 24
 minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3440
