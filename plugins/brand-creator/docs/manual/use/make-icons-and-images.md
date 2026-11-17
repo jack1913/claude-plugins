@@ -18,6 +18,11 @@ a brand project.
 Without a project, everything goes into `./brand-assets/`. Inside a brand project, the files follow your project's list of
 places that show an icon.
 
+Is your logo drawn on its own dark square, made to be cropped by a phone? Say so. Claude sets `icons.ground` to
+`drawing` in `qa/rules.json`, and the app icons and the avatar show your square edge to edge instead of a small dark
+tile on white. `dark` puts them on your dark background colour instead. To put the Open Graph card and the GitHub
+preview on the dark background too, Claude sets `social.mode` to `dark`.
+
 ## What you can get
 
 Favicons and web app icons, Open Graph and social images, Apple app icons, Windows `.ico` and installer art, Linux icon

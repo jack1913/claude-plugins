@@ -17,6 +17,10 @@ Writes under assets/web/ (override with --out-dir) and records every file in ass
   icons/               PWA any-purpose icons, a separate maskable icon (content inside the safe circle), monochrome; each is
                        drawn by the band rule for its size
   site.webmanifest, head.html
+The touch and maskable icons and the manifest's theme and background colours take the ground of qa/rules.json icons.ground
+(marks.<id>.ground): light (default) or dark is color.bg of that mode with the mark inside it (the dark one: its -dark.svg);
+drawing is a drawing that carries its own ground, set edge to edge, its ground read from its corners; the safe-circle check
+then counts only what sits on that ground. A drawing that does not fill its canvas with one ground stops the run (exit 1).
 Only files referenced from HTML or the manifest carry a content fingerprint (?v=<8 hex>), and it changes only when the
 bytes change. Sizes come from platform-specs.json only. Needs gate G3. Idempotent: a second run writes nothing.
 """
@@ -115,7 +119,9 @@ def main() -> int:
     # apple-touch
     s_apple = favset["apple_touch"]
     d_at = e.drawing(s_apple)
-    at = e.png(svgtools.fit(d_at.svg, s_apple, s_apple, box=(s_apple * APPLE_TOUCH_CONTENT, s_apple * APPLE_TOUCH_CONTENT), bg=bg_l), s_apple, s_apple)
+    art_at, ground_at, bleed = e.icon_ground(d_at, s_apple)
+    box_at = None if bleed else (s_apple * APPLE_TOUCH_CONTENT, s_apple * APPLE_TOUCH_CONTENT)
+    at = e.png(svgtools.fit(art_at, s_apple, s_apple, box=box_at, bg=ground_at), s_apple, s_apple)
     icon("apple-touch-icon.png", at, ["favicon-set"], s_apple, d_at, "apple-touch-icon")
     _w, _h, px = read_png(at)
     rep.add("check:apple-touch opaque", "pass" if all(px[i] == 255 for i in range(3, len(px), 4)) else "fail",
@@ -130,11 +136,12 @@ def main() -> int:
         icons.append({"src": f"{base}icons/icon-{s}.png?v={v8(data)}", "sizes": f"{s}x{s}", "type": "image/png", "purpose": "any"})
     s_m, frac = pwa["maskable"], pwa["maskable_safe_radius"]
     d_m = e.drawing(s_m)
-    mk = e.png(svgtools.fit_in_circle(d_m.svg, s_m, frac, bg=bg_l), s_m, s_m)
+    art_m, ground_m, bleed = e.icon_ground(d_m, s_m)
+    mk = e.png(svgtools.fit(art_m, s_m, s_m, bg=ground_m) if bleed else svgtools.fit_in_circle(art_m, s_m, frac, bg=ground_m), s_m, s_m)
     icon(f"icons/maskable-{s_m}.png", mk, ["pwa-manifest"], s_m, d_m, "pwa-icon-maskable")
     icons.append({"src": f"{base}icons/maskable-{s_m}.png?v={v8(mk)}", "sizes": f"{s_m}x{s_m}", "type": "image/png", "purpose": "maskable"})
     w, h, px = read_png(mk)
-    bgc = parse_hex(bg_l)
+    bgc = parse_hex(ground_m)   # the ground the icon is painted on: the drawing's own one counts as ground, not as ink
     cx = cy = (w - 1) / 2
     outside = 0
     for i in range(w * h):
@@ -158,7 +165,7 @@ def main() -> int:
             rep.add("note:monochrome", "warn", "derived silhouette", detail="the monochrome icon is a black silhouette of the drawing for its size; supply --svg-mono when knockouts matter")
 
     # manifest + head snippet
-    manifest = {"name": name, "short_name": name, "icons": icons, "theme_color": bg_l, "background_color": bg_l}
+    manifest = {"name": name, "short_name": name, "icons": icons, "theme_color": ground_m, "background_color": ground_m}
     mbytes = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode()
     put("site.webmanifest", mbytes, ["pwa-manifest"])
     head = "\n".join([

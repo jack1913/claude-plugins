@@ -23,6 +23,7 @@ from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_pro
                      find_project, plugin_root, rasterise_svg, read_state, require_gate, today)
 from manifest import Manifest  # noqa: E402
 from mark_lint import lint_svg_text  # noqa: E402
+from pxio import read_png  # noqa: E402
 
 
 def add_common_args(ap) -> None:
@@ -362,10 +363,22 @@ def card_art(layout: str, mark_svg: str | None, lettering: str | None) -> list[s
     return [x for x in (None if layout == "lockup" else mark_svg, None if layout == "type" else lettering) if x]
 
 
-def rule_radius(round_css: str, drawn: list[str]) -> str:
+def square_corners(tokens_doc: dict) -> bool:
+    """True when the brand's corner radius tokens (`radius.*` in tokens.json `other`) are all 0: a brand with no round corners. False when it
+    defines none."""
+    radii = [str(v).strip() for k, v in (tokens_doc.get("other") or {}).items() if k.startswith("radius.")]
+    return bool(radii) and all(re.fullmatch(r"0+(?:\.0*)?(?:px|rem|em|%)?", r) for r in radii)
+
+
+def tokens_square(tokens_path: Path) -> bool:
+    """`square_corners` of a built tokens.json (load_tokens has already read it as valid)."""
+    return square_corners(json.loads(tokens_path.read_text(encoding="utf-8")))
+
+
+def rule_radius(round_css: str, drawn: list[str], *, square: bool = False) -> str:
     """{{rule_radius}}, the corner radius of the accent line under the name: `round_css`, the template's own round ends, for vector art; 0 when
-    everything drawn is pixel art (pixel_art), so the line's ends are square like the pixels."""
-    return "0" if drawn and all(pixel_art(x) for x in drawn) else round_css
+    everything drawn is pixel art (pixel_art), so the line's ends are square like the pixels, or when the brand's radius tokens are all 0 (`square`)."""
+    return "0" if square or (drawn and all(pixel_art(x) for x in drawn)) else round_css
 
 
 def mark_accent(modes: dict, mode: str, mark: dict | None, fg: str) -> str:
@@ -456,6 +469,7 @@ class Emit:
         self.out = (a.out_dir or (f"assets/{name}/{self.mark_id}" if self.mark else f"assets/{name}")).strip("/")
         self.bands = qa_rules.bands_for(self.rules, self.mark_id)
         self.favicon_drawing = self.mark["favicon"] if self.mark else self.rules["favicon"]["drawing"]
+        self.ground = qa_rules.ground_for(self.rules, self.mark_id)   # light | dark | drawing: the ground of the touch, maskable and avatar icons
         self.rep = Report(f"emit-{name}" + (f"/{self.mark_id}" if self.mark else ""), project, self.mark_paths + [self.tokens_path], renderer=a.renderer)
         self.mf = Manifest(project)
         self.used: list[str] = []
@@ -605,6 +619,25 @@ class Emit:
         self.rep.add(f"dark:{d.rel or 'mark'}", "warn", "dark artwork derived",
                      detail=f"no dark file next to {d.rel or 'the mark'}: its colours were mapped light to dark through the token roles")
         return out
+
+    def icon_ground(self, d: Drawing, n: int) -> tuple[str, str, bool]:
+        """The art, the ground and whether the art fills the canvas, for an n px icon that needs a ground (touch, maskable, avatar), by the rules'
+        ground (icons.ground, or marks.<id>.ground): light or dark is color.bg of that mode under the drawing (the dark one: `dark_svg`), set
+        inside the icon; drawing is the drawing's own ground, read from its corners, the drawing filling the icon edge to edge. A drawing that
+        does not fill its canvas with one opaque ground stops the run (exit 1): nothing falls back to the light ground."""
+        if self.ground != "drawing":
+            return (d.svg if self.ground == "light" else self.dark_svg(d)), self.colour(self.ground, "color.bg"), False
+        w, h, px = read_png(self.png(svgtools.fit(d.svg, n, n), n, n))
+        clear = sum(1 for i in range(3, len(px), 4) if px[i] < 255)
+        corners = {tuple(px[(y * w + x) * 4:(y * w + x) * 4 + 3]) for x, y in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))}
+        if clear or len(corners) != 1:
+            key = f"marks.{self.mark_id}.ground" if self.mark and self.mark["ground"] else "icons.ground"
+            rel = d.rel or (self.mark_paths[0].relative_to(self.project).as_posix() if self.mark_paths else "the mark")
+            why = f"{clear} see-through pixels" if clear else "its four corners differ"
+            fail(EXIT_FAIL, f"{key} is drawing in {qa_rules.RULES_FILE}, but {rel} does not fill its whole canvas with one ground at {n} px ({why}): "
+                            f"draw its ground edge to edge in a square viewBox, or set {key} to light or dark")
+        r, g, b = corners.pop()
+        return d.svg, f"#{r:02x}{g:02x}{b:02x}", True
 
     def logo_art(self) -> tuple[str, str]:
         """The logo art for wide or text-bearing slots: --logo-svg, else assets/logo/lockup.svg, else assets/logo/wordmark.svg, else the

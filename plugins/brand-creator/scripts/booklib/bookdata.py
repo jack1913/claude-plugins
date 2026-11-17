@@ -168,6 +168,20 @@ def section_lines(st: State, heading: str) -> list[str]:
     return out
 
 
+RULE_MARK = re.compile(r"^\s*\(rule(?:\s*[,;:][^)]*)?\)\s*", re.I)   # "(rule)", or "(rule, a note)": the marker of a recorded G4 line
+LOOKS_LIKE_RULE = re.compile(r"^\s*\([^)]*rule", re.I)                  # a line whose tag speaks of a rule, as "(rules)" or "(approved rule)"
+
+
+def is_rule(line: str) -> bool:
+    """A line of Rules (G4) that is a rule: it starts with "(rule)", or with "(rule" and a note after a comma, semicolon or colon ("(rule, approved 2026-11-16)")."""
+    return bool(RULE_MARK.match(line))
+
+
+def rule_text(line: str) -> str:
+    """The words of a rule line without its marker (and the note in it), white space collapsed."""
+    return " ".join(RULE_MARK.sub("", line, count=1).split())
+
+
 def bullets(lines: list[str]) -> list[str]:
     return [m.group(1).strip() for ln in lines if (m := re.match(r"^\s*[-*]\s+(.*\S)\s*$", ln))]
 
@@ -242,11 +256,14 @@ def state_view(project: Path) -> dict:
         "edition": int(raw_ed), "approved_edition": int(raw_ap) if raw_ap else None,
         "g5": g5, "g6": g6, "adoption": adoption_progress(project), "book_chapters": bc,
         "directions": rows,
-        "rules": [b for b in bullets(section_lines(st, "Rules (G4)")) if b.lower().startswith("(rule)")],
+        "rules": [b for b in bullets(section_lines(st, "Rules (G4)")) if is_rule(b)],
         "decided": [b for b in bullets(section_lines(st, "Liked, rejected, decided")) if b.lower().startswith("decided")],
         "edition_log": bullets(section_lines(st, "Edition log")),
         "collapsed": bullets(section_lines(st, "Collapsed")),
     }
+    skipped = [b for b in bullets(section_lines(st, "Rules (G4)")) if not is_rule(b) and LOOKS_LIKE_RULE.match(b)]
+    if skipped:   # only then, so a book whose rule lines all read is built from the same view as before
+        view["rules_skipped"] = skipped
     if view["mark_source"] not in ("generated", "authored-vector", "existing"):
         fail(EXIT_USAGE, "BRAND-STATE.md has no valid `mark_source:` (generated | authored-vector | existing)")
     return view

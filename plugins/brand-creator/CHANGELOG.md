@@ -6,6 +6,35 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-17
+
+A mark that carries its own dark ground now gets icons, an avatar and cards on that ground; the brand book and the
+brand kit catch up with it.
+
+### Added
+
+- `qa/rules.json` `icons.ground` (`light`, `dark` or `drawing`; per mark `marks.<id>.ground`) sets the ground of the
+  touch and maskable icons, the web manifest colours and the profile avatar. With `drawing`, a mark drawn on its own
+  full-bleed square fills the icon edge to edge, and the safe-zone checks measure only what sits on that square. A
+  drawing that does not fill its canvas stops the run with a message, instead of falling back to the light ground.
+- `qa/rules.json` `social.mode` (`light` or `dark`) sets the ground of the Open Graph card and the GitHub preview;
+  dark uses the dark mark and lettering, as the dark README header does.
+- The brand kit carries the files `emit web`, `emit social` and `emit profiles` made (icons, cards, avatar,
+  banners), byte for byte, and its map points to them.
+
+### Changed
+
+- The accent line on cards and banners has square ends when every corner radius token of the brand is 0.
+- With `icons.ground` set to `drawing`, the brand book shows a drawing that carries its own ground on both grounds
+  (the size table and the marks block) instead of warning "no dark drawing".
+
+### Fixed
+
+- The brand book keeps rule lines written as "(rule, approved by the owner ...)"; before, only lines starting with
+  "(rule)" were kept and the others were dropped without a word. A line whose tag is some other form of "rule" is now
+  named in a warning. Code in backticks in a rule line shows as code.
+- A hex value in the brand book's colour table no longer breaks across two lines.
+
 ## [0.11.2] - 2026-11-10
 
 Fixes left over from the 0.11.0 review, and a clearer message after a plugin update.

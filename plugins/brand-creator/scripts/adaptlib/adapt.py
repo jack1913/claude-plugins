@@ -36,7 +36,7 @@ BM_ARCHS = ("branded-house", "endorsed", "sub-brand", "independent")
 
 def g4_rules(st) -> list[str]:
     """The recorded "(rule)" lines of the Rules (G4) section of BRAND-STATE.md (a State), a line with a `(...)` placeholder left out. The one reading of them: `view` and the "g4-rules" part of a report input (`_common.PART_READERS`) share it."""
-    return [b for b in bookdata.bullets(bookdata.section_lines(st, "Rules (G4)")) if b.lower().startswith("(rule)") and not re.search(r"\(\.\.\.\)", b)]
+    return [b for b in bookdata.bullets(bookdata.section_lines(st, "Rules (G4)")) if bookdata.is_rule(b) and not re.search(r"\(\.\.\.\)", b)]
 
 
 def view(project: Path) -> dict:

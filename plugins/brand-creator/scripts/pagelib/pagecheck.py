@@ -1725,7 +1725,7 @@ TIE_MIN_WORDS = 2                         # content words the g4 text needs when
 
 def _tie_body(text: str) -> str:
     """The words of a rule line without its "(rule)" marker, white space collapsed and case ignored."""
-    return re.sub(r"^\(rule\)\s*", "", _squash(text))
+    return _bookdata().RULE_MARK.sub("", _squash(text), count=1)
 
 
 def _tie(g4: dict, text: str) -> tuple[str | None, str]:

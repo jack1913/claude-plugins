@@ -161,6 +161,8 @@ def sources(project: Path) -> dict:
            "logos": h.hexdigest(), "fonts": fonts_source(project), "pages": pages_source(project)}
     if (masters := masters_source(project)) is not None:
         out["masters"] = masters
+    if (platform := platform_source(project)) is not None:
+        out["platform"] = platform
     return out
 
 
@@ -173,7 +175,7 @@ def input_paths(project: Path) -> list[Path]:
     """The files a `kit` report lists as inputs, each only when the project has it: the token files, the logo files and band drawings, qa/rules.json, FACTS.md, the motion files, the fonts, and what the
     approved reference pages and the masters are made from (`page_input_rels`, `masters_sources`)."""
     rels = [TOKENS_CSS, TOKENS_JSON, *source_paths(project), qa_rules.RULES_FILE, FACTS_FILE, *motion_sources(project), *font_sources(project), *page_input_rels(project),
-            *masters_sources(project)]
+            *masters_sources(project), *platform_sources(project)]
     return [project / r for r in rels if (project / r).is_file()]
 
 
@@ -451,13 +453,12 @@ def motion_source(project: Path) -> str | None:
 
 _FOLD = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "đ": "d", "Đ": "D", "ð": "d", "Ð": "D", "ħ": "h", "Ħ": "H", "ı": "i", "ß": "ss",
                        "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "þ": "th", "Þ": "TH"})   # letters NFKD does not take apart
-_RULE_MARK = re.compile(r"^\s*\(rule\)\s*", re.I)
 _RULE_FALLBACK = "rule"   # the id of a line with no ASCII letter or digit in it (a line in another script), numbered like any other repeat
 
 
 def rule_text(line: str) -> str:
     """The words of a G4 line without its "(rule)" marker, white space collapsed."""
-    return " ".join(_RULE_MARK.sub("", line).split())
+    return bookdata.rule_text(line)
 
 
 def rule_id(text: str) -> str:
@@ -1321,6 +1322,52 @@ def masters_source(project: Path) -> str | None:
     return h.hexdigest()
 
 
+# ---------------------------------------------------------------- platform files: what emit web, social and profiles wrote goes into the kit
+# The files those emitters recorded in assets/manifest.json (the touch and PWA icons, the favicon, the manifest and head snippet, the Open Graph card and GitHub preview,
+# the README headers, the avatar and banners) are copied byte for byte to brand/<project path>. The proofs (_proof/) and card pages (_build/) are never in the manifest, so never
+# in the kit. A file that differs from what its emitter recorded (changed by hand, or gone) stops the build: the emitter is run again first.
+
+PLATFORM_EMITTERS = ("web", "social", "profiles")
+MANIFEST_FILE = "assets/manifest.json"
+
+
+def _platform_rows(project: Path) -> list[dict]:
+    """The manifest rows of emit web, social and profiles, sorted by path ([] without a manifest; an unreadable one is the same: `check` names it)."""
+    doc = _json_object(project / MANIFEST_FILE) or {}
+    rows = [a for a in doc.get("artefacts", []) if isinstance(a, dict) and a.get("emitter") in PLATFORM_EMITTERS and isinstance(a.get("path"), str)]
+    return sorted(rows, key=lambda a: a["path"])
+
+
+def platform_sources(project: Path) -> list[str]:
+    """The project paths of the platform files the manifest lists, sorted. It never stops a run."""
+    return [a["path"] for a in _platform_rows(project)]
+
+
+def platform_source(project: Path) -> str | None:
+    """One sha256 over `platform_sources` (the path and the file's sha256 of each, a missing file counted as missing); None when the manifest lists none."""
+    rels = platform_sources(project)
+    if not rels:
+        return None
+    h = hashlib.sha256()
+    for rel in rels:
+        h.update(f"{rel}\0{_sha_or_none(project, rel) or 'missing'}\n".encode())
+    return h.hexdigest()
+
+
+def platform_plan(project: Path) -> dict[str, bytes]:
+    """{path in the kit: bytes} of the platform files, each at brand/<project path>. A file that is gone or whose bytes are not the ones its emitter recorded stops the run (exit 1)."""
+    out: dict[str, bytes] = {}
+    for a in _platform_rows(project):
+        rel = a["path"]
+        f = confine(project, rel, what=f"emit {a['emitter']} file", read=True)
+        data = f.read_bytes() if f.is_file() else None
+        if data is None or sha256_bytes(data) != a.get("sha256"):
+            fail(EXIT_FAIL, f"{rel} is {'gone' if data is None else 'not the file'} `brand-creator emit {a['emitter']}` wrote{'' if data is None else ' (changed since)'}: "
+                            f"run `brand-creator emit {a['emitter']}` again, then `brand-creator kit build --yes`")
+        out[PREFIX + rel] = data
+    return out
+
+
 # ---------------------------------------------------------------- the plan
 
 def _project_file(project: Path, rel: str, what: str) -> bytes:
@@ -1430,6 +1477,7 @@ def map_md(files, own=()) -> str:
             ("approved pages to follow", ["reference-pages/"] if _holds(files, "reference-pages/") else []),
             ("the approved ads and decks", ([MASTERS_README] if MASTERS_README in files else [PREFIX + "assets/masters/"]) if _holds(files, PREFIX + "assets/masters/") else []),
             ("the signature move", [PREFIX + MOTION_SPEC] if PREFIX + MOTION_SPEC in files else []),
+            ("the web icons, social images and profile pictures", [PREFIX + f"assets/{d}/" for d in PLATFORM_EMITTERS if _holds(files, PREFIX + f"assets/{d}/")]),
             ("how to make one kind of material", ["recipes/"]),
             ("the rules every piece keeps", ["golden-rules.md"]),
             ("how the brand looks and sounds", ["visual.md", "voice.md"]),
@@ -1461,6 +1509,7 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
     if logo:
         files[LOGO_HTML] = logo
     files.update(motion_files(project))
+    files.update(platform_plan(project))
     rules_data = rules_doc(project)
     files[RULES_JSON] = json_bytes(rules_data)
     files[CHECKLIST_MD] = checklist_md(project, rules_data)
@@ -1751,6 +1800,7 @@ _LINK_READERS = {"md": md_links, "html": html_links, "css": css_links}
 OUTSIDE = "points outside the kit: it will not resolve in a product repository"
 ABSOLUTE = "an absolute path: it will not resolve in a product repository"
 NO_SUCH_FILE = "no such file in the kit"
+SITE_ROOT_SNIPPET = re.compile(rf"^{re.escape(PREFIX)}assets/web/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)?head\.html$")   # emit web's <head> snippet: its links name the site's own root URLs, never kit files
 
 
 def _not_a_file(kd: Path, rel: str, serve: bool = True) -> str | None:
@@ -1820,6 +1870,8 @@ def link_check(project: Path, doc: dict | None = None) -> dict:
     listed = unsupplied_fonts(doc) if doc else {}
     for rel in kit_paths(project):
         kind = LINK_KINDS.get(Path(rel).suffix.lower())
+        if SITE_ROOT_SNIPPET.match(rel):   # pasted into a page's <head>: /favicon.ico is where the site serves it, not a path in the kit
+            continue
         text = kit_text(project, rel) if kind else None
         if text is None:
             continue

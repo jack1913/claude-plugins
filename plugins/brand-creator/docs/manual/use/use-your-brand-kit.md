@@ -34,6 +34,8 @@ where everything else is.
 - exact copies of your tokens, logo files, OFL fonts with their licence texts, and your motion files if you have any;
 - exact copies of the masters you approved, such as an ad or a deck template with its pictures, PDFs and fonts, from the
   `assets/masters/` folder of your brand project (more on that below);
+- exact copies of the web icons, social images and profile pictures Claude made for your brand, such as the favicon,
+  the Open Graph card and the avatar;
 - your brand rules, each with a short name, and the facts you confirmed, never contact details;
 - `brand.md`: your colours and their contrast, type, logo sizes, motion and what may be claimed, on one page;
 - `checklist.md`: a checklist to go through before anything is handed over, made from your rules;
