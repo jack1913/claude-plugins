@@ -250,7 +250,10 @@ def _why_not(rows: dict | None, row: dict | None, has_text: bool) -> str | None:
         return "OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt"
     if not (isinstance(row.get("family"), str) and row["family"].strip()):
         return "the fontcheck report has no family name: run `brand-creator fontcheck` again"
-    if type(row.get("weight")) is not int or not 1 <= row["weight"] <= 1000 or row.get("style") not in ("normal", "italic"):   # a weight CSS takes: a report from before fontcheck took 0 as 400 is no weight
+    if not _is_weight(row.get("weight")) or row.get("style") not in ("normal", "italic"):   # a weight CSS takes: a report from before fontcheck took 0 as 400 is no weight
+        return "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"
+    rng = row.get("weight_range")   # [lowest, highest] of a variable font; None for a static one, absent in a report from before fontcheck read it
+    if rng is not None and not (isinstance(rng, list) and len(rng) == 2 and all(_is_weight(v) for v in rng) and rng[0] < rng[1]):   # a range CSS takes
         return "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"
     return None
 
@@ -260,14 +263,21 @@ def _css(text: str) -> str:
     return re.sub(r"[\x00-\x1f\x7f]", " ", text).replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _is_weight(value) -> bool:
+    return type(value) is int and 1 <= value <= 1000
+
+
 def font_face(rel: str, row: dict) -> str:
     """The @font-face of one copied font (`rel` its project path): family, source (the path percent-encoded where a URL needs it), weight and style as the fontcheck
-    report reads them, nothing else."""
+    report reads them, and `font-display: swap` (text shows in a fallback font while the file loads). A variable font declares its weight range, `font-weight: <lowest>
+    <highest>`: with one weight the browser would hold the font at that weight and fake the bolder ones."""
+    rng = row.get("weight_range")   # [lowest, highest] of a variable font; None for a static one, absent in a report from before fontcheck read it
     return ("@font-face {\n"
             f'  font-family: "{_css(row["family"])}";\n'
             f'  src: url("../{quote(PREFIX + rel)}") format("{FONT_FORMATS[Path(rel).suffix.lower()]}");\n'
-            f"  font-weight: {row['weight']};\n"
+            f"  font-weight: {f'{rng[0]} {rng[1]}' if rng else row['weight']};\n"
             f"  font-style: {row['style']};\n"
+            "  font-display: swap;\n"
             "}\n")
 
 
@@ -1116,16 +1126,21 @@ def note_text(text: str, *, values: bool = False) -> str:
     return s
 
 
+CHOICES_LEAD = "What was chosen for this page. A choice is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. The page itself is an example."
+
+
 def notes_md(page: dict, site: dict, stills: list[tuple[str, str]]) -> str:
     """reference-pages/<id>/notes.md of one approved page (`page` and `site` as site/site.json holds them, `stills` the link texts and file names of `_capture_state`): the page id as its title; its
     layout with the words "structure only"; the approval; links to the page and to each still (percent-encoded where a URL needs it, from reference-pages/<id>/ to brand/site/<id>/); and
-    `## Choices`, one bullet for each choice that names this page (or every page), `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example."""
+    `## Choices`, one sentence on their weight (`CHOICES_LEAD`, only when there is a choice), then one bullet for each choice that names this page (or every page), `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example."""
     pid = page["id"]
     base = f"../../{PREFIX}{SITE_DIR}/{pid}"
     L = [f"# {note_text(pid, values=True)}", "", f"Layout: {note_text(page['layout'], values=True)} (structure only)", f"Approved: {note_text(site['approved'], values=True)}", "",
          f"Page: [index.html]({quote(base + '/index.html', safe='/')})",
          "Stills: " + ", ".join(f"[{label}]({quote(f'{base}/shots/{name}', safe='/')})" for label, name in stills), "", "## Choices", ""]
     choices = [c for c in site.get("choices", []) if isinstance(c, dict) and ("pages" not in c or pid in c["pages"])]
+    if choices:
+        L += [CHOICES_LEAD, ""]
     for c in choices:
         if c["tag"] == "rule":
             L.append(f"- {note_text(c['text'])} [rule: site:{c['id']}] (decided in {note_text(c['source'])})")
@@ -1408,7 +1423,7 @@ def section(version: str) -> str:
 
 def checklist_md(project: Path, rules: dict) -> bytes:
     """checklist.md: the check before handing anything over, every item a `- [ ]` line, built only from `rules` (`rules_doc(project)`) and a few fixed lines the plugin
-    holds for every brand (the logo from its files, colours from the tokens, claims from facts.json, proposals to the owner, golden-rules.md). A section with nothing in it
+    holds for every brand (the logo from its files, colours from the tokens, claims from facts.json, what was decided beyond the brand's decisions, golden-rules.md). A section with nothing in it
     is left out."""
     ds = rules["downscale"]
     logo = ["The logo comes from its files in `" + PREFIX + "assets/logo/`, used as they are."]
@@ -1424,10 +1439,12 @@ def checklist_md(project: Path, rules: dict) -> bytes:
                 ("The owner's rules", [f"{r['text'].rstrip('.')} (`{r['id']}`)." for r in rules["g4"]]),
                 ("Words", [f"None of these: {', '.join(rules['forbidden'])}."] if rules["forbidden"] else []),
                 ("Page rules", [f"`{r['id']}`: {str(r['g4']).rstrip('.')}." for r in page_rules]),
-                ("Claims", ["Every number, feature, price, client and date is in `facts.json`; a missing one is a visible placeholder.", "Sample data is labelled as sample data."]),
-                ("New things", ["Anything the brand has not decided is labelled a proposal and shown to the owner.", "Every rule in `golden-rules.md` holds."])]
+                ("Claims", ["Every number, feature, price, client and date is in `facts.json`; a missing one is left out, or is a visible placeholder.", "Sample data is labelled as sample data."]),
+                ("New things", ["Anything the brand has not decided was decided in line with the fixed parts, and the hand-over says what was decided.",
+                                "Every fixed rule in `golden-rules.md` holds, and each default that was left has a reason you can state."])]
     L = [f"# {adapt.view(project)['name']} checklist", "",
-         "Go through it before you hand anything over. A \"no\" is fixed, or shown to the owner; never waved through. Generated from `rules.json`: never edit it here."]
+         "Go through it before you hand anything over. A \"no\" on a fixed line is fixed, never waved through; a \"no\" on a default is a choice with a reason you can state "
+         "(`golden-rules.md` says which rules are defaults; a rule it does not sort is fixed). Generated from `rules.json`: never edit it here."]
     for title, items in sections:
         if items:
             L += ["", f"## {title}", "", *(f"- [ ] {i}" for i in items)]
@@ -1438,23 +1455,28 @@ def _holds(files, prefix: str) -> bool:
     return any(rel.startswith(prefix) for rel in files)
 
 
+HOW_LEAD = "This is the brand's own practice. Follow it, or use a better way of your own: the fixed parts hold either way."   # the steps have the Default weight
+
+
 def how_md(files) -> str:
-    """`## How to work`: numbered steps, the same for every brand, each naming only files the kit holds (`files`: the paths the build writes, generated and scaffolded)."""
+    """`## How to work`: one sentence that says the steps are the brand's practice (the Default weight of SKILL.md: follow them or use a better way), then numbered steps, the same for
+    every brand, each naming only files the kit holds (`files`: the paths the build writes, generated and scaffolded)."""
     steps = ["Name what you are making and the moment it is for (a page, a post, an ad, a deck; a launch, a reminder, an error).",
-             "Read `golden-rules.md`: the rules every piece keeps.",
+             "Read `golden-rules.md`: what every piece keeps, and what it may change.",
              "Open the recipe for that material in `recipes/`, one file per kind of material. When none fits, work from `brand.md` and say what no recipe covers."]
     if _holds(files, PREFIX + "assets/masters/"):
         steps.append("Ads and decks start from an approved master: `" + MASTERS_README + "` lists them." if MASTERS_README in files
                      else "Ads and decks start from an approved master in `" + PREFIX + "assets/masters/`.")
-    steps.append("Take colours, type, spacing and motion from the tokens (`" + PREFIX + TOKENS_CSS + "`). A value the tokens lack is asked for, never invented.")
+    steps.append("Take colours, type, spacing and motion from the tokens (`" + PREFIX + TOKENS_CSS + "`). A new brand colour is never made up; a role the tokens lack "
+                 "(a state colour, a raised surface, a shadow) is built from the colours they have.")
     if _holds(files, PREFIX + "assets/logo/"):
         steps.append("Take the logo from its files in `" + PREFIX + "assets/logo/` as they are: never redrawn, recoloured or typed out."
                      + (" `" + LOGO_HTML + "` places it in light and dark." if LOGO_HTML in files else ""))
-    steps += ["Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder and ask the owner.",
-              "Anything the brand has not decided (a layout, a use of colour, an animation, a line of copy) is a proposal: label it and ask the owner."]
+    steps += ["Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave it out or leave a visible placeholder, and tell whoever maintains the brand.",
+              "Anything else the brand has not decided (a layout, a use of colour, an animation, a line of copy) is yours to decide, in line with the fixed parts: say what you decided."]
     if "checklist.md" in files:
         steps.append("Before you hand anything over, go through `checklist.md`.")
-    return "\n".join(["## How to work", "", *(f"{n}. {s}" for n, s in enumerate(steps, 1))])
+    return "\n".join(["## How to work", "", HOW_LEAD, "", *(f"{n}. {s}" for n, s in enumerate(steps, 1))])
 
 
 def own_entries(kd: Path) -> list[str]:
@@ -1474,7 +1496,7 @@ def map_md(files, own=()) -> str:
             ("the fonts", [FONTS_CSS] if FONTS_CSS in files else []),
             ("the colours text may sit on", [ON_GROUND_CSS] if ON_GROUND_CSS in files else []),
             ("the rules and the facts as data", [RULES_JSON, FACTS_JSON]),
-            ("approved pages to follow", ["reference-pages/"] if _holds(files, "reference-pages/") else []),
+            ("approved pages to learn from", ["reference-pages/"] if _holds(files, "reference-pages/") else []),
             ("the approved ads and decks", ([MASTERS_README] if MASTERS_README in files else [PREFIX + "assets/masters/"]) if _holds(files, PREFIX + "assets/masters/") else []),
             ("the signature move", [PREFIX + MOTION_SPEC] if PREFIX + MOTION_SPEC in files else []),
             ("the web icons, social images and profile pictures", [PREFIX + f"assets/{d}/" for d in PLATFORM_EMITTERS if _holds(files, PREFIX + f"assets/{d}/")]),

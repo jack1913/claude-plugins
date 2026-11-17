@@ -1,6 +1,6 @@
 # Acme checklist
 
-Go through it before you hand anything over. A "no" is fixed, or shown to the owner; never waved through. Generated from `rules.json`: never edit it here.
+Go through it before you hand anything over. A "no" on a fixed line is fixed, never waved through; a "no" on a default is a choice with a reason you can state (`golden-rules.md` says which rules are defaults; a rule it does not sort is fixed). Generated from `rules.json`: never edit it here.
 
 ## Logo
 
@@ -20,10 +20,10 @@ Go through it before you hand anything over. A "no" is fixed, or shown to the ow
 
 ## Claims
 
-- [ ] Every number, feature, price, client and date is in `facts.json`; a missing one is a visible placeholder.
+- [ ] Every number, feature, price, client and date is in `facts.json`; a missing one is left out, or is a visible placeholder.
 - [ ] Sample data is labelled as sample data.
 
 ## New things
 
-- [ ] Anything the brand has not decided is labelled a proposal and shown to the owner.
-- [ ] Every rule in `golden-rules.md` holds.
+- [ ] Anything the brand has not decided was decided in line with the fixed parts, and the hand-over says what was decided.
+- [ ] Every fixed rule in `golden-rules.md` holds, and each default that was left has a reason you can state.

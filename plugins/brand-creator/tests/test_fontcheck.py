@@ -230,6 +230,7 @@ def test_the_licence_row_names_the_family_weight_and_style_of_the_file(proj):
     assert r.returncode == 0, r.stdout + r.stderr
     lic = results(proj)[f"licence:{TEST_FONT.name}"]
     assert (lic["family"], lic["weight"], lic["style"]) == ("Inter", 400, "normal")
+    assert lic["weight_range"] == [100, 900]                                               # its fvar `wght` axis: the fixture is a variable font
     assert lic["status"] == "info" and lic["recognised"] == "SIL Open Font License (OFL)"  # the status and the facts are as before
 
 
@@ -289,6 +290,39 @@ def test_the_licence_row_takes_the_family_weight_and_style_from_the_next_table_w
         "no-os2": ("Inter", 400, "italic"),
         "Brand-Sans": ("Brand-Sans", 400, "normal"),
     }
+
+
+RANGE_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+for name, low, high in (("r-part", 400.5, 700.5), ("r-point", 400, 400), ("r-wide", 0, 2000), ("r-thin", 400.2, 400.8)):
+    f = TTFont(src)
+    axis = next(a for a in f["fvar"].axes if a.axisTag == "wght")
+    axis.minValue, axis.defaultValue, axis.maxValue = low, low, high
+    f.save(f"{out}/{name}.ttf")
+f = TTFont(src)
+f["fvar"].axes = [a for a in f["fvar"].axes if a.axisTag != "wght"]      # a variable font with no weight axis
+f.save(f"{out}/r-none.ttf")
+"""
+
+
+def test_the_licence_row_holds_the_weight_range_of_a_variable_font_and_none_for_a_static_one(proj, tmp_path):
+    """The `wght` axis of the fvar table as CSS takes a range: whole numbers from 1 to 1000 inside the axis, the lowest below the highest. A static font, a variable font with no
+    weight axis and an axis that gives no such range have none, and the kit then declares the one weight."""
+    from helpers import font_variant, fonttools
+    made = fonttools(RANGE_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    font_variant(tmp_path / "r-static.ttf", static=True)
+    names = ["r-part", "r-point", "r-wide", "r-thin", "r-none", "r-static"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    assert {n: res[f"licence:{n}.ttf"]["weight_range"] for n in names} == {
+        "r-part": [401, 700], "r-point": None, "r-wide": [1, 1000], "r-thin": None, "r-none": None, "r-static": None}
 
 
 WEIGHT_VARIANTS = """

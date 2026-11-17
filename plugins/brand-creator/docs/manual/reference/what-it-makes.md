@@ -178,7 +178,7 @@ yes. The steps are in [Use your brand kit](../use/use-your-brand-kit.md).
   it passes its page check and its pictures are up to date. Also `brand.md` (your colours, type, logo sizes, motion and
   claims on one page), `checklist.md` (a checklist from your rules) and `install.py` (the kit's installer).
 - **Yours:** `voice.md`, `visual.md` and `golden-rules.md` (how your brand sounds, how it looks beyond the colours, and
-  the few rules every piece keeps), `recipes/web-page.md` (the steps for building a web page in your brand), once you
+  what every piece keeps and what it may change), `recipes/web-page.md` (what a page keeps and the steps you usually build one by), once you
   approved ads or a deck `recipes/ad.md` and `recipes/presentation.md`, and
   `EXTENDING.md` (how to add to the kit). Claude writes each once, never over it, and drafts the first three with you.
   A recipe or file you add yourself is yours too and travels with the kit.

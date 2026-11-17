@@ -513,7 +513,8 @@ RECIPE_VALUE = re.compile(r"(?i)\d(?:\.\d+)?\s*(?:%|(?:px|rem|em|ms|s|vh|vw|svh|
 
 def test_the_web_page_recipe_is_steps_only_with_no_values():
     """The kit's web-page recipe is seven numbered steps and no value: the brand's values live in its tokens and rules.json, and the recipe points at the page check's rows instead of
-    copying a word list or a threshold. Static, so no data directory is needed (tests/test_kit.py has a module-level mark that a test inside it cannot escape)."""
+    copying a word list or a threshold. The steps are the brand's practice: they stand under Defaults, between what is fixed and the examples, and send no choice to the owner.
+    Static, so no data directory is needed (tests/test_kit.py has a module-level mark that a test inside it cannot escape)."""
     for sample in ("Hero padding 48px", "a 200ms ease", "a 60% ground", "1.5 rem", "contrast 4.5:1", "#0a0a0a", "rgb(0 0 0)", "oklch(0.5 0.1 200)"):
         assert RECIPE_VALUE.search(sample), sample
     for sample in ("step 3 of 7", "a phone and a desktop width", "tell:hero-text-budget", "# Web page"):
@@ -521,8 +522,16 @@ def test_the_web_page_recipe_is_steps_only_with_no_values():
     text = RECIPE.read_text(encoding="utf-8")
     lines = text.splitlines()
     assert lines[0] == "# Web page" and lines[1] == ""
-    assert lines[2] == "Steps only. The brand's values live in the tokens and rules.json; a line you add that pins a value cites a token or a rule, or is tagged `[example]`."
-    assert lines[-1] == "The other pages follow the same steps."
+    assert lines[2] == ("What a page for this brand keeps, and how we usually make one. `SKILL.md` explains the three weights (Fixed, Default, Example). "
+                        "The brand's values live in the tokens and rules.json; a line you add that pins a value cites a token or a rule, or is tagged `[example]`.")
+    heads = [line for line in lines if line.startswith("#")]
+    assert heads == ["# Web page", "## Fixed", "## Defaults", "### How we usually make one", "## Examples"], heads
+    practice = text.split("### How we usually make one\n", 1)[1].split("\n## ", 1)[0]
+    assert practice.startswith("\nThis is the brand's own practice. Follow it, or use a better way of your own: the fixed lines hold either way.\n\n1. ")
+    assert practice.rstrip("\n").endswith("\n\nThe other pages follow the same steps.") and len(re.findall(r"(?m)^\d+\. ", practice)) == 7, "all seven steps are practice"
+    assert "ask the owner" not in text and "the owner" not in text and "a proposal" not in text, "no choice is sent to the owner"
+    assert "a published page carries no sample data" in text.split("## Fixed\n", 1)[1].split("\n## ", 1)[0]
+    assert "one answer, not the answer" in text.split("## Examples\n", 1)[1]
     steps = re.findall(r"(?m)^(\d+)\. (.*)$", text)
     assert [n for n, _ in steps] == [str(i) for i in range(1, 8)], "seven numbered steps"
     assert all(step.startswith(lead) for (_, step), lead in zip(steps, RECIPE_LEADS)), "in this order: the visitor's job, references, tokens, hero, page check, cold read, before publishing"
@@ -545,7 +554,8 @@ def test_the_web_page_recipe_is_steps_only_with_no_values():
     assert len(words) > 40 and not [w for w in words if w.casefold() in text.casefold()], "no stock label or word list is copied"
     # the gaps the kit test baseline found
     for needle in ("into the product's own public or static folder and link them from there", "Never link into `.claude/skills/`",
-                   "with the owner's web-design skill loaded beside this kit, never instead of it", "a plain placeholder marked as a sample",
+                   "with a web-design skill loaded beside this kit, never instead of it", "a plain placeholder marked as a sample",
+                   "where brand-creator and the brand project are at hand", "Without the page check, go through `checklist.md` and the fixed lines by hand",
                    "mark every sample with the `[data-sample]` attribute and a label", "Run the page check again"):
         assert needle in text, needle
 

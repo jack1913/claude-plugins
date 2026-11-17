@@ -52,9 +52,10 @@ the kit check warns that whoever builds your product must get it under its own l
 **Yours.** Claude writes each once, as a starter file, and never overwrites it. Delete one, and the next build writes
 the starter again.
 
-- `voice.md`, `visual.md` and `golden-rules.md`: how your brand sounds, how it looks beyond colours and fonts, and the
-  few rules every piece keeps.
-- `recipes/web-page.md`: the steps for building a web page in your brand. Change it to fit how you work.
+- `voice.md`, `visual.md` and `golden-rules.md`: how your brand sounds, how it looks beyond colours and fonts, and what
+  every piece keeps and what it may change.
+- `recipes/web-page.md`: what a page keeps, and the steps you usually build one by. Change it to fit how you work.
+  Whoever builds a page follows the steps or uses a better way of their own.
 - `EXTENDING.md`: how to add to the kit.
 - `recipes/ad.md` and `recipes/presentation.md`, once you approved ads or a deck in a masters round: the steps for a new
   ad or presentation from your masters. Each has one note for you to fill: which direction to use when.
@@ -116,7 +117,7 @@ you from your brand book, and you correct them:
 
 1. `voice.md`: three sentences on how your brand sounds, with one right and one wrong example.
 2. `visual.md`: your layout habits, your image style and what to keep out of a picture.
-3. `golden-rules.md`: up to ten rules every piece keeps.
+3. `golden-rules.md`: your rules sorted under three headings, Fixed, Defaults and Examples, with up to ten under Fixed.
 
 In `visual.md` and `golden-rules.md`, each list line carries a tag that tells whoever builds a page what to keep:
 `[rule: <name>]` for one of your brand rules, by the short name the kit gives it, or `[example]` for one way of doing
@@ -126,6 +127,16 @@ it, free to change:
 - Photos use daylight, never flash. [rule: photos-use-daylight-never-flash]
 - A loaf on a wooden table, seen from above. [example]
 ```
+
+The heading a line stands under says how much it binds whoever builds for your brand:
+
+- **Fixed:** what every piece keeps.
+- **Defaults:** your usual pattern and your way of working. They use it or do better, and need no permission to leave
+  it, only a reason they can state.
+- **Examples:** one good application, such as a reference page. They take what helps.
+
+A rule you don't sort counts as fixed. The kit's `SKILL.md` explains the three to whoever uses the kit. Three things stay
+with you whatever they do: a new brand colour, a claim your facts don't hold, and a redrawn logo.
 
 A line with a size, a colour or a ratio, such as `48px`, also says where it comes from: a token, a rule, or `[example]`.
 Claude writes the tags as it drafts; you check them. In a recipe, or in any other note of yours written in Markdown, tag the bullet points too; numbered steps need none.

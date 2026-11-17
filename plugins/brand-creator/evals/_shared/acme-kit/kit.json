@@ -4,9 +4,9 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.12.1",
-  "content_sha": "7482119e26b27e2c5194326529c31d18010ffe3a7b3953cc52cab8a275451915",
+  "content_sha": "2d42a0fcc307bd187db1466ec11c3e7071927b83a131b5d03158fd5f3e7a5a70",
   "generated": {
-    "SKILL.md": "8de704cf162db3980f531145644e2a9b3f713e5d768407b3aa7d6f5ba3d6aade",
+    "SKILL.md": "62fac52ba5cd4dd6fa3c0803eb7a653d25f5bd167bc2dd5082e408a3b23cde9f",
     "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
     "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
     "brand/assets/logo/grid-mark-master.png": "5cc76acd488c20da7a3cda17360ff6db0222f5bd5b44089ab25597c296886654",
@@ -18,16 +18,16 @@
     "brand/assets/logo/wordmark.svg": "161dedabf56299cdacc9021d46f10a8931177f50690c79a6a68c03f62d147151",
     "brand/assets/tokens/tokens.css": "601623035d6fe68e7d7146fe93b0f2bf59a3f635b6747cd87db6ea84aef2e587",
     "brand/assets/tokens/tokens.json": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
-    "checklist.md": "c68eebe817da87c1c5c088f65119b9d907d123174b71d5a4f9bbdfc3ecb9b4a3",
+    "checklist.md": "85df971de7fcba2416e80a942576869685e3438dc4e533ddf0d5994cee402879",
     "facts.json": "15ab8ad3e2caa901c0b2bd94e9106fcbe2caa4f1097ada18ce35f1294b8ae924",
     "install.py": "e6887f5a073f1addc3651cf9a44ba3424b69ed3fe546b3912199f2e1497f68b2",
     "rules.json": "8d05bfc7947b843ace2544184d8864a77f65744fb054837ee7b5bd8e6537678a",
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
   "owned": {
-    "EXTENDING.md": "8069092c281f51ea01d1d3bb95bfd3a3b891532d5317489e133a030738b2ece1",
-    "golden-rules.md": "44f766a99cddcb953f78e7941fe895198887a75392ed4f40a0cc7b6e3fc39a75",
-    "recipes/web-page.md": "563dd61f18ec9987cfe6f5691d00af2787a1af32a4b7139e946c92da498274f4",
+    "EXTENDING.md": "594a770e4a95f1cc6d13708a6c472d467676ca56028bb356ab7a8a3958748225",
+    "golden-rules.md": "f76a3051a84690bdfc589c7ec718beb0c7c6592dc40cc36827dd24f975739341",
+    "recipes/web-page.md": "ac348723a205e69a89cdbc9addd4397fefc0bbe26dd5a918a96c7053fd6e65ec",
     "visual.md": "9498f424fa5ffeef9bac272fce456520c5c484db52623895dbbfaa8682a61a95",
     "voice.md": "4b4b3d6d38f18a005665a95bf35f1f6e01ba82f7081d5419b3df6d43d021aafe"
   },

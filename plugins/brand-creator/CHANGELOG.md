@@ -6,6 +6,31 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+Your brand kit now says how much each part binds, so a product team keeps its own way of working.
+
+### Changed
+
+- The kit's `SKILL.md` opens with three weights. **Fixed** is your identity: the logo files, the token colours, the type,
+  your rules, and claims that are true. **Default** is your usual pattern and your way of working, which whoever builds
+  uses or betters. **Example** is one good application, such as a reference page. Before, every line read as an
+  instruction of the same force.
+- The steps in `SKILL.md` and in the recipes stay, and now say they are your brand's own practice: follow them, or use a
+  better way. The page check is named for where the plugin and your brand project are at hand.
+- The kit no longer tells whoever builds to ask you before every choice your brand hasn't made. Three things stay with
+  you: a new brand colour, a claim your facts don't hold, and a redrawn logo. The rest they decide in line with what is
+  fixed, and say what they decided.
+- The starter `golden-rules.md` asks for your rules sorted under Fixed, Defaults and Examples, and the starter recipes
+  have the same three headings. A rule you don't sort counts as fixed. Files you already have are left as they are.
+- The note on each reference page says its choices are defaults and the page itself is an example.
+- After this update, the next build changes `SKILL.md` and `checklist.md` of every kit, so its version goes up by one and
+  a product's copy is behind until you update it.
+
+### Fixed
+
+- The kit's font code now declares the full weight range of a variable font. Before, it named one weight, so a browser
+  held the font there and faked the bolder ones. It also shows text in a fallback font while yours loads
+  (`font-display: swap`). Run the font check again, then build the kit, to get the corrected code.
+
 ## [0.12.1] - 2026-11-18
 
 ### Fixed

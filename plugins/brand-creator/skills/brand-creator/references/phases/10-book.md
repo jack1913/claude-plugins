@@ -151,7 +151,9 @@ decks and other templates) go into `assets/masters/` first, and only approved on
    `applied-skill`: that command leaves a project with a kit to `kit build`.
 2. The owner's files are written once from `templates/kit/` and never overwritten or moved: `EXTENDING.md`, `voice.md`, `visual.md`,
    `golden-rules.md` and `recipes/web-page.md`. Fill the three with a `[[fill: ...]]` marker with the owner: `voice.md` from the tone
-   chapter of the book and the FACTS voice rows, `visual.md` from the book, `golden-rules.md` citing rule ids from `rules.json`.
+   chapter of the book and the FACTS voice rows, `visual.md` from the book, `golden-rules.md` citing rule ids from `rules.json`, sorted under `## Fixed`, `## Defaults` and
+   `## Examples`. Propose the sort; the owner decides it line by line, because it says what binds every product. A rule left
+   unsorted reads as fixed.
 3. `kit build --yes` again records the owner's text and moves the version on (until then `kit check` warns that owner files changed
    since the last build), then `kit check` until it passes. A fresh kit fails `kit:fill` until those three files are filled; it also
    fails a hand-edited generated file and a dead link, and says "not verified" when the brand changed after the kit was built.

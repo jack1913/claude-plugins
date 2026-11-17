@@ -22,6 +22,7 @@ Every run writes the one report over the last, so a font an earlier run checked 
 kit leaves it out: such a font that still exists in the project is a `fonts:dropped` warning (no merge: name every font in one run).
 """
 import json
+import math
 import re
 import subprocess
 import sys
@@ -76,15 +77,26 @@ def invalid_weight(font) -> int | None:
     return stored if stored is not None and not 1 <= stored <= 1000 else None
 
 
+def weight_range(font) -> list[int] | None:
+    """[lowest, highest] weight of a variable font, as CSS takes a range (whole numbers from 1 to 1000, the lowest below the highest): the `wght` axis of
+    its fvar table, kept inside what the axis holds. None for a static font, a variable font with no `wght` axis, or an axis that gives no such range."""
+    axis = next((a for a in font["fvar"].axes if a.axisTag == "wght"), None) if "fvar" in font else None
+    if axis is None:
+        return None
+    low, high = max(1, math.ceil(axis.minValue)), min(1000, math.floor(axis.maxValue))
+    return [low, high] if low < high else None
+
+
 def face(font, stem: str) -> dict:
-    """-> {family, weight, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
-    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the style `italic` when OS/2
-    fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
+    """-> {family, weight, weight_range, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
+    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the weight range of a variable
+    font (`weight_range`), else None; the style `italic` when OS/2 fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
     nm = font["name"]
     italic = bool(font["OS/2"].fsSelection & 1) if "OS/2" in font else False
     italic = italic or ("head" in font and bool(font["head"].macStyle & 2))
     return {"family": nm.getDebugName(16) or nm.getDebugName(1) or stem,
             "weight": font["OS/2"].usWeightClass if "OS/2" in font and invalid_weight(font) is None else 400,
+            "weight_range": weight_range(font),
             "style": "italic" if italic else "normal"}
 
 

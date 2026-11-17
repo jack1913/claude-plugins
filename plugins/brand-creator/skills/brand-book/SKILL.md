@@ -149,7 +149,8 @@ fences. Once the owner decides:
    Yes to the kit → `kit build` (it prints the plan and writes nothing), show the owner the plan, then `kit build --yes`. The kit
    includes the per-brand skill as its `SKILL.md`, so a yes to the kit needs no separate `applied-skill`. Then fill the owner
    files with the owner: `voice.md` from the tone chapter and the FACTS voice rows, `visual.md` from the book, `golden-rules.md`
-   citing rule ids from `rules.json`. Then `kit build --yes` again (it records the owner's text and moves the version on) and
+   citing rule ids from `rules.json`, sorted under `## Fixed`, `## Defaults` and `## Examples` (propose the sort; the owner
+   decides it line by line; a rule left unsorted reads as fixed). Then `kit build --yes` again (it records the owner's text and moves the version on) and
    `kit check` until it passes. A later brand change means `kit build --yes` again, then `kit check`.
 5. These files are generated: a later change goes into the sources, then the command again. `check` fails a hand edit.
 
