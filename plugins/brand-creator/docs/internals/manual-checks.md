@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-18, 0.12.1, the release commit's tree, with the denylist | passed |
+| [Release run](#release-run) | 2026-11-18, 0.13.0, run 44341529604 on GitHub, commit 8a6894b | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -435,7 +435,14 @@ It passes when the Mac's pytest reports no failure and no skip at all (no NOT VE
 both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
 with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
 
-**Last run:** 2026-11-18, brand-creator 0.12.1, macOS 27.3, on the release commit's tree (commit b87587f; only this record
+**Last run:** 2026-11-18, brand-creator 0.13.0, on GitHub: run 44341529604 of `brand-creator-release.yml` on the release
+commit 8a6894b, the workflow's first run. The four `macos` jobs (`macos-26` on Apple silicon, Xcode 26.6): pytest 3552
+passed and nothing skipped (1357, 831 and 1364 in the three shares), node 249 pass and 0 fail, both halves of the Acme
+smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`. The two `linux` jobs printed `LINUX RUN OK`: pytest 3501 passed with 51
+expected skips, node 249 pass and the smoke. 30 minutes in all; the longest job, node and the smoke on macOS, took 29.
+No private file was set ([Private terms](#private-terms)).
+
+The 0.12.1 run: 2026-11-18, brand-creator 0.12.1, macOS 27.3, on the release commit's tree (commit b87587f; only this record
 differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3525 passed and nothing skipped (the anonymisation test ran), node 249
 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 32
 minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3474
