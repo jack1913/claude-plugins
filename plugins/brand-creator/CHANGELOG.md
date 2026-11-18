@@ -6,7 +6,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
-Your brand kit now says how much each part binds, so a product team keeps its own way of working.
+## [0.13.0] - 2026-11-18
+
+Your brand kit now says how much each part binds, so a product team keeps its own way of working. After you update, run
+the font check again and build the kit: until you do, the build leaves your fonts out of it.
 
 ### Changed
 
