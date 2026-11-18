@@ -19,8 +19,8 @@ Without a project, everything goes into `./brand-assets/`. Inside a brand projec
 places that show an icon.
 
 Is your logo drawn on its own dark square, made to be cropped by a phone? Say so. Claude sets `icons.ground` to
-`drawing` in `qa/rules.json`, and the app icons and the avatar show your square edge to edge instead of a small dark
-tile on white. `dark` puts them on your dark background colour instead. To put the Open Graph card and the GitHub
+`drawing` in `qa/rules.json`, and the app icons and the avatar show your square instead of a small dark tile on white.
+Where a phone or a profile page crops to a circle, your logo shrinks on its own square until nothing gets cut. `dark` puts them on your dark background colour instead. To put the Open Graph card and the GitHub
 preview on the dark background too, Claude sets `social.mode` to `dark`.
 
 ## What you can get

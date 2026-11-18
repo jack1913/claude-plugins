@@ -10,7 +10,7 @@ Writes under assets/profiles/ (override with --out-dir) and records every file i
                                    Most networks show it in a circle, so the gate is the circle: the mark's ink must stay inside the row's safe circle
                                    (a share of the radius). By default the mark is as large as fits (up to --content-fraction); a value you set is held to the same gate.
                                    The ground is qa/rules.json icons.ground: light (default) or dark color.bg, or drawing: a mark drawn on its own full-bleed ground
-                                   fills the avatar edge to edge, and only what sits on that ground must stay inside the circle
+                                   fills the avatar up to edge to edge, shrinking on that ground until what sits on it is inside the circle
   linkedin-banner-<w>x<h>.png, x-header-..., youtube-banner-..., facebook-cover-..., instagram-feed-..., instagram-story-...
                                    one image per platform at its row's size, from templates/profile/banner.html (or --template): the brand's drawn lettering (the
                                    lockup alone, or the wordmark next to the mark: --logo-svg, else assets/logo/lockup.svg, else wordmark.svg) and one line of real
@@ -103,14 +103,12 @@ def main() -> int:
         fail(EXIT_FAIL, "the mark has no ink: there is nothing to put in an avatar")
     limit_top = av["safe_circle"] * biggest / 2
     auto = a.content_fraction is None
-    if bleed and auto:
-        content = 1.0                           # the drawing fills the avatar edge to edge, as it was drawn to be cropped
-    else:
-        content = fit_share(limit_top, far_full, AVATAR_MAX_CONTENT) if auto else a.content_fraction
+    # a drawing on its own ground may fill the avatar edge to edge when its ink stays inside the circle; else it shrinks on that ground
+    content = fit_share(limit_top, far_full, 1.0 if bleed else AVATAR_MAX_CONTENT) if auto else a.content_fraction
     if content <= 0:
         fail(EXIT_FAIL, f"the mark does not fit the avatar's safe circle even at the smallest size (its ink reaches {far_full:.0f} px from the centre of a {biggest} px "
                         f"canvas at a box of 1.0, the limit is {limit_top:.0f} px). Nothing is written. Redraw the mark with a rounder silhouette")
-    rep.add("note:avatar content", "info", "the mark's box in the avatar", detail=f"{content:g} of the canvas ({'the drawing edge to edge, on its own ground' if bleed and auto else 'the largest that fits the safe circle' if auto else '--content-fraction'})")
+    rep.add("note:avatar content", "info", "the mark's box in the avatar", detail=f"{content:g} of the canvas ({'on its own ground, the largest that fits the safe circle' if bleed and auto else 'the largest that fits the safe circle' if auto else '--content-fraction'})")
     for n in av["px"]:
         d = e.drawing(n)
         art, _g, _b = e.icon_ground(d, n)

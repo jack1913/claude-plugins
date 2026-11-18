@@ -6,6 +6,17 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-18
+
+### Fixed
+
+- With `icons.ground` `drawing`, the maskable icon now shrinks the drawing on its own ground until its ink is inside the
+  safe circle, instead of always failing the safe-zone check; the touch icon stays edge to edge.
+- With `icons.ground` `drawing`, the avatar does the same by default, so `--content-fraction` is no longer needed to pass
+  its circle check.
+- With `icons.ground` `dark`, a band drawing that already is a `-dark.svg` is used as it is, instead of stopping the run
+  while looking for a `-dark-dark.svg`.
+
 ## [0.12.0] - 2026-11-17
 
 A mark that carries its own dark ground now gets icons, an avatar and cards on that ground; the brand book and the

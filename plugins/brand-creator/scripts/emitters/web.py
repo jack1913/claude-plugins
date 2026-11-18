@@ -19,8 +19,9 @@ Writes under assets/web/ (override with --out-dir) and records every file in ass
   site.webmanifest, head.html
 The touch and maskable icons and the manifest's theme and background colours take the ground of qa/rules.json icons.ground
 (marks.<id>.ground): light (default) or dark is color.bg of that mode with the mark inside it (the dark one: its -dark.svg);
-drawing is a drawing that carries its own ground, set edge to edge, its ground read from its corners; the safe-circle check
-then counts only what sits on that ground. A drawing that does not fill its canvas with one ground stops the run (exit 1).
+drawing is a drawing that carries its own ground, its ground read from its corners: the touch icon takes it edge to edge, the
+maskable icon at the largest share whose ink (what differs from that ground) stays inside the safe circle, on that ground. A
+band drawing that already is a -dark.svg is its own dark artwork. A drawing that does not fill its canvas with one ground stops the run (exit 1).
 Only files referenced from HTML or the manifest carry a content fingerprint (?v=<8 hex>), and it changes only when the
 bytes change. Sizes come from platform-specs.json only. Needs gate G3. Idempotent: a second run writes nothing.
 """
@@ -36,9 +37,10 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import qa_rules  # noqa: E402
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
-from _common import EXIT_USAGE, confine, fail, main_guard  # noqa: E402
+from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard  # noqa: E402
 from _emit import Emit, need_colors  # noqa: E402
 from pxio import png_size, read_ico_sizes, read_png, write_ico  # noqa: E402
+from tierb import fit_share, ink_far  # noqa: E402
 
 APPLE_TOUCH_CONTENT = 0.7  # share of the touch icon the mark may fill; iOS rounds the corners itself
 
@@ -137,7 +139,16 @@ def main() -> int:
     s_m, frac = pwa["maskable"], pwa["maskable_safe_radius"]
     d_m = e.drawing(s_m)
     art_m, ground_m, bleed = e.icon_ground(d_m, s_m)
-    mk = e.png(svgtools.fit(art_m, s_m, s_m, bg=ground_m) if bleed else svgtools.fit_in_circle(art_m, s_m, frac, bg=ground_m), s_m, s_m)
+    if bleed:   # the drawing on its own ground, as large as keeps every ink pixel (what differs from that ground) inside the safe circle
+        far = ink_far(e.png(svgtools.fit(art_m, s_m, s_m, bg=ground_m), s_m, s_m), ground=parse_hex(ground_m))
+        share = fit_share(frac * s_m, far, 1.0) if far else 1.0
+        if share <= 0:
+            fail(EXIT_FAIL, f"the maskable icon cannot keep {d_m.rel or 'the mark'}'s ink inside the {frac:g} safe circle at any size; redraw it")
+        mk = e.png(svgtools.tile(art_m, s_m, s_m, bg=ground_m, content=share), s_m, s_m)
+        rep.add("note:maskable content", "info", "the drawing's share of the maskable icon",
+                detail=f"{share:g} of the side, on the drawing's own ground: the largest that keeps its ink inside the {frac:g} safe circle")
+    else:
+        mk = e.png(svgtools.fit_in_circle(art_m, s_m, frac, bg=ground_m), s_m, s_m)
     icon(f"icons/maskable-{s_m}.png", mk, ["pwa-manifest"], s_m, d_m, "pwa-icon-maskable")
     icons.append({"src": f"{base}icons/maskable-{s_m}.png?v={v8(mk)}", "sizes": f"{s_m}x{s_m}", "type": "image/png", "purpose": "maskable"})
     w, h, px = read_png(mk)

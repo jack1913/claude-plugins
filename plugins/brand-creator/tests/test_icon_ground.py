@@ -19,6 +19,8 @@ from pxio import read_png
 GROUND = (10, 10, 15)   # the test mark's own ground, #0a0a0f
 OWN = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a0a0f"/>'
        '<rect x="35" y="35" width="30" height="30" fill="#f5f5f0"/></svg>')
+CORNER = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a0a0f"/>'
+          '<rect x="10" y="10" width="80" height="80" fill="#f5f5f0"/></svg>')   # its light shape reaches past the maskable safe circle
 INSET = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#0a0a0f"/>'
          '<rect x="35" y="35" width="30" height="30" fill="#f5f5f0"/></svg>')
 
@@ -41,6 +43,13 @@ def own_ground_mark(p, svg=OWN):
 def corner(png: bytes) -> tuple:
     w, _h, px = read_png(png)
     return tuple(px[:3])
+
+
+def light_side(png: bytes) -> int:
+    """The width in px of the light shape on the dark ground."""
+    w, h, px = read_png(png)
+    xs = [i % w for i in range(w * h) if px[i * 4] > 128]
+    return max(xs) - min(xs) + 1
 
 
 def near(a, b, tol=3):
@@ -111,6 +120,35 @@ def test_web_fills_the_touch_and_maskable_icons_with_a_drawing_that_carries_its_
 
 @pytest.mark.requires_setup
 @pytest.mark.requires_resvg
+def test_web_shrinks_the_maskable_onto_the_drawings_own_ground_until_its_ink_is_inside_the_safe_circle(acme):
+    own_ground_mark(acme, CORNER)
+    set_rules(acme, icons={"ground": "drawing"})
+    r = bc("emit", "web", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    web = acme / "assets/web"
+    mk = (web / "icons/maskable-512.png").read_bytes()
+    assert near(corner(mk), GROUND)                                      # the drawing's own ground, not the light color.bg
+    assert light_side(mk) < 0.8 * 512 - 4                                 # smaller than edge to edge (0.8 of the side)
+    rows = {x["id"]: x for x in report(acme, "emit-web")["results"]}
+    assert rows["check:maskable safe zone"]["status"] == "pass", rows["check:maskable safe zone"]
+    at = (web / "apple-touch-icon.png").read_bytes()
+    w, _h, _px = read_png(at)
+    assert abs(light_side(at) - 0.8 * w) <= 2                             # the touch icon stays edge to edge
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_resvg
+def test_a_band_drawing_that_is_already_the_dark_file_serves_the_dark_ground_as_it_is(acme):
+    assert bc("state", "--set", "tier=quick", project=acme).returncode == 0
+    set_rules(acme, icons={"ground": "dark"}, bands=[{"name": "all", "drawing": "assets/logo/mark-dark.svg"}])
+    for verb in ("web", "profiles"):
+        r = bc("emit", verb, project=acme)
+        assert r.returncode == 0, verb + r.stdout + r.stderr
+        assert "mark-dark-dark.svg" not in r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_resvg
 def test_web_refuses_the_drawing_ground_when_the_drawing_does_not_fill_its_canvas(acme):
     own_ground_mark(acme, INSET)
     set_rules(acme, icons={"ground": "drawing"})
@@ -153,6 +191,21 @@ def test_the_avatar_is_the_drawing_edge_to_edge_and_only_what_sits_on_its_ground
         light = [(i % w, i // w) for i in range(w * h) if px[i * 4] > 128]
         side = max(x for x, _ in light) - min(x for x, _ in light) + 1
         assert abs(side - 0.3 * n) <= 2                                    # the drawing at full size: its light square is 30 % of the canvas
+    rows = {x["id"]: x for x in report(acme, "emit-profiles")["results"]}
+    assert rows["check:avatar-400 circle"]["status"] == rows["check:avatar-800 circle"]["status"] == "pass"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_resvg
+def test_the_avatar_shrinks_a_drawing_whose_ink_reaches_past_the_circle_without_a_content_fraction(acme):
+    assert bc("state", "--set", "tier=quick", project=acme).returncode == 0
+    own_ground_mark(acme, CORNER)
+    set_rules(acme, icons={"ground": "drawing"})
+    r = bc("emit", "profiles", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    for n in (400, 800):
+        png = (acme / f"assets/profiles/avatar-{n}.png").read_bytes()
+        assert near(corner(png), GROUND) and light_side(png) < 0.8 * n - 4
     rows = {x["id"]: x for x in report(acme, "emit-profiles")["results"]}
     assert rows["check:avatar-400 circle"]["status"] == rows["check:avatar-800 circle"]["status"] == "pass"
 

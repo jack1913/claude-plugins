@@ -563,7 +563,10 @@ class Emit:
         return self._drawn_dark(d.rel)
 
     def _drawn_dark(self, rel: str) -> str | None:
-        """<name>-dark.svg next to a drawing: pure vector like it (exit 1 otherwise), recorded as an input; None when there is none."""
+        """<name>-dark.svg next to a drawing: pure vector like it (exit 1 otherwise), recorded as an input; None when there is none. A drawing that
+        already is a dark file (<name>-dark.svg) is its own dark artwork: no <name>-dark-dark.svg is looked for."""
+        if Path(rel).stem.endswith("-dark"):
+            return confine(self.project, rel, what="dark drawing").read_text(encoding="utf-8")
         cand = confine(self.project, str(Path(rel).with_suffix("")) + "-dark.svg", what="dark drawing")   # a symlink out of the project is refused
         if not cand.is_file():
             return None
@@ -623,7 +626,7 @@ class Emit:
     def icon_ground(self, d: Drawing, n: int) -> tuple[str, str, bool]:
         """The art, the ground and whether the art fills the canvas, for an n px icon that needs a ground (touch, maskable, avatar), by the rules'
         ground (icons.ground, or marks.<id>.ground): light or dark is color.bg of that mode under the drawing (the dark one: `dark_svg`), set
-        inside the icon; drawing is the drawing's own ground, read from its corners, the drawing filling the icon edge to edge. A drawing that
+        inside the icon; drawing is the drawing's own ground, read from its corners, the drawing filling the canvas (the caller may shrink it on that ground). A drawing that
         does not fill its canvas with one opaque ground stops the run (exit 1): nothing falls back to the light ground."""
         if self.ground != "drawing":
             return (d.svg if self.ground == "light" else self.dark_svg(d)), self.colour(self.ground, "color.bg"), False

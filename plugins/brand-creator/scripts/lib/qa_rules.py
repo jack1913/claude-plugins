@@ -12,7 +12,7 @@ keys are refused (a typo must not silently fall back to the default).
      "guides":    {"tolerance_px": 1.5},
      "family":    {"tile_share_tolerance": 0.05},
      "favicon":   {"drawing": "assets/logo/favicon.svg"},
-     "icons":     {"ground": "light"},        # light | dark | drawing (a mark drawn on its own ground, set edge to edge)
+     "icons":     {"ground": "light"},        # light | dark | drawing (a mark drawn on its own ground, on that ground)
      "social":    {"mode": "light"},          # light | dark: the Open Graph card and the GitHub preview
      "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
      "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"},
@@ -69,7 +69,7 @@ DEFAULTS: dict = {
         "clear_space": 0.25,           # free space round the mark, as a share of the mark's rendered height
         "rules": [],                   # brand rules the owner added from the generic tells (a list; its entries are validated where they are used)
     },
-    "icons": {"ground": "light"},      # the ground of the touch, maskable and avatar icons: light | dark (color.bg of that mode) | drawing (its own, edge to edge)
+    "icons": {"ground": "light"},      # the ground of the touch, maskable and avatar icons: light | dark (color.bg of that mode) | drawing (its own)
     "social": {"mode": "light"},       # the Open Graph card and the GitHub preview: light | dark (the dark ground and the -dark artwork)
     "bands": [],
     "marks": {},                       # several marks, each with its own bands (see the docstring); empty = one mark

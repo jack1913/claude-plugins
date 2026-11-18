@@ -1016,8 +1016,10 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
 the icons that need one: the apple-touch and maskable icons and the manifest's `theme_color` and `background_color` (`emit web`), and the avatar
 (`emit profiles`). `light` and `dark` are `color.bg` of that mode, with the mark set inside the icon (the dark one: the drawing's `-dark.svg`, else
 derived through the token roles with a warning). `drawing` is for a mark that carries its own ground (a light shape on a full-bleed dark square,
-made to be cropped by the phone): the band's drawing fills the icon edge to edge, its ground is read from its corners, and the safe-zone and
-safe-circle checks count only what sits on that ground as ink. A drawing that does not fill its canvas with one opaque ground (see-through pixels,
+made to be cropped by the phone): its ground is read from its corners, the touch icon takes the drawing edge to edge, and the maskable icon
+takes it on that ground at the largest share (up to 1.0, in whole percents) whose ink stays inside the safe circle (a report row
+`note:maskable content` gives the share; exit 1 when no share fits); the safe-zone and safe-circle checks count only what sits on that ground as
+ink. A band drawing that already is a `-dark.svg` is its own dark artwork with `dark` (no `<name>-dark-dark.svg` is looked for). A drawing that does not fill its canvas with one opaque ground (see-through pixels,
 or corners of different colours) exits 1, naming the key and the file: nothing falls back to the light ground. With `drawing`, the book shows such a
 drawing on both grounds (the mark-by-size table and `{{marks}}`) when it has no `-dark.svg`, without the "no dark drawing" warning.
 `social.mode` (`light` by default, or `dark`) is the ground of the Open Graph card and the GitHub social preview (`emit social`); `dark` takes the dark
@@ -3081,7 +3083,7 @@ carries `UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): ` 
 
 **`emit profiles`** (`emitters/profiles.py`, template `templates/profile/banner.html`, report `emit-profiles`; every tier: the Quick tier writes the two avatars only and an info row says the banners are Standard; gate G3). It writes under
 `assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred on the ground of `qa/rules.json` `icons.ground`; with
-`drawing` the drawing fills the avatar edge to edge unless `--content-fraction` is given, and the safe-circle gate measures only what sits on its own ground) and one image per platform at its row's size
+`drawing` the drawing sits on its own ground at the largest share up to 1.0 whose ink stays inside the safe circle, unless `--content-fraction` is given, and the safe-circle gate measures only what sits on its own ground) and one image per platform at its row's size
 (`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the brand's drawn lettering, plus one FACTS.md line with `--tagline`,
 laid out inside the row's `safe` rectangle, 24-bit PNG). The lettering is `--logo-svg`, else `assets/logo/lockup.svg` (it stands alone), else `assets/logo/wordmark.svg`
 (set next to the mark), shown as an image (`{{lettering}}`, `{{layout}}` = `lockup`, `wordmark` or `type`). Whether a file is a lockup or a wordmark comes from

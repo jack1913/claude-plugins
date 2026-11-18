@@ -140,7 +140,8 @@ required surfaces in `brief/BRIEF.md`.
    recorded off the rule. `icon.svg` is one scalable file shown in browser tabs: the band rule's drawing for the tab size, or
    `favicon.drawing` in `qa/rules.json` when the owner picked another one. The ground of the touch and maskable icons and the
    avatar is `icons.ground` in `qa/rules.json`: `light` (default), `dark`, or `drawing` for a mark drawn on its own full-bleed
-   square, which then fills the icon edge to edge. `social.mode` `dark` puts the Open Graph card and the GitHub preview on the
+   square, which then fills the touch icon edge to edge and is shrunk on its own ground in the maskable icon and the avatar until
+   its ink is inside the safe circle. `social.mode` `dark` puts the Open Graph card and the GitHub preview on the
    dark ground.
 3. **Several marks.** When the products share one system but each has its own mark, `qa/rules.json` lists them in `marks`,
    each with its own bands (and its name, favicon, accent role and tagline label); the top-level `bands` stay empty. Run every
