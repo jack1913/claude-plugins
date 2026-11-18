@@ -1,10 +1,10 @@
-"""Static checks over the shipped files: manifest shape, licences, pins, locks, README, no personal data."""
+"""Static checks over the shipped files: manifest shape, licences, pins, locks, README, no personal data. (Private terms are no test: whoever
+holds private brand projects scans their own pushes, tests/tools/private_terms.py.)"""
 import json
 import os
 import re
 import subprocess
 import sys
-import unicodedata
 from pathlib import Path
 
 import pytest
@@ -32,87 +32,6 @@ def text_files():
             yield p, p.read_bytes().decode("utf-8")
         except UnicodeDecodeError:
             continue
-
-
-# ---------------------------------------------------------------- anonymisation
-
-def _fold(s: str) -> str:
-    s = unicodedata.normalize("NFKD", s).lower().replace("ł", "l")
-    for a, b in (("‘", "'"), ("’", "'"), ("“", '"'), ("”", '"'), ("–", "-"), ("—", "-"), ("‑", "-")):
-        s = s.replace(a, b)
-    return re.sub(r"\s+", " ", "".join(c for c in s if not unicodedata.combining(c)))
-
-
-def _hexes(text: str):
-    for m in re.finditer(r"(?:#|%23)([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-z])", text, re.I):
-        h = m.group(1).lower()
-        if len(h) in (3, 4):
-            h = "".join(c * 2 for c in h[:3])
-        yield "#" + h[:6]
-    for m in re.finditer(r"rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})", text, re.I):
-        yield "#%02x%02x%02x" % tuple(min(255, int(x)) for x in m.groups())
-
-
-def _scan(deny: dict, files, root: Path) -> list[str]:
-    terms = [_fold(t) for t in deny["terms"] if t.strip()]
-    allow = [_fold(a) for a in deny.get("allow", [])]
-    hexes = {h.lower() for h in deny.get("hex", [])}
-    hits = []
-    for p in files:
-        relp = p.relative_to(root).as_posix()
-        folded_path = _fold(relp)
-        hits += [f"{relp}: path contains {t!r}" for t in terms if t in folded_path]
-        try:
-            text = p.read_bytes().decode("utf-8")
-        except UnicodeDecodeError:
-            continue
-        for n, line in enumerate(text.splitlines(), 1):
-            f = _fold(line)
-            for t in terms:
-                i = f.find(t)
-                while i >= 0:
-                    if not any(a.find(t) >= 0 and f.find(a) <= i < f.find(a) + len(a) for a in allow if a in f):
-                        hits.append(f"{relp}:{n}: {t!r}")
-                        break
-                    i = f.find(t, i + 1)
-            for h in _hexes(line):
-                if h in hexes:
-                    hits.append(f"{relp}:{n}: denylisted colour {h}")
-    return hits
-
-
-def test_the_anonymisation_scanner_catches_planted_terms(tmp_path):
-    """Mutation test for the scanner itself, with a synthetic denylist (nothing real is stored here)."""
-    deny = {"terms": ["Zorblax Industries", "dluga fraza"], "hex": ["#123abc"], "allow": ["zorblaxes"]}
-    f = tmp_path / "doc.md"
-    clean = "Nothing to see. Acme is fictional. Colour #ff00aa.\n"
-    f.write_text(clean)
-    assert _scan(deny, [f], tmp_path) == []
-    for planted in ("We worked for ZORBLAX industries.\n", "Colour #12ABC.\n", "colour #123abc\n", "rgb(18, 58, 188)\n", "Długa Fraza here\n", "color:%23123ABC\n"):
-        f.write_text(clean + planted)
-        assert f.read_text() != clean
-        hits = _scan(deny, [f], tmp_path)
-        assert hits or planted == "Colour #12ABC.\n", planted  # #12abc is a different colour than #123abc
-    (tmp_path / "zorblax industries.txt").write_text("x")
-    assert _scan(deny, [tmp_path / "zorblax industries.txt"], tmp_path)  # file names are scanned too
-
-
-def test_anonymisation():
-    """No client or brand names, real hex values or user quotes in any shipped file. The denylist is NOT shipped:
-    point BRAND_CREATOR_DENYLIST at it. Without it this test is skipped with a loud banner."""
-    path = os.environ.get("BRAND_CREATOR_DENYLIST", "").strip()
-    if not path:
-        banner = "NOT VERIFIED: BRAND_CREATOR_DENYLIST is not set, so the anonymisation test did NOT run"
-        print("\n" + "!" * len(banner) + "\n" + banner + "\n" + "!" * len(banner), file=sys.stderr)
-        import conftest
-        conftest.NOT_VERIFIED.append(("tests/test_static.py::test_anonymisation", "BRAND_CREATOR_DENYLIST is not set (anonymisation NOT verified)"))
-        if os.environ.get("BRAND_CREATOR_REQUIRE_ALL") == "1":
-            pytest.fail(banner)
-        pytest.skip(banner)
-    deny = json.loads(Path(path).read_text())
-    assert deny["terms"] and deny["hex"]
-    hits = _scan(deny, list(shipped_files()), ROOT)
-    assert hits == [], "anonymisation hits:\n" + "\n".join(hits[:20])
 
 
 # ---------------------------------------------------------------- no personal data, no network identity

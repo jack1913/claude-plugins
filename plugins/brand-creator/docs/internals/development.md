@@ -67,9 +67,8 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - Tests that spend money (`costs_money`: OpenRouter image generation, a billed run) run only with `BRAND_CREATOR_PAID=1`. Without it,
   `tests/conftest.py` and `tests/run-all.sh` take every `OPENROUTER_*` and `USE_LLM_DESIGN_*` variable out of the run, and a lookup
   of `openrouter.ai` from a test fails.
-- The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it. Run it with the
-  denylist before every push that changes this folder, on the machine you push from
-  ([Release run](manual-checks.md#release-run)): a skipped scan let the pilot brand's name ship in 0.10.0 to 0.11.1.
+- No test needs a private file. Keeping private brand names out of the repository is not a test: see
+  [Private terms](#private-terms).
 - A set-up data directory comes from `brand-creator --data <dir> setup --yes`.
 - No run writes into the data directory it is given. pytest, node:test and each smoke give the tools a data directory of
   their own: links to the given one's npm packages and Chromium, and a scratch folder of its own. pytest keeps it with its
@@ -99,7 +98,7 @@ It starts on a push to `main` or a pull request that changes `plugins/brand-crea
 
 | Job | What it runs |
 | --- | --- |
-| validate | `claude plugin validate --strict` on the plugin, then the quick tests (`test_static`, `test_skills`, `test_agents_workflows`, `test_guard`, `test_evals`, `test_docker_ci`, `test_paid_guard`) with any skip a failure; the two tests that need a set-up data directory or the private denylist are deselected by name |
+| validate | `claude plugin validate --strict` on the plugin, then the quick tests (`test_static`, `test_skills`, `test_agents_workflows`, `test_guard`, `test_evals`, `test_docker_ci`, `test_paid_guard`, `test_private_terms`) with any skip a failure; the one test that needs a set-up data directory is deselected by name |
 | brand-creator | the verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green). A release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed ([Release a plugin](../../../../docs/internals/release.md#the-tag-rulesets)) |
 
 The workflow never runs `claude plugin eval`: it is billed. See [Evals](evals.md).
@@ -114,9 +113,31 @@ on macOS and in the Linux Docker image, runs before each release instead ([Relea
 
 | Job | What it runs |
 | --- | --- |
-| macos | on `macos-26`, with any skip a failure: pytest in three shares of the test files (`python3 tests/tiering.py shard <share> 3` deals them out by measured time, so each job ends inside its hour), and one job for node:test and the smoke; the anonymisation test is deselected by name |
+| macos | on `macos-26`, with any skip a failure: pytest in three shares of the test files (`python3 tests/tiering.py shard <share> 3` deals them out by measured time, so each job ends inside its hour), and one job for node:test and the smoke; no test is left out |
 | linux | `tests/docker/run.sh` in two jobs: pytest, then node:test and the smoke |
 | brand-creator-release | the verdict: passes only when every other job passed |
+
+## Private terms
+
+This plugin was built while making real brands, and their names must not reach this public repository. That is not a
+test of the plugin: someone who has never seen a private brand cannot leak it. It is a scan that whoever holds private
+brand projects runs on their own machine, before git sends anything ([ADR-0010](../../../../docs/adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md)).
+
+If your machine holds private brand projects, install the hook once in your clone, from the repository root:
+
+```bash
+python3 plugins/brand-creator/tests/tools/private_terms.py install-hook --projects <the folder of your brand projects>
+```
+
+- `--projects` takes each project's name and slug as the terms. `--public <slug>` leaves out a project that is public.
+  `--list <file.json>` adds terms, colours and allowed phrases you keep by hand
+  (`{"terms": [], "hex": [], "allow": []}`).
+- Every push from that clone is then scanned by what it adds: added lines, added paths and commit messages, in the whole
+  repository. A hit stops the push and names the commit, the file and the line.
+- The hook keeps its own copy of the tool, so run `install-hook` again after the tool changes.
+- To scan by hand, give the same sources and `--range origin/main..HEAD`, or `--files` for every tracked file as it is.
+
+If your machine holds none, you need nothing.
 
 ## Validate
 

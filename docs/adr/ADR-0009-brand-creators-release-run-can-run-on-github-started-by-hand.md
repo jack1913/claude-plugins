@@ -28,11 +28,11 @@ them because they ran on every push, not because they did not work.
   push, a pull request or a tag.
 - Its `macos` jobs run the whole suite on `macos-26`: pytest in three shares of the test files, dealt out by measured time
   (`tests/tiering.py shard`), and one job for node:test and the smoke. Any skip fails. Its `linux` jobs run the suite in
-  the Linux Docker image. Its verdict is the check `brand-creator-release`.
+  the Linux Docker image, where only the expected off-macOS skips pass. Its verdict is the check `brand-creator-release`.
 - A release run is that workflow's run on the release commit, or the run on a Mac with Docker that ADR-0008 describes. The
   release record names which, with the run's number.
-- The anonymisation test runs on the machine that pushes, before the push, with the denylist kept on that machine outside
-  the repository. The workflow deselects that one test by name. The denylist never goes to GitHub.
+- The run needs no private file: the scan for private terms is no longer a test
+  ([ADR-0010](ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md)).
 - `check-workflows.py` accepts one `<plugin>-release.yml` per plugin: a release run, which triggers on `workflow_dispatch`
   and nothing else. Every other rule holds for it: a pinned runner image, a timeout of an hour at most on every job,
   read-only permissions, a run that is never cancelled, and a verdict job named after the workflow.
@@ -40,8 +40,6 @@ them because they ran on every push, not because they did not work.
 
 Rejected:
 
-- The denylist as a GitHub secret, checked by the workflow: the repository is public, so a private term is out the moment
-  it is pushed, and a branch pushed for a check is public too. The scan has to come before the push.
 - The release-run jobs inside `brand-creator.yml`, under a condition: on a push they would be skipped, and a verdict that
   needs a skipped job fails.
 - A Mac run only for a release that changes the code calling Apple's tools: the rest of the suite would never run on
@@ -52,8 +50,7 @@ Rejected:
 
 ## Consequences
 
-- A release can be cut from any machine that has `gh`, signed in, and the denylist file. The denylist has to be copied to
-  each such machine once, by a private route.
+- A release can be cut from any machine that has `gh`, signed in, by anyone who may push to `main`.
 - This replaces two parts of ADR-0008: "No workflow runs on macOS or builds the Docker image" now holds for every
   workflow that starts on a push or a pull request, and a release no longer needs the maintainer's machine. Its quick
   checks on every push, and its update on a limited Linux run, are unchanged.

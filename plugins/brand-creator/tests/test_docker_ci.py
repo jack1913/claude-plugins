@@ -94,7 +94,7 @@ def verify(tmp_path, text, rc=0, env=None):
     log.write_text(text, encoding="utf-8")
     import os
     base = {k: v for k, v in os.environ.items() if k != "BRAND_CREATOR_TEST_PARTS"}   # a run of one part (tests/docker/run.sh) sets its own part; these logs are whole runs
-    return subprocess.run([sys.executable, str(VERIFY), str(log), str(rc)], capture_output=True, text=True, env={**base, "BRAND_CREATOR_DENYLIST": "x", **(env or {})})
+    return subprocess.run([sys.executable, str(VERIFY), str(log), str(rc)], capture_output=True, text=True, env={**base, **(env or {})})
 
 
 def test_the_verifier_accepts_exactly_the_expected_off_macos_skips(tmp_path):
@@ -185,14 +185,15 @@ def test_a_smoke_run_that_fails_fails_run_all_and_the_others_still_end_and_are_p
     assert "smoke: acme finish exit 0, acme rest exit 1, quick exit 0" in out, out
 
 
-def test_the_denylist_skip_is_expected_only_when_no_denylist_was_mounted(tmp_path):
-    skip = "SKIPPED [1] tests/test_static.py:105: NOT VERIFIED: BRAND_CREATOR_DENYLIST is not set (anonymisation NOT verified)\n"
-    text = GOOD.replace("920 passed, 47 skipped", "919 passed, 48 skipped").replace("=========================== short test summary info ============================\n",
-                                                                                "=========================== short test summary info ============================\n" + skip)
-    assert skip in text and "48 skipped" in text
-    assert verify(tmp_path, text, env={"BRAND_CREATOR_DENYLIST": ""}).returncode == 0   # no denylist given: the skip is expected, and printed
-    r = verify(tmp_path, text, env={"BRAND_CREATOR_DENYLIST": "/run/denylist.json"})
-    assert r.returncode == 1 and "unexpected skips" in r.stderr   # a mounted denylist must have run the test
+def test_no_private_file_is_part_of_the_suite_or_of_a_run():
+    """The suite, CI and the release run need nothing only one person has: the scan for private terms is a tool of whoever holds private brand
+    projects, run by their own pre-push hook (tests/tools/private_terms.py), and no test here waits for its list."""
+    for path in ("tests/run-all.sh", "tests/docker/run.sh", "tests/docker/in-container.sh", "tests/docker/verify_log.py", "tests/conftest.py", "tests/test_static.py"):
+        text = (ROOT / path).read_text().lower()
+        assert "denylist" not in text and "anonymis" not in text, path
+    for name, text in ((CI.name, ci_text()), (RELEASE.name, release_text())):
+        assert "denylist" not in text.lower() and "anonymis" not in text.lower(), name
+        assert "tools/private_terms.py" not in text, name                                          # CI tests the tool on made-up brands; it never runs a scan
 
 
 # ---------------------------------------------------------------- the workflow
@@ -238,11 +239,10 @@ def test_ci_workflow_values_are_valid_yaml():
 
 def test_a_test_deselected_by_name_takes_no_other_test_with_it():
     """pytest's --deselect takes the start of a node id: a test whose name starts with a deselected one is left out with it, and nothing says so.
-    The scanner's own test was left out of CI that way, behind test_anonymisation."""
+    A scanner's own test was left out of CI that way once, behind a test whose name its own began with."""
+    assert re.findall(r"--deselect ([\w/.:]+)", ci_text())
     for name, text in ((CI.name, ci_text()), (RELEASE.name, release_text())):
-        nodes = set(re.findall(r"--deselect ([\w/.:]+)", text))
-        assert nodes, name
-        for node in nodes:
+        for node in set(re.findall(r"--deselect ([\w/.:]+)", text)):
             path, test = node.split("::")
             tests = re.findall(r"^def (test_\w+)\(", (ROOT / path).read_text(), re.M)
             assert [t for t in tests if t.startswith(test)] == [test], f"{name}: --deselect {node} also leaves out another test"
@@ -269,7 +269,7 @@ def test_the_release_run_starts_only_by_hand_and_no_step_runs_the_billed_eval():
         assert needle not in text
 
 
-def test_the_release_run_on_macos_runs_every_test_file_fails_on_any_skip_and_deselects_only_the_denylist_test():
+def test_the_release_run_on_macos_runs_every_test_file_fails_on_any_skip_and_leaves_no_test_out():
     text = release_text()
     macos = text[text.index("\n  macos:\n"):text.index("\n  linux:\n")]
     assert "runs-on: macos-26\n" in macos and "latest" not in macos                          # a pinned image, with the Xcode the .icon pipeline needs
@@ -279,7 +279,7 @@ def test_the_release_run_on_macos_runs_every_test_file_fails_on_any_skip_and_des
     assert count and shares == [str(i) for i in range(1, int(count.group(1)) + 1)] + [""], shares   # every share of the files has a job, and one job has none
     pytest_step = macos[macos.index("- name: pytest, one share"):macos.index("- name: node:test and the smoke")]
     assert 'BRAND_CREATOR_REQUIRE_ALL: "1"' in pytest_step and "BRAND_CREATOR_TEST_PARTS: pytest\n" in pytest_step
-    assert re.findall(r"--deselect ([\w/.:]+)", macos) == ["tests/test_static.py::test_anonymisation"]   # needs the private denylist: it runs before the push
+    assert "--deselect" not in macos and "PYTEST_ADDOPTS" not in macos                          # every test runs: nothing here needs a file only one person has
     rest = macos[macos.index("- name: node:test and the smoke"):]
     assert "tests/run-all.sh --smoke" in rest and "BRAND_CREATOR_TEST_PARTS: node,smoke\n" in rest
     assert "grep 'NOT VERIFIED'" in rest and "exit 1" in rest                                  # the smoke has no skip to fail on: its NOT VERIFIED lines do
@@ -338,7 +338,7 @@ def test_run_all_refuses_a_selection_that_names_an_unknown_part_or_runs_nothing(
     assert r.returncode == 2 and why in r.stderr, r.stdout + r.stderr
 
 
-def test_ci_quick_tests_fail_on_any_skip_deselect_only_the_two_that_need_local_files_and_the_verdict_needs_every_job():
+def test_ci_quick_tests_fail_on_any_skip_deselect_only_the_one_that_needs_a_data_directory_and_the_verdict_needs_every_job():
     text = ci_text()
     validate = text[text.index("\n  validate:\n"):text.index("\n  brand-creator:\n")]
     verdict = text[text.index("\n  brand-creator:\n"):]                                     # the check the release-tag ruleset requires
@@ -347,9 +347,8 @@ def test_ci_quick_tests_fail_on_any_skip_deselect_only_the_two_that_need_local_f
     files = re.findall(r"\b(tests/test_\w+\.py)\b(?!::)", step)
     assert files and all((ROOT / p).is_file() for p in files), files                        # every quick test file exists
     assert "tests/test_static.py" in files and "tests/test_skills.py" in files and "tests/test_guard.py" in files
-    assert sorted(re.findall(r"--deselect (\S+)", step)) == [
-        "tests/test_evals.py::test_the_kit_in_the_kit_fixture_is_current_for_the_project_it_sits_in",   # needs a set-up data directory
-        "tests/test_static.py::test_anonymisation"]                                                      # needs the private denylist
+    assert re.findall(r"--deselect (\S+)", step) == [
+        "tests/test_evals.py::test_the_kit_in_the_kit_fixture_is_current_for_the_project_it_sits_in"]   # needs a set-up data directory
     jobs = re.findall(r"^  ([\w-]+):$", text[text.index("\njobs:\n"):], re.M)
     needs = re.findall(r"^      - ([\w-]+)$", verdict[:verdict.index("\n    if:")], re.M)
     assert sorted(needs) == sorted(j for j in jobs if j != "brand-creator"), (jobs, needs)  # the verdict waits for every other job

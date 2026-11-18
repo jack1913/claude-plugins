@@ -55,3 +55,8 @@ and says how many; it never replaces a release run.
 `brand-creator-release.yml`, started by hand, runs the full suite on `macos-26` and in the Linux Docker image. "No workflow runs
 on macOS or builds the Docker image" now holds for the workflows that start on a push or a pull request, and a release no
 longer needs the maintainer's machine. The run on a Mac with Docker described here stays valid.
+
+## Update 2026-11-18
+
+The test that needed the private denylist is gone ([ADR-0010](ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md)),
+so CI deselects one test by name, the one that needs a set-up data directory, and a release run sets no denylist.

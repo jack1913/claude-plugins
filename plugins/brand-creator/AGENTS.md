@@ -25,6 +25,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | Files copied into brand projects (not docs) | `templates/` |
 | Tests | `tests/` (pytest in `tests/test_*.py`, `tests/node/`, `tests/smoke/`, `tests/docker/`) |
 | How CI runs them | `.github/workflows/brand-creator.yml` (`run:` lines; validate and the quick tests on every push) and `.github/workflows/brand-creator-release.yml` (the full suite on macOS and in the Linux Docker image, started by hand before a release, `docs/internals/manual-checks.md`) |
+| Keeping private brand names out of a push (a pre-push scan for whoever holds private brand projects; not a test) | `tests/tools/private_terms.py`, `docs/internals/development.md` ("Private terms") |
 | Evals (behaviour cases, billed) and trigger evals | `evals/`, `evals/trigger-evals.json` |
 | Connector rules (none needed) | `CONNECTORS.md` |
 | Third-party notices | `THIRD_PARTY_NOTICES.md` |

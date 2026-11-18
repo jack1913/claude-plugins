@@ -36,6 +36,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | Secret scanning, push protection and Dependabot alerts: what is on, and how an alert is handled | `docs/adr/ADR-0007-secret-scanning-and-dependabot-alerts.md` |
 | A plugin's version (its only home) | `plugins/<name>/.claude-plugin/plugin.json` (`version`) |
 | How each plugin is tested in CI | `.github/workflows/<name>.yml` (`run:` lines) |
+| What keeps private brand terms out of the repository (a pre-push scan on the machine that holds them; no test needs a private file) | `plugins/brand-creator/tests/tools/private_terms.py` (module docstring); why: `docs/adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md` |
 | brand-creator's release run on GitHub (full suite, macOS and Linux, started by hand) | `.github/workflows/brand-creator-release.yml`; why: `docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md` |
 | What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml`; the root manual's recorded outputs and coverage record: `docs/.onboard-captures/`, `docs/.onboard-coverage.json` |
 | batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py` |

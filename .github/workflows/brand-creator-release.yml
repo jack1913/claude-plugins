@@ -8,9 +8,7 @@
 #   macos   the whole suite on macOS, where the Apple-tool tests run (sips, iconutil, actool, assetutil, the .icon pipeline):
 #           pytest in three shares of the test files (tests/tiering.py shard, so each job ends well inside the hour) and one job
 #           for node:test and the smoke (the two halves of the Acme smoke with `emit apple`, and the Quick smoke).
-#           BRAND_CREATOR_REQUIRE_ALL=1 turns any skip into a failure; the one test deselected by name is the anonymisation
-#           test, which needs the private denylist. That test runs on the machine that pushes, before the push
-#           (docs/internals/release.md): a public repository cannot hold the list, and a check after the push comes too late.
+#           BRAND_CREATOR_REQUIRE_ALL=1 turns any skip into a failure, and no test is left out.
 #   linux   the same suite in the Linux Docker image (tests/docker/run.sh), on the paths that apply off macOS: one job for
 #           pytest, one for node:test and the smoke. tests/docker/verify_log.py accepts only the expected off-macOS skips.
 #   brand-creator-release  the workflow's verdict: passes only when every other job passed (a failed, cancelled or skipped job
@@ -94,7 +92,6 @@ jobs:
           BRAND_CREATOR_TEST_PARTS: pytest
           BRAND_CREATOR_TEST_WORKERS: "3"
           BRAND_CREATOR_REQUIRE_ALL: "1"
-          PYTEST_ADDOPTS: "--deselect tests/test_static.py::test_anonymisation"
       - name: node:test and the smoke (nothing may be NOT VERIFIED)
         if: matrix.share == ''
         run: |

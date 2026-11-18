@@ -8,10 +8,11 @@
 #   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm, then the quick tests: the
 #             manifest and version pins (tests/test_static.py, its validator mutation test included), the skill and agent
 #             frontmatter (tests/test_skills.py, tests/test_agents_workflows.py), the hooks (tests/test_guard.py), the eval cases
-#             (tests/test_evals.py), this workflow's shape (tests/test_docker_ci.py) and the paid-test guard (tests/test_paid_guard.py).
-#             BRAND_CREATOR_REQUIRE_ALL=1 turns any skip into a failure; the two tests that need a set-up data directory or the
-#             private denylist are deselected by name. If the CLI cannot be installed or started, the job fails: an unvalidated
-#             manifest never passes the verdict.
+#             (tests/test_evals.py), this workflow's shape (tests/test_docker_ci.py), the paid-test guard (tests/test_paid_guard.py) and
+#             the private-terms scan on made-up brands (tests/test_private_terms.py).
+#             BRAND_CREATOR_REQUIRE_ALL=1 turns any skip into a failure; the one test that needs a set-up data directory is
+#             deselected by name. If the CLI cannot be installed or started, the job fails: an unvalidated manifest never
+#             passes the verdict.
 #   brand-creator  the workflow's verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green).
 #             A release tag brand-creator--v* is accepted only on a commit where this check and docs passed
 #             (.github/rulesets/brand-creator-release-tags.json, docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md).
@@ -75,8 +76,7 @@ jobs:
         run: |
           uv run --no-project --with-requirements tests/requirements.txt python -m pytest -q -p no:cacheprovider \
             tests/test_static.py tests/test_skills.py tests/test_agents_workflows.py tests/test_guard.py \
-            tests/test_evals.py tests/test_docker_ci.py tests/test_paid_guard.py \
-            --deselect tests/test_static.py::test_anonymisation \
+            tests/test_evals.py tests/test_docker_ci.py tests/test_paid_guard.py tests/test_private_terms.py \
             --deselect tests/test_evals.py::test_the_kit_in_the_kit_fixture_is_current_for_the_project_it_sits_in
         env:
           BRAND_CREATOR_REQUIRE_ALL: "1"

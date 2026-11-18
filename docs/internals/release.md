@@ -16,15 +16,8 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    claude plugin validate plugins/<name> --strict
    ```
 
-3. Commit and push the changelog and version bump. For brand-creator, scan for private terms before every push that
-   changes its folder: the repository is public, so the scan cannot wait for CI. From `plugins/brand-creator/`, with the
-   private denylist that each machine you push from keeps outside the repository:
-
-   ```bash
-   BRAND_CREATOR_DENYLIST=<denylist.json> BRAND_CREATOR_REQUIRE_ALL=1 \
-     uv run --no-project --with-requirements tests/requirements.txt python -m pytest -q tests/test_static.py::test_anonymisation
-   ```
-
+3. Commit and push the changelog and version bump. (On a machine that holds private brand projects, a pre-push hook
+   scans every push for their names first: [ADR-0010](../adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md).)
 4. Wait until every CI run of that commit on `main` has passed. A tag push runs no CI, so this run is the release's only
    check ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)), and GitHub accepts the tag
    only on a commit where the checks `<name>` and `docs` passed (the tag rulesets below):

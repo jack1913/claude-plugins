@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Run the whole suite: pytest, node:test and (with --smoke) the Acme end-to-end path and the Quick-tier smoke (no Apple tools, no git).
 #
-#   BRAND_CREATOR_DATA=<set-up data dir> BRAND_CREATOR_DENYLIST=<denylist.json> tests/run-all.sh [--smoke | --fast]
+#   BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh [--smoke | --fast]
 #
 # --fast is the daily run, a minute or two: pytest leaves out every test tests/durations.json measured at a second or more (it says how many),
 # node:test runs whole, and there is no smoke. A release runs everything: no --fast, with --smoke.
 # BRAND_CREATOR_TEST_FILES="tests/test_a.py tests/test_b.py" runs only those pytest files (the tests a change touches).
 #
-# Tests that need the set-up data directory (npm packages, Chromium) or the anonymisation denylist are skipped with a
-# loud "NOT VERIFIED" banner when those are missing. A skip is not a pass. BRAND_CREATOR_REQUIRE_ALL=1 (used in CI)
+# Tests that need the set-up data directory (npm packages, Chromium) are skipped with a
+# loud "NOT VERIFIED" banner when it is missing. A skip is not a pass. BRAND_CREATOR_REQUIRE_ALL=1 (used in CI)
 # turns every such skip into a failure.
 # BRAND_CREATOR_TEST_PARTS=<parts> runs only those parts, a comma-separated list of pytest, node and smoke (default: all
 # three; smoke still needs --smoke). CI runs each part in a job of its own. A part name it does not know, or a selection

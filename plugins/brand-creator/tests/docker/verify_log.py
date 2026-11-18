@@ -27,8 +27,6 @@ EXPECTED = {
     "the claude CLI is not on PATH": "the claude CLI is not installed in the image: it runs `claude plugin validate` (test_static, CI job `validate`) and the free "
                                      "eval-loader check (test_evals and the smoke), which a bare Linux image cannot do",
 }
-if not os.environ.get("BRAND_CREATOR_DENYLIST"):   # the denylist is the owner's private file: run.sh mounts it when given
-    EXPECTED["BRAND_CREATOR_DENYLIST is not set"] = "the anonymisation denylist is never shipped (run.sh mounts it from BRAND_CREATOR_DENYLIST)"
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 WHOLE_SMOKE = re.compile(r"^SMOKE PASSED: Acme at ", re.M)   # tests/smoke/acme.sh with every section (ACME_SMOKE_PART unset or all)
 HALVES = [re.compile(rf"^SMOKE PASSED \(part {h}: [^\n]*\): Acme at ", re.M) for h in ("finish", "rest")]   # its two halves (ACME_SMOKE_PART)

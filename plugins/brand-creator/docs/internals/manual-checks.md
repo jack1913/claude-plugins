@@ -12,7 +12,7 @@ proven.
 | [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-11-03, Haiku 5.5 and Sonnet 5.5, one worker, brand-creator and brand-book; brand-naming and brand-assets last on 2026-10-21 | sonnet passes 120 of 124 queries, haiku 112 of 124; precision 0.98 for brand-creator on both (a sibling case), 1.00 for brand-book; the brand-creator text changed with this run and the table is the text as it ships |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
-| [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-25 | private to the author; cannot run for anyone else, CI skips it |
+| [Private terms](#private-terms) | no longer a check here since 2026-11-18 | a pre-push scan on the machine that holds private brand projects |
 | [Hook guard in subagents](#hook-guard-applies-to-subagent-tool-calls) | 2026-10-20, Claude Code 2.1.305, a haiku subagent, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Hook guard in the main thread](#hook-guard-in-a-real-main-thread-session) | 2026-10-20, Claude Code 2.1.305, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Live name screening](#live-name-screening) | never run as a release check | |
@@ -135,17 +135,16 @@ fails on any skip other than the macOS-only ones.
 
 **Last run:** 2026-10-18, Debian 13 image (Python 3.13, Node 24): passed with only the macOS-only NOT VERIFIED skips.
 
-## Anonymisation denylist
+## Private terms
 
-**Why manual.** `tests/test_static.py::test_anonymisation` scans every shipped file for client and brand names, real colour
-values and owner quotes from the projects this plugin was distilled from. The denylist itself is private to the author and is
-never shipped, so the test skips (with a NOT VERIFIED banner) for everyone else and in CI.
+Not a manual check any more. Until 2026-11-18 a test, `test_anonymisation`, scanned every shipped file against the
+author's private denylist, and a release run had to set it. The scan is now a pre-push hook on the machine that holds
+private brand projects, and no test, CI job or release run needs a private file
+([ADR-0010](../../../../docs/adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md),
+[Private terms](development.md#private-terms)). Release records below from before that date name the denylist.
 
-**Steps** (the author only): `BRAND_CREATOR_DENYLIST=<private denylist.json> tests/run-all.sh` before every release; the test
-must pass, not skip.
-
-**Last run:** in the author's own suite runs; last 2026-10-25, on the test, CI and docs changes after 0.4.2 (before that
-2026-10-24, the 0.3.1 to 0.4.2 release runs), with the terms and palettes of the client projects since 0.1.0 added to the list.
+**Last run of the old test:** 2026-11-10, in the 0.11.2 release run; before that 2026-10-25, with the terms and palettes of
+the client projects since 0.1.0 in the list.
 
 ## Hook guard applies to subagent tool calls
 
@@ -412,14 +411,6 @@ runs here, before every release tag: on macOS, where the Apple-tool tests (`sips
 `.icon` pipeline) and the Acme smoke with `emit apple` run, and in the Linux Docker image, where the off-macOS paths run.
 There are two ways to make it, and the record says which ([ADR-0009](../../../../docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)).
 
-**Before the push, on any machine.** Scan for private terms with the denylist, from `plugins/brand-creator/`. The
-repository is public, so this runs before the release commit is pushed, never after:
-
-```bash
-BRAND_CREATOR_DENYLIST=<denylist.json> BRAND_CREATOR_REQUIRE_ALL=1 \
-  uv run --no-project --with-requirements tests/requirements.txt python -m pytest -q tests/test_static.py::test_anonymisation
-```
-
 **Steps on GitHub, from any machine.** With the release commit on `main`, start the release run and wait for its verdict:
 
 ```bash
@@ -428,25 +419,21 @@ gh run list --workflow brand-creator-release.yml --commit "$(git rev-parse HEAD)
 ```
 
 It passes when the run's conclusion is `success`: every `macos` job passed with no skip (pytest in three shares, then
-node:test and the smoke), and every `linux` job ended with `LINUX RUN OK`. The workflow leaves the anonymisation test out,
-so the scan above is part of this release run. Record the version, the commit, the date and the run's number here before
-tagging.
+node:test and the smoke), and every `linux` job ended with `LINUX RUN OK`. Record the version, the commit, the date and
+the run's number here before tagging.
 
 **Steps on a Mac.** On a Mac with Xcode 26 or later and Docker, on the release commit with a clean tree, from the repository root:
 
 ```bash
-BRAND_CREATOR_DATA=<set-up data dir> BRAND_CREATOR_DENYLIST=<denylist.json> plugins/brand-creator/tests/run-all.sh --smoke
+BRAND_CREATOR_DATA=<set-up data dir> plugins/brand-creator/tests/run-all.sh --smoke
 cd plugins/brand-creator
-BRAND_CREATOR_DENYLIST=<denylist.json> BRAND_CREATOR_TEST_PARTS=pytest,node tests/docker/run.sh
+BRAND_CREATOR_TEST_PARTS=pytest,node tests/docker/run.sh
 BRAND_CREATOR_TEST_PARTS=smoke tests/docker/run.sh --no-build
 ```
 
-A release run always sets `BRAND_CREATOR_DENYLIST` (the private list, never in the repository): without it the
-anonymisation test is skipped, and the pilot brand's name shipped in 0.10.0 to 0.11.1 because it was. It passes when the
-Mac's pytest reports no failure and no skip at all (its NOT VERIFIED banner names no Apple tool and no denylist), node
-reports `fail 0`, both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each
-Docker run ends with `LINUX RUN OK`, its pytest without the denylist skip. Record the version, the commit, the date and the counts here before
-tagging.
+It passes when the Mac's pytest reports no failure and no skip at all (no NOT VERIFIED banner), node reports `fail 0`,
+both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
+with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
 
 **Last run:** 2026-11-10, brand-creator 0.11.2, macOS 27.3, on the release commit's tree (commit bb62161; only this record
 differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3491 passed and nothing skipped (the anonymisation test ran), node 249
