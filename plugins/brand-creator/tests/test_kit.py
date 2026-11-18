@@ -5807,3 +5807,37 @@ def test_the_kit_text_says_kit_build_never_overwrites_the_owners_files_and_insta
     assert "are never overwritten." not in text                                                # since 0.11.0 install.py updates the unchanged ones
     assert "Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`" in text, text
     assert "`install.py` updates one only while that repository has not changed it" in text, text
+
+
+# ---------------------------------------------------------------- 0.12.0: the web icons, the social images and the profile pictures go into the kit
+
+def platform_files(p) -> dict[str, bytes]:
+    """The files emit web, social and profiles recorded in the manifest, as project paths with their bytes."""
+    rows = json.loads((p / "assets/manifest.json").read_text())["artefacts"]
+    return {a["path"]: (p / a["path"]).read_bytes() for a in rows if a["emitter"] in ("web", "social", "profiles")}
+
+
+@pytest.mark.requires_resvg
+def test_the_web_icons_social_images_and_profile_pictures_go_into_the_kit_byte_for_byte(pack):
+    for cmd in (("emit", "web"), ("emit", "social", "--tagline", "Dependable small-batch tools"), ("emit", "profiles")):
+        r = bc(*cmd, project=pack)
+        assert r.returncode == 0, (cmd, r.stdout + r.stderr)
+    plat = platform_files(pack)
+    assert {"assets/web/apple-touch-icon.png", "assets/web/icons/maskable-512.png", "assets/profiles/avatar-400.png"} <= set(plat)
+    assert any(rel.startswith("assets/social/og-") for rel in plat)
+    filled_kit(pack)
+    for rel, data in plat.items():
+        assert (kit_of(pack) / "brand" / rel).read_bytes() == data, rel
+    assert not any("/_proof/" in rel or "/_build/" in rel for rel in kit_files(pack))       # the proofs and the card pages are never shipped
+    kj = kit_json(pack)
+    assert {"brand/" + rel for rel in plat} <= set(kj["generated"]) and "platform" in kj["sources"]
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "| the web icons, social images and profile pictures | `brand/assets/web/`, `brand/assets/social/`, `brand/assets/profiles/` |" in skill
+    assert set(plat) <= {i["path"] for i in report(pack, "kit")["inputs"]}
+    r = kit_check(pack)
+    assert r.returncode == 0 and statuses(pack) == ALL_PASS, r.stdout + r.stderr
+    with (pack / "assets/web/apple-touch-icon.png").open("ab") as fh:                     # a file changed after it was emitted: the manifest no longer vouches for it
+        fh.write(b"\x01")
+    assert kit_check(pack).returncode == 3 and "(platform)" in check_report_rows(pack)["kit:sources"]["detail"]
+    r = build(pack)
+    assert r.returncode == 1 and "assets/web/apple-touch-icon.png" in r.stderr and "emit web" in r.stderr, r.stdout + r.stderr

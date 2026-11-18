@@ -4,8 +4,8 @@
 - **Date:** 2026-11-17
 - **Source:** `.github/workflows/brand-creator-release.yml`; `.github/scripts/check-workflows.py`; the `macos-suite` and
   `linux-suite` jobs of `.github/workflows/brand-creator.yml` as they ran until 2026-11-04 (commit b621a96);
-  `plugins/brand-creator/docs/internals/manual-checks.md` ("Release run"); the 0.12.0 release prepared on a Linux machine
-  on 2026-11-17
+  `plugins/brand-creator/docs/internals/manual-checks.md` ("Release run"); a release prepared on a Linux machine on
+  2026-11-17 and not finished there
 
 ## Context
 

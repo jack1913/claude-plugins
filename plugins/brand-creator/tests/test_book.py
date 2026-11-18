@@ -1417,3 +1417,65 @@ def test_the_masters_block_needs_the_approved_masters(proj):
     err = r.stdout + r.stderr
     assert r.returncode == 1 and "{{masters}} needs the approved masters (assets/masters/masters.json, from masters approve)" in err, err
     assert (proj / "book.html").read_bytes() == before
+
+
+# ---------------------------------------------------------------- 0.12.0: rule lines with a note in the tag, the hex column, drawings with their own ground
+
+@pytest.mark.parametrize("line,rule,text", [
+    ("(rule) the accent is a fill", True, "the accent is a fill"),
+    ("(Rule) the accent is a fill", True, "the accent is a fill"),
+    ("(rule, approved by the owner 2026-11-16) no round corners", True, "no round corners"),
+    ("(rule; G4) no round corners", True, "no round corners"),
+    ("(rules) no round corners", False, None),
+    ("(ruler) no round corners", False, None),
+    ("a note under the rules", False, None),
+])
+def test_a_rule_line_may_carry_a_note_in_its_tag(line, rule, text):
+    assert bookdata.is_rule(line) is rule
+    if rule:
+        assert bookdata.rule_text(line) == text
+
+
+@setup
+@resvg
+def test_the_decided_block_keeps_rule_lines_with_a_note_shows_code_and_warns_about_a_line_it_leaves_out(proj):
+    mutate(proj / "BRAND-STATE.md", "- (rule) the accent is a fill, never text (proposal)",
+           "- (rule) the accent is a fill, never text (proposal)\n- (rule, approved by the owner 2026-11-16) keep `color.accent` for fills\n"
+           "- (rules) corners stay square\n- a note under the rules that is no rule line")
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert "<li>keep <code>color.accent</code> for fills</li>" in html and "`color.accent`" not in html
+    assert "corners stay square" not in html
+    rep = json.dumps(report(proj, "book"))
+    assert "(rules) corners stay square" in rep and "a note under the rules" not in rep
+
+
+@setup
+@resvg
+def test_a_hex_value_in_the_colour_table_never_breaks_across_lines(proj):
+    html = (proj / "book.html").read_text()
+    assert re.search(r'<code class="hex">#[0-9a-f]{6}</code>', html)
+    assert re.search(r"\.hex\{[^}]*white-space:nowrap", html)
+
+
+@setup
+@resvg
+def test_a_drawing_that_carries_its_own_ground_is_shown_on_both_grounds_without_a_dark_sibling(proj):
+    own = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a0a0f"/>'
+           '<rect x="35" y="35" width="30" height="30" fill="#f5f5f0"/></svg>')
+    for name in ("mark", "grid-mark"):
+        (proj / f"assets/logo/{name}.svg").write_text(own)
+        (proj / f"assets/logo/{name}-dark.svg").unlink(missing_ok=True)
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no dark drawing" in (proj / "book.html").read_text()            # without the rule: the dark column is missing
+    rules = json.loads((proj / "qa/rules.json").read_text())
+    rules["icons"] = {"ground": "drawing"}
+    (proj / "qa/rules.json").write_text(json.dumps(rules))
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    dark = [t for t in htmlscan.tags(html) if t.name == "img" and re.fullmatch(r"Acme mark at \d+ px, dark ground", t.attrs.get("alt", ""))]
+    assert "no dark drawing" not in html and len(dark) == 7
+    assert "-dark.svg does not exist" not in json.dumps(report(proj, "book"))

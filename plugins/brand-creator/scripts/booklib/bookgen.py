@@ -24,6 +24,11 @@ from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, ras
 from mark_lint import lint_svg_text
 
 esc = bookmd.esc
+
+
+def code_spans(escaped: str) -> str:
+    """`text` in an escaped line as <code>text</code>: a rule line names tokens and files in backticks."""
+    return re.sub(r"`([^`\n]+)`", r"<code>\1</code>", escaped)
 FONT_MIME = {".woff2": ("font/woff2", "woff2"), ".woff": ("font/woff", "woff"), ".ttf": ("font/ttf", "truetype"), ".otf": ("font/otf", "opentype")}
 IMG_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
 PROOF_TOOLS = ["tokens", "contrast", "logo-sheet", "states", "family", "fontcheck", "motion", "idempotence", "staleness"]
@@ -55,6 +60,7 @@ p{margin:0 0 12px;max-width:72ch}
 a{color:var(--text);text-underline-offset:3px}
 a:focus-visible{outline:2px solid var(--text);outline-offset:3px}
 code,pre{font-family:@@MONO@@;font-size:14px;overflow-wrap:anywhere}
+code.hex{white-space:nowrap;overflow-wrap:normal}
 pre{overflow-x:auto;border:1px solid var(--line);padding:12px;margin:0 0 16px}
 ul,ol{margin:0 0 16px;padding-left:24px;max-width:72ch}li{margin:4px 0}li::marker{color:var(--accent)}
 li.task{list-style:none;margin-left:-24px;padding-left:28px;position:relative}
@@ -389,6 +395,9 @@ class BookBuild:
                 fail(EXIT_FAIL, f"{{{{marks:{stem}}}}}: assets/logo/{stem}.svg does not exist (write {stem}? to make it optional)")
             lt = self.mark_svg(light)
             cells = [f'<div class="ground g-light">{self.img_tag(lt, stem, f"{self.view["name"]} {stem} on a light ground")}</div>']
+            own = (stem in rules["marks"] or (stem == "mark" and not rules["marks"])) and qa_rules.ground_for(rules, stem if rules["marks"] else None) == "drawing"
+            if not dark.is_file() and own:   # the mark carries its own ground (icons.ground drawing) and serves both grounds
+                dark = light
             if dark.is_file():
                 cells.append(f'<div class="ground g-dark">{self.img_tag(self.mark_svg(dark), stem + "-dark", f"{self.view["name"]} {stem} on a dark ground")}</div>')
             else:
@@ -410,13 +419,16 @@ class BookBuild:
         if rules["marks"]:   # several marks: one table per mark, each from its own bands
             out = []
             for m in rules["marks"].values():
-                out += [f"<h4>{esc(m['name'])}</h4>", self.size_table(m["bands"], qa_rules.master_of(m), m["name"], lang)]
+                out += [f"<h4>{esc(m['name'])}</h4>", self.size_table(m["bands"], qa_rules.master_of(m), m["name"], lang,
+                                                                   own_ground=qa_rules.ground_for(rules, m["id"]) == "drawing")]
         else:
-            out = [self.size_table(rules["bands"], "assets/logo/mark.svg", None, lang)]
+            out = [self.size_table(rules["bands"], "assets/logo/mark.svg", None, lang, own_ground=qa_rules.ground_for(rules, None) == "drawing")]
         return self.size_notes(out, lang)
 
-    def size_table(self, bands: list, master: str, who: str | None, lang: str) -> str:
-        """The size proof of one mark: at each size the drawing its band rule picks, at exactly those pixels, on both grounds."""
+    def size_table(self, bands: list, master: str, who: str | None, lang: str, *, own_ground: bool = False) -> str:
+        """The size proof of one mark: at each size the drawing its band rule picks, at exactly those pixels, on both grounds. With `own_ground`
+        (qa/rules.json icons.ground, or the mark's ground, is drawing) a drawing carries its own ground and serves both: with no -dark sibling it
+        is shown on the dark ground too."""
         rows = []
         for s in self.cfg["sizes"]:
             band = qa_rules.pick_band(bands, s) if bands else None
@@ -424,6 +436,8 @@ class BookBuild:
             if not draw.is_file():
                 fail(EXIT_FAIL, f"the drawing for {s} px, {draw.relative_to(self.project)}, does not exist")
             dark = confine(self.project, draw.with_name(draw.stem + "-dark.svg"), what="dark size drawing")
+            if own_ground and not dark.is_file():
+                dark = draw
             zoom = max(1, min(8, 128 // s))
             cells = [f"{s} px", f"{esc(draw.relative_to(self.project).as_posix())}" + (f" ({esc(band['name'])})" if band else "")]
             for mode, f, bg in (("light", draw, self.light["bg"]), ("dark", dark, self.dark["bg"])):
@@ -474,7 +488,7 @@ class BookBuild:
             hx = prim[name]["hex"].lower()
             lr = sorted(r for r, v in self.doc["modes"]["light"].items() if v.get("ref") == name)
             dr = sorted(r for r, v in self.doc["modes"]["dark"].items() if v.get("ref") == name)
-            rows.append([f'<span class="sw" style="background:{hx}"></span>{esc(name)}', f"<code>{hx}</code>",
+            rows.append([f'<span class="sw" style="background:{hx}"></span>{esc(name)}', f'<code class="hex">{hx}</code>',
                          esc(", ".join(lr) or "-"), esc(", ".join(dr) or "-")])
         return self.table([self.T(lang, "Colour"), self.T(lang, "Hex"), self.T(lang, "Light roles"), self.T(lang, "Dark roles")], rows)
 
@@ -901,7 +915,9 @@ class BookBuild:
             rows = [[esc(r.get("name", "")), esc(r.get("register", "")), esc(r.get("liked", "")), esc(r.get("decided", ""))] for r in dec]
             out.append(self.table([self.T(lang, "Direction"), self.T(lang, "Register"), self.T(lang, "What holds"), self.T(lang, "Decided")], rows))
         if self.view["rules"]:
-            out.append("<ul>" + "".join(f"<li>{esc(re.sub(r'^\(rule\)\s*', '', x, flags=re.I))}</li>" for x in self.view["rules"]) + "</ul>")
+            out.append("<ul>" + "".join(f"<li>{code_spans(esc(bookdata.rule_text(x)))}</li>" for x in self.view["rules"]) + "</ul>")
+        for x in self.view.get("rules_skipped", []):
+            self.warn("decided", f"a line of Rules (G4) in BRAND-STATE.md is left out: it does not start with \"(rule)\" or \"(rule, ...)\": {x[:80]}")
         if not out:
             self.warn("decided", "BRAND-STATE.md has no DECIDED direction and no (rule) lines; the decided block is empty")
             return f"<p>{esc(self.T(lang, 'Nothing has been decided yet.'))}</p>"

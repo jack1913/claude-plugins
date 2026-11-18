@@ -837,8 +837,8 @@ def test_the_real_loader_accepts_every_case(tmp_path):
         n_real = len(list((c / "graders").glob("*.md")))
         assert c.name in ln and re.search(rf"graders\.{n_real}\.type: Invalid discriminator", ln), f"{c.name}: {ln}"
         assert ln.count("Invalid") == 1, ln
-    n = len(case_dirs())   # the summary line as Claude Code 2.1.302 words it (the version CI pins), then as 2.1.326 does
-    assert "0 case(s)" in out and (f"{n} case file(s) failed to load" in out or f"Couldn't load {n} case files" in out), out
+    n = len(case_dirs())   # the summary line: "N case file(s) failed to load" in older Claude Code, "Couldn't load N case files" in 2.1.326
+    assert "0 case(s)" in out and re.search(rf"{n} case file\(s\) failed to load|Couldn't load {n} case files", out), out
     assert re.search(r"0 case\(s\) .*\$0\.00\b", out), "nothing may be billed by the loader check: " + out[-300:]
 
 

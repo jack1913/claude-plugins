@@ -9,7 +9,8 @@ Every image is a designed card: an HTML page (templates/card.html, or --template
 mark and the brand's drawn lettering (the lockup alone, or the wordmark next to the mark: --logo-svg, else assets/logo/lockup.svg,
 else wordmark.svg; the dark README header takes <name>-dark.svg next to it), rendered to PNG by the single Chromium driver (render.mjs
 card). With no lockup or wordmark, or with --name, the name is live text in the system font, and the report says so. Sizes come from
-platform-specs.json only.
+platform-specs.json only. The Open Graph card and the GitHub preview are on the ground qa/rules.json social.mode names (light by default;
+dark takes the dark mark and lettering, as the dark README header does). The accent line has square ends when every radius token is 0.
   assets/social/og-<w>x<h>-<hash>.png   a new URL whenever the bytes change (platforms cache by URL)
   assets/social/github-social-<w>x<h>.png                only when INVENTORY.md or brief/BRIEF.md lists a code repository (or --repo-images yes)
   assets/social/readme-header-light.png, readme-header-dark.png   the same condition; otherwise an info row says why they were skipped
@@ -37,7 +38,7 @@ from _common import EXIT_FAIL, EXIT_USAGE, Parser, Report, confine, fail, find_p
 from _emit import (CARD_RULE_RADIUS, add_common_args, add_logo_arg, art_img, card_art, card_lettering, card_lettering_setup, card_mark_size,  # noqa: E402
                    dark_sibling, facts as facts_of, fill_template, fit_art, lettering_art, lettering_files, mark_accent, mark_tagline,
                    load_mark, load_tokens, need_colors, regulated_profession, render_card, lists_repository, require_gate, require_tier,
-                   rule_radius)
+                   rule_radius, tokens_square)
 from manifest import Manifest  # noqa: E402
 from pxio import png_size  # noqa: E402
 
@@ -73,7 +74,7 @@ def lineup_members(project: Path, a, rules: dict, rep: Report) -> list[dict]:
     return members
 
 
-def lineup_values(members: list[dict], layout: str, art: str | None, name: str, mode: str, w: int, h: int) -> dict:
+def lineup_values(members: list[dict], layout: str, art: str | None, name: str, mode: str, w: int, h: int, square: bool = False) -> dict:
     """The values of templates/lineup.html at w x h: each mark (its dark drawing on a dark card when it has one) as an image in its cell,
     the wordmarks under them at one height, and the brand's lettering or typed name above. Pixel art is set at a whole-number scale, and
     when every mark is pixel art the accent line under the name has square ends."""
@@ -97,7 +98,7 @@ def lineup_values(members: list[dict], layout: str, art: str | None, name: str, 
     title_px, rule_h = round(h * LINEUP_TITLE), max(2, round(h * 0.012))
     return {"lettering": title, "marks": "".join(figs), "gap": round(h * 0.06), "gap_x": gap_x, "cell_w": int(cell_w), "caption_gap": round(h * 0.03), "caption_h": cap,
             "caption_px": round(cap * 0.8), "title_px": title_px, "sub_px": round(h * 0.045), "rule_w": title_px * 2, "rule_h": rule_h,
-            "rule_radius": rule_radius(f"{rule_h}px", drawings)}
+            "rule_radius": rule_radius(f"{rule_h}px", drawings, square=square)}
 
 
 def main() -> int:
@@ -151,6 +152,8 @@ def main() -> int:
     tagline = mark_tagline(project, mark, a.tagline, rep.inputs)
     found, layout = card_lettering_setup(rep, project, a, template, tpl_path.name, mid)
     members = lineup_members(project, a, rules, rep) if lineup else []
+    square = tokens_square(tokens_path)                 # radius tokens all 0: the accent line has square ends
+    card_mode = rules["social"]["mode"]                 # qa/rules.json social.mode: the ground of the Open Graph card and the GitHub preview
 
     def render(variant: str, mode: str, w: int, h: int, values: dict, raw: tuple) -> bytes:
         bg, fg = need_colors(modes, mode, "color.bg", "color.text")
@@ -169,15 +172,22 @@ def main() -> int:
 
     def card(variant: str, mode: str, w: int, h: int, mark_svg: str | None, art: str | None) -> bytes:
         if lineup:
-            return render(variant, mode, w, h, lineup_values(members, layout, art, name, mode, w, h), ("lettering", "marks"))
+            return render(variant, mode, w, h, lineup_values(members, layout, art, name, mode, w, h, square), ("lettering", "marks"))
         values = {"layout": layout, "lettering": card_lettering(layout, art, name, w, h), "mark_size": card_mark_size(mark_svg, h),
                   "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg),
-                  "rule_radius": rule_radius(CARD_RULE_RADIUS, card_art(layout, mark_svg, art))}
+                  "rule_radius": rule_radius(CARD_RULE_RADIUS, card_art(layout, mark_svg, art), square=square)}
         return render(variant, mode, w, h, values, ("mark", "lettering"))
 
-    # Open Graph: new URL per change
+    # Open Graph: new URL per change; on the ground social.mode names (dark: the dark mark and lettering, as the dark README header)
     art = found[0] if found else None
-    d = card("og", "light", og["width"], og["height"], light, art)
+    art_dark = dark_sibling(project, found[1], rep.inputs) if layout != "type" and found else None
+    card_mark, card_lettering_svg = (dark or light, art_dark or art) if card_mode == "dark" else (light, art)
+    if card_mode == "dark" and not lineup:
+        if dark is None and layout != "lockup":
+            rep.add("note:cards dark", "warn", "no dark artwork", detail="social.mode is dark, but the Open Graph card and the GitHub preview reuse the light mark artwork")
+        if layout != "type" and art_dark is None:
+            rep.add("note:cards dark lettering", "warn", "no dark lettering", detail=f"social.mode is dark, but there is no dark {layout}: the cards reuse the light one")
+    d = card("og", card_mode, og["width"], og["height"], card_mark, card_lettering_svg)
     h8 = hashlib.sha256(d).hexdigest()[:8]
     og_rel = f"og-{og['width']}x{og['height']}-{h8}.png"
     changed = mf.put(f"{out}/{og_rel}", d, emitter="social", specs=["open-graph"], width=og["width"], height=og["height"], **of_mark)
@@ -197,13 +207,12 @@ def main() -> int:
                        "add the repository to the brief, or pass --repo-images yes")
     else:
         # GitHub social preview
-        d = card("github-social", "light", gh["width"], gh["height"], light, art)
+        d = card("github-social", card_mode, gh["width"], gh["height"], card_mark, card_lettering_svg)
         gh_rel = f"github-social-{gh['width']}x{gh['height']}.png"
         changed = mf.put(f"{out}/{gh_rel}", d, emitter="social", specs=["github-social"], width=gh["width"], height=gh["height"], **of_mark)
         rep.add(f"file:{gh_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
 
         # README header, light and dark
-        art_dark = dark_sibling(project, found[1], rep.inputs) if layout != "type" else None
         for mode, mark_art, lettering_svg in (("light", light, art), ("dark", dark or light, art_dark or art)):
             d = card(f"readme-header-{mode}", mode, rh["width"], rh["height"], mark_art, lettering_svg)
             rel_name = f"readme-header-{mode}.png"

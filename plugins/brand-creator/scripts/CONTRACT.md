@@ -918,6 +918,9 @@ no switch and a warning names the missing file. The manifest row records the fil
 that keeps the old tab icon: `favicon.drawing` in `qa/rules.json`, or `marks.<id>.favicon` for one of several marks. A row with no
 `drawing_file` (written before 0.3.1) is not compared.
 
+The apple-touch and maskable icons take the ground of `qa/rules.json` `icons.ground` (see qa/rules.json); with `drawing` both are the drawing edge
+to edge, and the maskable safe-zone check measures against the drawing's own ground. The manifest's `theme_color` and `background_color` are that ground.
+
 `emit apple` exits 3 off macOS (and on a Mac without Xcode) before it reads the project. `emit tray` reads `tray/tray.json` (a state's source is a
 path, or a map of master size to path, or `{"light": ..., "dark": ...}` of those; a master serves only the sizes it divides, a size with no master
 is exit 2). `Assets.car` files are compiled into a scratch folder and compared by their rendition list; only the list is shipped. A row that asks
@@ -1004,8 +1007,23 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
  "family":    {"tile_share_tolerance": 0.05},
  "favicon":   {"drawing": "assets/logo/favicon.svg"},
  "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
+ "icons":     {"ground": "light"},
+ "social":    {"mode": "light"},
  "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 ```
+
+`icons.ground` (`light` by default, `dark` or `drawing`; `marks.<id>.ground` overrides it for one mark, empty = `icons.ground`) is the ground of
+the icons that need one: the apple-touch and maskable icons and the manifest's `theme_color` and `background_color` (`emit web`), and the avatar
+(`emit profiles`). `light` and `dark` are `color.bg` of that mode, with the mark set inside the icon (the dark one: the drawing's `-dark.svg`, else
+derived through the token roles with a warning). `drawing` is for a mark that carries its own ground (a light shape on a full-bleed dark square,
+made to be cropped by the phone): its ground is read from its corners, the touch icon takes the drawing edge to edge, and the maskable icon
+takes it on that ground at the largest share (up to 1.0, in whole percents) whose ink stays inside the safe circle (a report row
+`note:maskable content` gives the share; exit 1 when no share fits); the safe-zone and safe-circle checks count only what sits on that ground as
+ink. A band drawing that already is a `-dark.svg` is its own dark artwork with `dark` (no `<name>-dark-dark.svg` is looked for). A drawing that does not fill its canvas with one opaque ground (see-through pixels,
+or corners of different colours) exits 1, naming the key and the file: nothing falls back to the light ground. With `drawing`, the book shows such a
+drawing on both grounds (the mark-by-size table and `{{marks}}`) when it has no `-dark.svg`, without the "no dark drawing" warning.
+`social.mode` (`light` by default, or `dark`) is the ground of the Open Graph card and the GitHub social preview (`emit social`); `dark` takes the dark
+mark and lettering (`-dark.svg`) as the dark README header does, with a warning for each that has no dark file.
 
 `favicon.drawing` (empty by default) fixes the drawing of `icon.svg` (`emit web`); it must be an existing `.svg` in the
 project (exit 2 otherwise) and pure vector (exit 1 otherwise), and so must its `-dark.svg` when there is one.
@@ -2072,9 +2090,10 @@ from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter f
 `>` quotes, pipe tables, fenced code, own-line images (embedded as data URIs; SVG under `assets/` is mark-linted), inline `**`, `*`, `` ` ``,
 links. Raw HTML is escaped. Anything else is an error with the line number. Computed blocks on their own line: `{{marks[:stem,stem?]}}`,
 `{{mark-sizes}}` (the drawing the size band rule picks, rendered at exactly the size on light and dark, the enlarged copy being the same
-pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
+pixels, plus the downscale reports' accent measurements; a drawing with no `-dark.svg` is shown on the dark ground too when `icons.ground` is `drawing`), `{{colours}}` (a hex value never breaks across lines), `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
 `{{motion}}`, `{{tokens}}`, `{{files}}` (one row per manifest row and source artwork file with `data-path` and `data-sha`; a row marked `superseded` carries a note saying so), `{{checks}}`,
-`{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`, `{{site}}` (the approved pages, below). Inline: `{{count:NAME}}`
+`{{decided}}` (the DECIDED directions and the "Rules (G4)" lines that start with "(rule)" or "(rule, a note)", without the marker, a `` `code` `` span shown as code; a line whose
+tag speaks of a rule in another form, "(rules)" for example, is left out with a `book:decided` warning that quotes it), `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`, `{{site}}` (the approved pages, below). Inline: `{{count:NAME}}`
 (`files, slots, colours, pairs, roles, sizes, artwork, emitters, chapters`), `{{fact:LABEL}}` (a FACTS.md row's value), `{{edition}}`,
 `{{name}}`, `{{approved}}`. `::: variant GROUP NAME` and `::: switcher GROUP` fences are open choices (see `collapse`). Settings in
 `book/book.json` (unknown keys are exit 2): `min_label_px` (default 12, stated in the book), `sizes`, `fonts` (`{family, file, weight, style}`,
@@ -2580,6 +2599,7 @@ The colour, type, layout, mark, motion and claims sections go to `brand.md`, wri
     motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
     site/<id>/ (the page, its folder and its stills) and every project file an approved reference page loads (see Reference pages below)
     assets/masters/<every file of the approved masters, a font by the font rule> (see Masters below)
+    assets/web/, assets/social/, assets/profiles/: every file `emit web`, `emit social` and `emit profiles` recorded in assets/manifest.json (see Platform files below)
   snippets/fonts.css   generated: an @font-face for each copied font
   snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
   snippets/logo.html   generated: the logo in light and dark, switched as tokens.css switches them
@@ -2779,6 +2799,14 @@ be trusted, and the build reads nothing for them until the checks pass. A projec
 - The report's inputs add `site/site.json`, the files of the page folders, the files they load and the page-check report of each page, so a page checked, captured or approved again makes the `kit` report stale. Row `kit:reference-pages`: pass,
   with the number of pages and their ids, when each is copied; warn when a page loads a font that is not copied (above); info "no approved reference pages" while the project has none. A reference page's notes are judged by `kit check`
   like a recipe (`kit:tags`, `kit:numbers`: their bullets are the page's choices).
+
+**Platform files.** Every file the manifest records for `emit web`, `emit social` or `emit profiles` (the favicon, the touch, PWA and maskable icons, `site.webmanifest`
+and `head.html`, the Open Graph card, the GitHub preview, the README headers, the avatars and the banners) is copied byte for byte to `brand/<project path>`; the
+proofs (`_proof/`) and the card pages (`_build/`) are not in the manifest, so never in the kit. A file that is gone, or whose bytes are not the ones its emitter
+recorded, stops the build (exit 1) with the emitter to run again. `kit.json` `sources` gets a `platform` key (one sha256 over the paths and their sha256, as the other
+sources) only when the manifest lists such a file, so a kit without them is the bytes it always was; each file is an input of the `kit` report, and the map has a row
+"the web icons, social images and profile pictures" naming the folders the kit holds. `kit:links` does not read `assets/web/head.html` (and `assets/web/<id>/head.html`):
+it is pasted into a page's `<head>`, and its links are the site's own root URLs.
 
 **Masters.** `assets/masters/` is a project folder the plugin knows: the masters the owner approved (an ad, a deck and other templates, with their pictures, PDFs, PPTX and the fonts they ship). Only approved masters belong in it:
 the plugin cannot know which are approved, so everything in the folder goes into the kit. Everything below it, at any depth, is copied byte for byte to `brand/<its project path>` (`brand/assets/masters/ad/index.html`),
@@ -3054,7 +3082,8 @@ is the Icon Composer layout canvas and stays the ictool export size for `--previ
 carries `UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): ` and a person must check the size in Xcode before the pack is relied on.
 
 **`emit profiles`** (`emitters/profiles.py`, template `templates/profile/banner.html`, report `emit-profiles`; every tier: the Quick tier writes the two avatars only and an info row says the banners are Standard; gate G3). It writes under
-`assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred) and one image per platform at its row's size
+`assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred on the ground of `qa/rules.json` `icons.ground`; with
+`drawing` the drawing sits on its own ground at the largest share up to 1.0 whose ink stays inside the safe circle, unless `--content-fraction` is given, and the safe-circle gate measures only what sits on its own ground) and one image per platform at its row's size
 (`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the brand's drawn lettering, plus one FACTS.md line with `--tagline`,
 laid out inside the row's `safe` rectangle, 24-bit PNG). The lettering is `--logo-svg`, else `assets/logo/lockup.svg` (it stands alone), else `assets/logo/wordmark.svg`
 (set next to the mark), shown as an image (`{{lettering}}`, `{{layout}}` = `lockup`, `wordmark` or `type`). Whether a file is a lockup or a wordmark comes from
@@ -3068,7 +3097,7 @@ pixel stays square: the mark (card.html's `{{mark_size}}`, the banner's `{{mark_
 side-by-side image; at a fixed icon size the band's drawing decides. The accent line under the name has square ends too: the cards
 (`card.html`), the banners (`banner.html`) and the side-by-side image (`lineup.html`) take `{{rule_radius}}` for its `border-radius`, which
 is 0 when everything drawn on the card is pixel art (the mark unless a lockup stands alone, the lettering unless the name is typed; on the
-side-by-side image every mark) and the template's own round ends otherwise (`1vh` on a card, the line's height on a banner and the image).
+side-by-side image every mark) or when the brand's corner radius tokens (`radius.*` in `tokens.json` `other`) are all 0, and the template's own round ends otherwise (`1vh` on a card, the line's height on a banner and the image).
 A template of a project that has no `{{rule_radius}}` keeps its own `border-radius`. With several marks, each follows the rules of Several marks. Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
 
 - **The gate comes before the files.** The avatar's ink must lie inside the `safe_circle` share of the circle (default box: the largest, up to 0.7 of the canvas, that fits; `--content-fraction` sets it

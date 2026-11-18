@@ -12,6 +12,8 @@ keys are refused (a typo must not silently fall back to the default).
      "guides":    {"tolerance_px": 1.5},
      "family":    {"tile_share_tolerance": 0.05},
      "favicon":   {"drawing": "assets/logo/favicon.svg"},
+     "icons":     {"ground": "light"},        # light | dark | drawing (a mark drawn on its own ground, on that ground)
+     "social":    {"mode": "light"},          # light | dark: the Open Graph card and the GitHub preview
      "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
      "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"},
                    {"name": "large", "drawing": "assets/logo/mark.svg"}]}
@@ -67,12 +69,16 @@ DEFAULTS: dict = {
         "clear_space": 0.25,           # free space round the mark, as a share of the mark's rendered height
         "rules": [],                   # brand rules the owner added from the generic tells (a list; its entries are validated where they are used)
     },
+    "icons": {"ground": "light"},      # the ground of the touch, maskable and avatar icons: light | dark (color.bg of that mode) | drawing (its own)
+    "social": {"mode": "light"},       # the Open Graph card and the GitHub preview: light | dark (the dark ground and the -dark artwork)
     "bands": [],
     "marks": {},                       # several marks, each with its own bands (see the docstring); empty = one mark
 }
 _NUM = (int, float)
 MARK_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")   # names folders and reports: assets/<pack>/<id>/, emit-<pack>/<id>.json
-MARK_KEYS = ("bands", "name", "favicon", "accent", "tagline")
+MARK_KEYS = ("bands", "name", "favicon", "accent", "tagline", "ground")
+GROUNDS = ("light", "dark", "drawing")    # icons.ground and marks.<id>.ground
+SOCIAL_MODES = ("light", "dark")          # social.mode
 
 
 def _check(section: str, key: str, value, default) -> None:
@@ -130,11 +136,13 @@ def validate_marks(marks) -> dict[str, dict]:
         if not m.get("bands"):
             fail(EXIT_USAGE, f"{RULES_FILE}: {where}.bands: every mark names its drawing for each size (at least one band; the last one has no max_px)")
         entry = {"id": mid, "bands": validate_bands(m["bands"], f"{where}.bands")}
-        for k in ("name", "favicon", "accent", "tagline"):
+        for k in ("name", "favicon", "accent", "tagline", "ground"):
             v = m.get(k, "")
             if not isinstance(v, str):
                 fail(EXIT_USAGE, f"{RULES_FILE}: {where}.{k} must be a string, got {v!r}")
             entry[k] = v.strip()
+        if entry["ground"]:
+            entry["ground"] = _one_of(entry["ground"], GROUNDS, f"{RULES_FILE}: {where}.ground")
         entry["name"] = entry["name"] or mid
         out[mid] = entry
     return out
@@ -241,8 +249,16 @@ def validate_exemptions(items) -> list[dict]:
     return out
 
 
+def _one_of(value: str, allowed: tuple[str, ...], where: str) -> str:
+    if value not in allowed:
+        fail(EXIT_USAGE, f"{where} must be one of {', '.join(allowed)}, got {value!r}")
+    return value
+
+
 KEY_VALIDATORS = {("downscale", "exemptions"): validate_exemptions, ("page", "widths"): validate_page_widths,
-                  ("page", "rules"): validate_page_rules}   # keys whose value is checked beyond its type
+                  ("page", "rules"): validate_page_rules,
+                  ("icons", "ground"): lambda v: _one_of(v, GROUNDS, f"{RULES_FILE}: icons.ground"),
+                  ("social", "mode"): lambda v: _one_of(v, SOCIAL_MODES, f"{RULES_FILE}: social.mode")}   # keys whose value is checked beyond its type
 
 
 def load(project: Path) -> tuple[dict, str]:
@@ -305,6 +321,12 @@ def select_mark(a, rules: dict, *, required: bool = True) -> dict | None:
             fail(EXIT_USAGE, f"this project has several marks ({', '.join(rules['marks'])}): pass --mark <id>")
         return None
     return mark_entry(rules, a.mark)
+
+
+def ground_for(rules: dict, mark_id: str | None) -> str:
+    """The ground of the touch, maskable and avatar icons for a mark: its own marks.<id>.ground, else icons.ground (light, dark or drawing)."""
+    own = mark_entry(rules, mark_id)["ground"] if mark_id else ""
+    return own or rules["icons"]["ground"]
 
 
 def bands_for(rules: dict, mark_id: str | None) -> list[dict]:
