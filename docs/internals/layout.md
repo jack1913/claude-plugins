@@ -1,7 +1,8 @@
 # Repository layout
 
 `.claude-plugin/` and `.github/` are the marketplace itself: one `marketplace.json`, helper scripts, and one workflow per
-plugin plus `marketplace.yml` and `docs.yml`, one release-tag ruleset per plugin and one ruleset for `main`. Why one repository:
+plugin plus `marketplace.yml`, `docs.yml` and brand-creator's release run, one release-tag ruleset per plugin and one
+ruleset for `main`. Why one repository:
 [ADR-0001](../adr/ADR-0001-one-monorepo-marketplace.md).
 
 | Path | What it holds |
