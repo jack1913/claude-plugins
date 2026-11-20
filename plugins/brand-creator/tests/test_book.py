@@ -835,6 +835,48 @@ def test_the_fonts_of_the_project_are_embedded_as_data_uris(proj):
 
 @setup
 @resvg
+def test_a_variable_font_is_embedded_with_its_weight_range(proj):
+    """A variable font embedded with one weight is held at it by the browser, which fakes the book's bolder headings. The current fontcheck report says what the file is: a
+    variable font is declared with its range, in the @font-face and in the type table; a static one keeps the weight book.json gives. Without a current report that reads the
+    file the book cannot tell: it keeps the one weight and warns."""
+    from helpers import font_variant
+    range_unknown = "the weight range of assets/fonts/test.ttf is not known"
+
+    def book_warnings():
+        return [r["detail"] for r in report(proj, "book")["results"] if r["id"] == "book:type" and r["status"] == "warn"]
+
+    (proj / "assets/fonts").mkdir(parents=True)
+    shutil.copy(ROOT / "tests/fixtures/fonts/TestFont-subset.ttf", proj / "assets/fonts/test.ttf")
+    (proj / "book/book.json").write_text(json.dumps({"schema": 1, "fonts": [{"family": "Test Face", "file": "assets/fonts/test.ttf", "weight": 400}]}))
+    r = bc("book", project=proj)                                                     # no fontcheck report yet
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '@font-face{font-family:"Test Face";font-weight:400;font-style:normal;' in (proj / "book.html").read_text()
+    assert [w for w in book_warnings() if w.startswith(range_unknown) and "brand-creator fontcheck" in w], book_warnings()
+
+    assert bc("fontcheck", "--lang", "en", "--no-platform", project=proj).returncode == 0
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert '@font-face{font-family:"Test Face";font-weight:100 900;font-style:normal;' in html     # the fixture's `wght` axis
+    assert re.search(r"<td[^>]*>Test Face</td><td[^>]*>100–900</td>", html)                        # the type table says the range too
+    assert not [w for w in book_warnings() if w.startswith(range_unknown)]
+
+    font_variant(proj / "assets/fonts/test.ttf", static=True)                        # the font changed: the report no longer reads this file
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '@font-face{font-family:"Test Face";font-weight:400;font-style:normal;' in (proj / "book.html").read_text()
+    assert [w for w in book_warnings() if w.startswith(range_unknown)]
+
+    assert bc("fontcheck", "--lang", "en", "--no-platform", project=proj).returncode == 0
+    r = bc("book", project=proj)                                                     # a static font: the weight book.json gives, and nothing to warn about
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert '@font-face{font-family:"Test Face";font-weight:400;font-style:normal;' in html and re.search(r"<td[^>]*>Test Face</td><td[^>]*>400</td>", html)
+    assert not [w for w in book_warnings() if w.startswith(range_unknown)]
+
+
+@setup
+@resvg
 def test_an_unknown_key_in_book_json_is_exit_2_not_a_silent_default(proj):
     (proj / "book/book.json").write_text(json.dumps({"schema": 1, "min_label": 12}))
     r = bc("book", project=proj)

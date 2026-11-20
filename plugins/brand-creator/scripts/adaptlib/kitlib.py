@@ -257,6 +257,11 @@ def _why_not(rows: dict | None, row: dict | None, has_text: bool) -> str | None:
     rng = row["weight_range"]       # [lowest, highest] of a variable font; None for a static one
     if rng is not None and not (isinstance(rng, list) and len(rng) == 2 and all(_is_weight(v) for v in rng) and rng[0] < rng[1]):   # a range CSS takes
         return "the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again"
+    if "slant_range" not in row:    # a report from before fontcheck read it: a variable font that slants would be declared upright, and the browser would fake its italics
+        return "the fontcheck report was written before fontcheck read the slant range of a variable font: run `brand-creator fontcheck` again"
+    slant = row["slant_range"]      # [lowest, highest] in CSS degrees for a variable font with a slant axis; None for any other
+    if slant is not None and not (isinstance(slant, list) and len(slant) == 2 and all(_is_slant(v) for v in slant) and slant[0] < slant[1]):   # a range CSS takes
+        return "the fontcheck report holds a slant range for it that CSS does not take: run `brand-creator fontcheck` again"
     return None
 
 
@@ -269,16 +274,22 @@ def _is_weight(value) -> bool:
     return type(value) is int and 1 <= value <= 1000
 
 
+def _is_slant(value) -> bool:
+    return type(value) is int and -90 <= value <= 90
+
+
 def font_face(rel: str, row: dict) -> str:
     """The @font-face of one copied font (`rel` its project path): family, source (the path percent-encoded where a URL needs it), weight and style as the fontcheck
     report reads them, and `font-display: swap` (text shows in a fallback font while the file loads). A variable font declares its weight range, `font-weight: <lowest>
-    <highest>`: with one weight the browser would hold the font at that weight and fake the bolder ones."""
+    <highest>`: with one weight the browser would hold the font at that weight and fake the bolder ones. One that slants declares its slant range too, `font-style:
+    oblique <lowest>deg <highest>deg`, unless the file calls itself italic: declared `normal`, its italics would be faked the same way."""
     rng = row["weight_range"]       # [lowest, highest] of a variable font; None for a static one (`_why_not` refused a row without it)
+    slant = row["slant_range"]      # [lowest, highest] in CSS degrees of a variable font with a slant axis; None for any other (`_why_not` refused a row without it)
     return ("@font-face {\n"
             f'  font-family: "{_css(row["family"])}";\n'
             f'  src: url("../{quote(PREFIX + rel)}") format("{FONT_FORMATS[Path(rel).suffix.lower()]}");\n'
             f"  font-weight: {f'{rng[0]} {rng[1]}' if rng else row['weight']};\n"
-            f"  font-style: {row['style']};\n"
+            f"  font-style: {f'oblique {slant[0]}deg {slant[1]}deg' if slant and row['style'] == 'normal' else row['style']};\n"
             "  font-display: swap;\n"
             "}\n")
 

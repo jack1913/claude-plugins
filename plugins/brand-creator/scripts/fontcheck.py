@@ -87,16 +87,29 @@ def weight_range(font) -> list[int] | None:
     return [low, high] if low < high else None
 
 
+def slant_range(font) -> list[int] | None:
+    """[lowest, highest] slant of a variable font, as CSS takes an oblique range (whole degrees from -90 to 90, the lowest below the highest): the `slnt` axis of
+    its fvar table with the sign turned (the axis counts a clockwise slant as negative, CSS as positive), kept inside what the axis holds. None for a static font,
+    a variable font with no `slnt` axis, or an axis that gives no such range. An `ital` axis is not read: Chromium 149 does not set it for italic text, so a face
+    declared italic for it would show the upright letters."""
+    axis = next((a for a in font["fvar"].axes if a.axisTag == "slnt"), None) if "fvar" in font else None
+    if axis is None:
+        return None
+    low, high = max(-90, math.ceil(-axis.maxValue)), min(90, math.floor(-axis.minValue))
+    return [low, high] if low < high else None
+
+
 def face(font, stem: str) -> dict:
-    """-> {family, weight, weight_range, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
-    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the weight range of a variable
-    font (`weight_range`), else None; the style `italic` when OS/2 fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
+    """-> {family, weight, weight_range, slant_range, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
+    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the weight range and the slant range of a variable
+    font (`weight_range`, `slant_range`), else None; the style `italic` when OS/2 fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
     nm = font["name"]
     italic = bool(font["OS/2"].fsSelection & 1) if "OS/2" in font else False
     italic = italic or ("head" in font and bool(font["head"].macStyle & 2))
     return {"family": nm.getDebugName(16) or nm.getDebugName(1) or stem,
             "weight": font["OS/2"].usWeightClass if "OS/2" in font and invalid_weight(font) is None else 400,
             "weight_range": weight_range(font),
+            "slant_range": slant_range(font),
             "style": "italic" if italic else "normal"}
 
 

@@ -231,6 +231,7 @@ def test_the_licence_row_names_the_family_weight_and_style_of_the_file(proj):
     lic = results(proj)[f"licence:{TEST_FONT.name}"]
     assert (lic["family"], lic["weight"], lic["style"]) == ("Inter", 400, "normal")
     assert lic["weight_range"] == [100, 900]                                               # its fvar `wght` axis: the fixture is a variable font
+    assert lic["slant_range"] is None                                                      # and it has no `slnt` axis
     assert lic["status"] == "info" and lic["recognised"] == "SIL Open Font License (OFL)"  # the status and the facts are as before
 
 
@@ -323,6 +324,41 @@ def test_the_licence_row_holds_the_weight_range_of_a_variable_font_and_none_for_
     res = results(proj)
     assert {n: res[f"licence:{n}.ttf"]["weight_range"] for n in names} == {
         "r-part": [401, 700], "r-point": None, "r-wide": [1, 1000], "r-thin": None, "r-none": None, "r-static": None}
+
+
+SLANT_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+for name, low, high in (("s-usual", -10, 0), ("s-back", 0, 10), ("s-both", -12, 12), ("s-part", -9.5, 0), ("s-point", 0, 0), ("s-thin", -0.8, -0.2), ("s-wide", -120, 120)):
+    f = TTFont(src)                                                  # only fvar is decoded here: every other table is saved as the bytes it had
+    axis = next(a for a in f["fvar"].axes if a.axisTag == "opsz")    # the fixture has no slant axis: its optical-size axis takes the tag
+    axis.axisTag = "slnt"
+    axis.minValue, axis.defaultValue, axis.maxValue = low, min(max(0, low), high), high
+    f["fvar"].instances = []                                         # a named instance holds its coordinates by axis tag
+    f.save(f"{out}/{name}.ttf")
+"""
+
+
+def test_the_licence_row_holds_the_slant_range_of_a_variable_font_and_none_for_one_that_does_not_slant(proj, tmp_path):
+    """The `slnt` axis of the fvar table as CSS takes an oblique range: the axis counts clockwise slant as negative and CSS as positive, so the range is the axis with its sign
+    turned, in whole degrees from -90 to 90 inside the axis, the lowest below the highest. A font with no slant axis, a static font and an axis that gives no such range have none,
+    and the kit then declares the style alone."""
+    from helpers import font_variant, fonttools
+    made = fonttools(SLANT_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    font_variant(tmp_path / "s-static.ttf", static=True)
+    names = ["s-usual", "s-back", "s-both", "s-part", "s-point", "s-thin", "s-wide", "s-static"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    assert {n: res[f"licence:{n}.ttf"]["slant_range"] for n in names} == {
+        "s-usual": [0, 10], "s-back": [-10, 0], "s-both": [-12, 12], "s-part": [0, 9], "s-point": None, "s-thin": None, "s-wide": [-90, 90], "s-static": None}
+    assert fc(proj, "--lang", "pl").returncode == 0
+    assert results(proj)[f"licence:{TEST_FONT.name}"]["slant_range"] is None               # the fixture as it is: weight and optical size, no slant axis
 
 
 BROKEN_FVAR = """

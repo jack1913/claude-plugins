@@ -21,6 +21,7 @@ import sitedata
 import svgtools
 from _color import wcag_ratio
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, rasterise_svg, sha256_file, stale_inputs
+from _common import rel as project_path   # `rel` is a parameter name in this module
 from mark_lint import lint_svg_text
 
 esc = bookmd.esc
@@ -187,6 +188,7 @@ class BookBuild:
         self.missing_labels: dict[str, set[str]] = {}
         self._raster_cache: dict = {}
         self._demos: list[dict] | None = None   # the replays of the motion chapter, found once
+        self._font_rows: dict | None = None     # the rows of the current fontcheck report by id, read once ({} when there is none)
         self.demo_css: list[str] = []           # the rules of each replay built, in the order built
         self.light, self.dark = self._roles("light"), self._roles("dark")
         self.counts = bookdata.counts(project, self.cfg, self.doc, len(self.chapter_ids))
@@ -524,7 +526,7 @@ class BookBuild:
                 if letters:
                     out.append(f'<p class="cap">{esc(f.get("name", code))}: {esc(letters)}</p>')
         if declared:
-            frows = [[esc(f["family"]), esc(str(f.get("weight", 400))), esc(f.get("style", "normal")), esc(f["file"])] for f in self.cfg["fonts"]]
+            frows = [[esc(f["family"]), esc(self.font_weight(f)[1]), esc(f.get("style", "normal")), esc(f["file"])] for f in self.cfg["fonts"]]
             out.append(self.table([self.T(lang, "Family"), self.T(lang, "Weight"), self.T(lang, "Style"), self.T(lang, "File")], frows))
         doc, stale = self.load_report("assets/_checks/fontcheck.json")
         if doc:
@@ -1115,6 +1117,22 @@ class BookBuild:
             divs.append(f'<div class="lang" lang="{esc(lang)}" data-key="{esc(cid)}">\n<h2>{bookmd.inline(title, self, lang, 1)}</h2>\n{body}\n</div>')
         return first_title, f'<section class="ch" id="{esc(cid)}" data-chapter="{esc(cid)}">\n' + "\n".join(divs) + "\n</section>"
 
+    def font_weight(self, ft: dict) -> tuple[str, str]:
+        """-> (the `font-weight` of one embedded font, the same for the type table): `<lowest> <highest>` and `<lowest>–<highest>` for a variable font, from the
+        `weight_range` the current fontcheck report reads for the file (with one weight the browser holds the font at it and fakes the bolder headings); else the
+        weight book.json gives, 400 when it gives none. Without a current report that reads the file the book cannot tell which it is: the one weight, and a warning."""
+        declared = str(ft.get("weight", 400))
+        if self._font_rows is None:
+            doc, stale = self.load_report("assets/_checks/fontcheck.json")
+            self._font_rows = {r["id"]: r for r in doc.get("results", []) if isinstance(r, dict) and isinstance(r.get("id"), str)} if doc and not stale else {}
+        row = self._font_rows.get(f"licence:{project_path(self.project, self.read(ft['file'], 'font file'))}")   # the id fontcheck gives the file's row
+        rng = row.get("weight_range") if row else None
+        if not row or "weight_range" not in row or (rng is not None and not (isinstance(rng, list) and len(rng) == 2 and all(type(v) is int and 1 <= v <= 1000 for v in rng) and rng[0] < rng[1])):
+            self.warn("type", f"the weight range of {ft['file']} is not known (no current fontcheck report reads it), so it is embedded at the one weight {declared}: "
+                              "a variable font is then held at that weight and the browser fakes the bolder ones; run `brand-creator fontcheck`, then build the book again")
+            return declared, declared
+        return (f"{rng[0]} {rng[1]}", f"{rng[0]}–{rng[1]}") if rng else (declared, declared)
+
     def fonts_css(self) -> str:
         faces = []
         for ft in self.cfg["fonts"]:
@@ -1122,7 +1140,7 @@ class BookBuild:
             mime, fmt = FONT_MIME.get(p.suffix.lower(), (None, None))
             if not mime:
                 fail(EXIT_USAGE, f"font {ft['file']}: only {', '.join(FONT_MIME)} are embedded")
-            faces.append(f'@font-face{{font-family:"{ft["family"]}";font-weight:{ft.get("weight", 400)};font-style:{ft.get("style", "normal")};'
+            faces.append(f'@font-face{{font-family:"{ft["family"]}";font-weight:{self.font_weight(ft)[0]};font-style:{ft.get("style", "normal")};'
                          f'font-display:block;src:url({self.data_uri(p, mime)}) format("{fmt}")}}')
             if not any(ft["family"] in str(v) for k, v in self.doc.get("other", {}).items() if k.startswith("font.")):
                 self.warn("type", f"the embedded font {ft['family']!r} is not named in any font.* token; the book will not use it")

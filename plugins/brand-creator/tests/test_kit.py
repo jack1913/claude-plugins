@@ -761,6 +761,38 @@ def test_a_variable_font_declares_its_weight_range_and_every_font_swaps(pack):
         assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again"), stored
 
 
+def test_a_variable_font_with_a_slant_axis_declares_its_oblique_range(pack):
+    """A variable font that slants, declared `font-style: normal`, gets its italics faked by the browser as its bold was. fontcheck reads the `slnt` axis and the @font-face says
+    `font-style: oblique <lowest>deg <highest>deg` (measured in Chromium 149: upright text stays upright, italic text takes the font's own slant). A font the file itself calls
+    italic stays `italic`. A report from before fontcheck read the axis (no `slant_range`) copies no font and says to run fontcheck again; so does a range CSS would not take."""
+    with_font(pack)
+    path = pack / "assets" / "_checks" / "fontcheck.json"
+    row = "licence:assets/fonts/TestFont-subset.ttf"
+    css = kit_of(pack) / "snippets" / "fonts.css"
+
+    def store(key, value):
+        mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__(key, value))
+
+    for stored, line in (([0, 10], "  font-style: oblique 0deg 10deg;\n"), ([-10, 0], "  font-style: oblique -10deg 0deg;\n"), ([-90, 90], "  font-style: oblique -90deg 90deg;\n"),
+                         (None, "  font-style: normal;\n")):
+        store("slant_range", stored)
+        assert build(pack).returncode == 0, stored
+        assert line in css.read_text(encoding="utf-8") and "  font-weight: 100 900;\n" in css.read_text(encoding="utf-8"), stored
+    store("slant_range", [0, 10])
+    store("style", "italic")                                                        # the file calls itself italic: that is its style, whatever it can slant
+    assert build(pack).returncode == 0 and "  font-style: italic;\n" in css.read_text(encoding="utf-8")
+    store("style", "normal")
+    not_copied = lambda why: [{"file": "assets/fonts/TestFont-subset.ttf", "reason": why}]                                # noqa: E731
+    mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).pop("slant_range"))                       # a report from before: the key is not there
+    assert build(pack).returncode == 0 and not css.exists() and fonts_row(pack)["status"] == "warn"
+    assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report was written before fontcheck read the slant range of a variable font: run `brand-creator fontcheck` again")
+    for stored in ([10, 0], [0, 0], [-91, 0], [0, 91], [10], [0, 5, 10], "0 10", [0.0, 10.0], [True, 10], 10):
+        store("slant_range", stored)
+        assert build(pack).returncode == 0, stored
+        assert not css.exists(), stored
+        assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report holds a slant range for it that CSS does not take: run `brand-creator fontcheck` again"), stored
+
+
 def test_a_band_drawing_that_is_missing_or_outside_the_project_stops_the_build(pack, tmp_path):
     (pack / "assets" / "logo" / "mark.svg").unlink()
     r = build(pack)
