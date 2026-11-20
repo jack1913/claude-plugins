@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-20, 0.14.0, run 44686304119 on GitHub, commit ec0cf6f | passed |
+| [Release run](#release-run) | 2026-11-20, 0.14.1, run 44732405569 on GitHub, commit ed02cc5 | passed on its second attempt |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -435,7 +435,26 @@ It passes when the Mac's pytest reports no failure and no skip at all (no NOT VE
 both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
 with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
 
-**Last run:** 2026-11-20, brand-creator 0.14.0, on GitHub: run 44686304119 of `brand-creator-release.yml` on the release
+**Last run:** 2026-11-20, brand-creator 0.14.1, on GitHub: run 44732405569 of `brand-creator-release.yml` on commit
+ed02cc5 (the release commit 47ade40 and one change to a test). It passed on its second attempt. The four `macos` jobs
+(`macos-26` on Apple silicon, Xcode 26.6): pytest 3561 passed and nothing skipped (1357, 833 and 1371 in the three
+shares), node 249 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`. The two `linux`
+jobs printed `LINUX RUN OK`: pytest 3510 passed with 51 expected skips, node 249 pass and the smoke. The first attempt
+took 32 minutes; the longest job, node and the smoke on macOS, took 31.
+
+Two failures came before it, both on macOS only:
+
+- `capture --frames: a motion a script starts when the page loads` (`tests/node/capture-frames.test.mjs`) failed in both
+  attempts of run 44708967327, on the release commit 47ade40: the still was taken while the heading was on its way. The
+  test page starts its motion 300 ms after it loads and `capture` pauses 300 ms before its still, so a page timer that
+  fires about 15 ms late gives this failure (seen on Linux with a timer set 15 ms later). The test now asks for
+  `--wait 600` (ed02cc5) and passed in this run.
+- `tar: Write error`, from the copy of the worked brand in `evals/_shared/fixture.sh` (`fx_copy_acme`, one `tar` piped
+  into another), failed one test of `tests/test_evals.py` in the first attempt of run 44708967327 and another in the
+  first attempt of this run; each passed when its job ran again. It did not come back in 2000 copies on Linux under
+  load; its cause was not found.
+
+The 0.14.0 run: 2026-11-20, brand-creator 0.14.0, on GitHub: run 44686304119 of `brand-creator-release.yml` on the release
 commit ec0cf6f. The four `macos` jobs (`macos-26` on Apple silicon, Xcode 26.6): pytest 3555 passed and nothing skipped
 (1357, 833 and 1365 in the three shares), node 249 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and
 `QUICK SMOKE PASSED`. The two `linux` jobs printed `LINUX RUN OK`: pytest 3504 passed with 51 expected skips, node 249
