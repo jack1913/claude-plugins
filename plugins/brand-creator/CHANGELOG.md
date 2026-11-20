@@ -6,6 +6,27 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-20
+
+A variable font that slants keeps its own italics in your kit, and your brand book embeds a variable font with its whole
+weight range. After you update, run the font check again, then build the kit and the book: until you do, the kit build
+leaves your fonts out.
+
+### Changed
+
+- The font check records the slant range of every font, and the kit build refuses a report from before this version. Run
+  `brand-creator fontcheck` once, then `kit build`. The kit's version goes up only if one of your fonts slants.
+- The book warns when it cannot tell whether an embedded font is variable, because no current font-check report reads the
+  file. Run the font check, then build the book again.
+
+### Fixed
+
+- A variable font with a slant axis is declared in the kit's `fonts.css` with its slant range, so italic text in a product
+  uses the font's own slant. Before, the browser faked the italics from the upright letters.
+- The brand book embeds a variable font with its weight range, and its type table shows the range. Before, the font was
+  held at one weight and the book's bolder headings were faked. A book with such a font looks different at its next
+  build, and its PDF pages may break elsewhere: look at it again before you approve it.
+
 ## [0.13.0] - 2026-11-18
 
 Your brand kit now says how much each part binds, so a product team keeps its own way of working. After you update, run
