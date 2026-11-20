@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-20, 0.15.1, the touched test files only (the owner's call), commit ca15d31 | passed |
+| [Release run](#release-run) | 2026-11-20, 0.15.2, the touched test files only (the owner's call), commit 511565d | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -435,7 +435,13 @@ It passes when the Mac's pytest reports no failure and no skip at all (no NOT VE
 both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
 with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
 
-**Last run:** 2026-11-20, brand-creator 0.15.1, on a Mac (macOS 27.3), on the release commit's tree (commit ca15d31; only this
+**Last run:** 2026-11-20, brand-creator 0.15.2, on a Mac (macOS 27.3), on the release commit's tree (commit 511565d; only this
+record differs): as for 0.15.1, by the owner's decision only the test files the release touches ran: `tests/test_emit_apple.py`,
+`tests/test_icon_ground.py`, `tests/test_emit_platforms.py`, `tests/test_static.py`, `tests/test_skills.py` and
+`tests/test_evals.py`, 342 passed and nothing skipped, in 3 minutes. The change is `emit apple`'s cards alone (macOS only);
+the rendered store frame and DMG background were looked at (the drawn wordmark, square corners with every radius token 0).
+
+The 0.15.1 run: 2026-11-20, brand-creator 0.15.1, on a Mac (macOS 27.3), on the release commit's tree (commit ca15d31; only this
 record differs): by the owner's decision ("this is a small fix") only the test files the release touches ran, not the full
 suite on macOS and Linux: `tests/test_emit_apple.py`, `tests/test_icon_ground.py`, `tests/test_emit_platforms.py`,
 `tests/test_static.py`, `tests/test_skills.py` and `tests/test_evals.py`, 339 passed and nothing skipped, in 4 minutes.
