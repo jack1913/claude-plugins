@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-20, 0.14.1, run 44732405569 on GitHub, commit ed02cc5 | passed on its second attempt |
+| [Release run](#release-run) | 2026-11-20, 0.15.0, on a Mac and in Docker, commit 0975abc | passed (the Mac run on its second attempt) |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -435,7 +435,19 @@ It passes when the Mac's pytest reports no failure and no skip at all (no NOT VE
 both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
 with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
 
-**Last run:** 2026-11-20, brand-creator 0.14.1, on GitHub: run 44732405569 of `brand-creator-release.yml` on commit
+**Last run:** 2026-11-20, brand-creator 0.15.0, on a Mac (macOS 27.3) and in the Linux Docker image, on the release
+commit's tree (commit 0975abc; only this record differs). The Mac: pytest 3574 passed and nothing skipped, node 249 pass
+and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`; 36 minutes. Docker: `LINUX RUN OK`
+for pytest (3523 passed, 51 expected skips) and node (249 pass), then `LINUX RUN OK` for the smoke; 25 minutes.
+
+Two attempts came before it. On commit 5eff9b1 the Linux pytest failed `test_skills.py::test_the_phase_map_points_at_the_website_steps`:
+the new `family-parent` value took the top of the orchestrator's SKILL.md to 19982 characters, over its 19850 budget;
+0975abc shortens the line. The first Mac run of 0975abc, side by side with the Docker run, failed three tests on their
+timeouts only (`test_print.py::test_social_posts_are_byte_stable_on_a_second_run`, `test_adoption_wiring.py::test_a_rendered_page_adds_its_wiring_and_a_server_that_is_gone_is_not_verified`
+and `test_finish_chain.py::test_the_standard_chain_runs_profiles_print_posts_book_and_press_kit_in_order_through_to_check`,
+pytest taking 28 minutes); alone on the idle machine the three passed in 17, 8 and 535 seconds, and the Mac run above ran alone.
+
+The 0.14.1 run: 2026-11-20, brand-creator 0.14.1, on GitHub: run 44732405569 of `brand-creator-release.yml` on commit
 ed02cc5 (the release commit 47ade40 and one change to a test). It passed on its second attempt. The four `macos` jobs
 (`macos-26` on Apple silicon, Xcode 26.6): pytest 3561 passed and nothing skipped (1357, 833 and 1371 in the three
 shares), node 249 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`. The two `linux`
