@@ -86,7 +86,7 @@ project; a band drawing that is not written as a plain path; a scaffold with a p
 (no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
 differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the kit's install.py
 moves it to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
-differ (the repository changed or added them: its own, kept on update), the owner files to update (unchanged in the repository since the last copy, by the `owned` record of its kit.json), a second
+differ (the repository changed or added them: its own, kept on update), the rules its golden-rules.md sorts differently from the brand (each line of kit.json `sort` that has another weight there, or is gone: named, never copied over; --json: `sort_differ`), the owner files to update (unchanged in the repository since the last copy, by the `owned` record of its kit.json), a second
 skill for the same brand in the repository's .claude/skills/ (a warning), and the copy list: the generated files to copy, then the owner files the repository lacks (all of the owner's files, those she
 added too), then the owner files to update, kit.json last, as paths relative to the kit folder. The comparison is scripts/adaptlib/kitcopy.py, which the kit carries as install.py. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
 Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
@@ -474,7 +474,7 @@ def build(project: Path, a) -> int:
     version = kitlib.next_version(prev, edition, csha)
     files = kitlib.with_version(generated, version)
     src = kitlib.sources(project)
-    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages, masters)
+    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages, masters, sort=kitlib.sort_plan(project, owner))
     if a.plan or not a.yes:
         print(f"would write {len(files)} generated files into {kd_rel}/ (version {version})")
         for rel in sorted(files):

@@ -21,5 +21,6 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0013](ADR-0013-old-rounds-leave-through-cleanup.md) | Old rounds leave through `brand-creator cleanup`: whole committed folders, after a recorded yes tied to the exact plan | accepted |
 | [ADR-0014](ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md) | The kit installs itself (`install.py`) and updates owner files a repository never changed | accepted |
 | [ADR-0015](ADR-0015-the-kit-states-three-weights.md) | The kit states three weights (fixed, default, example): the steps stay as the brand's practice, and three things are never made up | accepted |
+| [ADR-0016](ADR-0016-the-kit-records-the-sort-of-its-rules.md) | The kit records the brand's sort of its rules, and `kit status` names what a repository sorts differently | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).

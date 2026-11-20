@@ -82,3 +82,9 @@ the text alone, which keeps the problem.
   reads as behind until it is updated.
 - Left for later records: a check that the heading and the tag agree, rule ids for claims and token colours, the web and
   social files in the kit, rules and their weights as structured data, and a check that ships inside the kit.
+
+## Update 2026-11-20
+
+[ADR-0016](ADR-0016-the-kit-records-the-sort-of-its-rules.md) answers the consequence that a rule can change weight unseen
+in a product repository: the build records the sort in `kit.json`, and `kit status` and the kit's `install.py` name each
+line a repository sorts differently. The file is still the repository's and is kept on update.

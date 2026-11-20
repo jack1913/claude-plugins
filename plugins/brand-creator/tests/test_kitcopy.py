@@ -354,3 +354,112 @@ def test_the_brand_is_a_whole_word_in_any_spelling_also_in_a_description_over_se
     skill(short / "notes", "ace-notes", "Notes.")                                                         # a whole word of the name is
     skill(short / "body", "body", "Writes copy for Ace.")
     assert kitcopy.other_brand_skills(short, "ace-brand", "Ace") == ["body", "notes"]
+
+
+# ---------------------------------------------------------------- the sort of the rules is recorded, and a repository's own sort is named (ADR-0016)
+
+RULES = """# Acme golden rules
+
+What every piece keeps.
+
+- A rule above every heading [rule: contrast]
+
+## Fixed
+
+- The logo is never redrawn [rule: logo-files]
+1. Text is never set   in the accent [rule: accent-fill]
+
+## Defaults
+
+*   Cards have a 12 px radius [rule: site:card-radius]
+
+### A note under Defaults
+
+2) Headlines are sentence case [rule: headline-case]
+
+## Examples
+
+- The pricing page [example]
+
+## Anything else
+
+- A rule nobody sorted [rule: wordmark]
+- A choice of a reference page [rule: site:hero]
+- One case [example]
+- A line with no tag
+- A rule shown by a case [rule: wordmark-size] [example]
+
+```
+- inside a code fence [rule: fenced]
+```
+- - -
+Not a list line [rule: prose]
+"""
+SORT = {"fixed": ["A rule above every heading [rule: contrast]", "The logo is never redrawn [rule: logo-files]", "Text is never set in the accent [rule: accent-fill]",
+                  "A rule nobody sorted [rule: wordmark]", "A line with no tag", "A rule shown by a case [rule: wordmark-size] [example]"],
+        "default": ["Cards have a 12 px radius [rule: site:card-radius]", "Headlines are sentence case [rule: headline-case]", "A choice of a reference page [rule: site:hero]"],
+        "example": ["The pricing page [example]", "One case [example]"]}
+
+
+def test_sort_of_gives_every_rule_line_its_weight():
+    """ADR-0015, worked out by hand: the heading a line stands under is its weight (`## Fixed`, `## Defaults`, `## Examples`; a deeper heading changes nothing); under any other
+    heading, or none, the tag decides: a rule of the brand is fixed, a choice of a reference page (`site:`) a default, `[example]` an example, and a line nobody sorted is fixed.
+    The lines are the bullets and numbered lines outside code fences, without their marker and with single spaces."""
+    assert kitcopy.sort_of(RULES) == SORT
+    assert kitcopy.sort_of("") == {"fixed": [], "default": [], "example": []}
+    assert kitcopy.sort_of("## fixed  \n- a [example]\n## DEFAULTS\n- b [rule: x]\n# Another title\n- c [example]\n") == {"fixed": ["a [example]"], "default": ["b [rule: x]"], "example": ["c [example]"]}
+
+
+def sorted_kit(tmp_path, sort=SORT):
+    """A kit whose golden-rules.md is RULES, with the sort its build recorded, and a repository's byte-for-byte copy of it."""
+    kit = tmp_path / "acme-brand"
+    make_fake_kit(kit, GEN, {"golden-rules.md": RULES.encode()}, sort=sort)
+    return kit, installed(tmp_path, kit)
+
+
+def test_a_copy_with_the_brands_own_sort_differs_in_no_rule(tmp_path):
+    kit, repo = sorted_kit(tmp_path)
+    res = kitcopy.compare(kit, repo)
+    assert res["state"] == kitcopy.CURRENT and res["sort_differ"] == [] and res["owner_differ"] == []
+
+
+def test_a_rule_the_repository_moved_or_took_out_is_named_with_both_weights(tmp_path):
+    """The repository edits its golden-rules.md: one fixed rule goes under Defaults, one is deleted, one is reworded, one example goes under Fixed, and a line of its own is added.
+    The file is the repository's to keep (ADR-0014) and the copy is still current, but every line of the brand's sort that has another weight there, or is no longer there, is named,
+    in the order of the brand's sort. A line the repository added is its own and is not named."""
+    kit, repo = sorted_kit(tmp_path)
+    text = RULES.replace("1. Text is never set   in the accent [rule: accent-fill]\n", "")
+    text = text.replace("## Defaults\n", "## Defaults\n\n- Text is never set in the accent [rule: accent-fill]\n- Our own rule [rule: site:own]\n")
+    text = text.replace("- The logo is never redrawn [rule: logo-files]\n", "")
+    text = text.replace("- A rule nobody sorted [rule: wordmark]", "- A rule somebody reworded [rule: wordmark]")
+    text = text.replace("- The pricing page [example]\n", "").replace("## Fixed\n", "## Fixed\n\n- The pricing page [example]\n")
+    (repo / "golden-rules.md").write_text(text, encoding="utf-8")
+    res = kitcopy.compare(kit, repo)
+    assert res["sort_differ"] == [("The logo is never redrawn [rule: logo-files]", "fixed", None),
+                                  ("Text is never set in the accent [rule: accent-fill]", "fixed", "default"),
+                                  ("A rule nobody sorted [rule: wordmark]", "fixed", None),
+                                  ("The pricing page [example]", "example", "fixed")]
+    assert res["state"] == kitcopy.CURRENT and res["owner_differ"] == [("golden-rules.md", kitcopy.WHY_BYTES)] and "golden-rules.md" not in res["copy"]
+
+
+def test_no_rule_is_named_where_there_is_nothing_to_compare(tmp_path):
+    """A kit.json from before the key records no sort; a repository that deleted its golden-rules.md, or has none yet, has no sort to read: the file is reported as it always was."""
+    kit, repo = sorted_kit(tmp_path, sort=None)
+    (repo / "golden-rules.md").write_text(RULES.replace("## Fixed", "## Defaults"), encoding="utf-8")
+    assert kitcopy.compare(kit, repo)["sort_differ"] == []
+    shutil.rmtree(tmp_path / "repo")
+    shutil.rmtree(kit)
+    kit, repo = sorted_kit(tmp_path)
+    (repo / "golden-rules.md").unlink()
+    res = kitcopy.compare(kit, repo)
+    assert res["sort_differ"] == [] and res["owner_differ"] == [("golden-rules.md", kitcopy.WHY_MISSING)]
+    assert kitcopy.compare(kit, tmp_path / "fresh" / ".claude" / "skills" / "acme-brand")["sort_differ"] == []
+
+
+def test_the_sort_key_of_kit_json_is_optional_and_checked_when_there(tmp_path):
+    kit, _ = sorted_kit(tmp_path)
+    doc = json.loads((kit / "kit.json").read_text(encoding="utf-8"))
+    assert kitcopy.problems(doc) == [] and kitcopy.problems({k: v for k, v in doc.items() if k != "sort"}) == []
+    why = "sort: must be an object of fixed, default and example, each a list of lines"
+    for bad in ([], "fixed", {"fixed": [], "default": []}, {**SORT, "practice": []}, {**SORT, "fixed": "a line"}, {**SORT, "example": [1]}):
+        assert kitcopy.problems({**doc, "sort": bad}) == [why], bad

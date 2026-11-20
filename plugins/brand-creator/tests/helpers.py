@@ -590,9 +590,10 @@ def symlink_or_skip(link: Path, target: Path) -> None:
 FAKE_OWNED = ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md")   # the five scaffolded owner files (kitcopy.OWNED_FILES, written out)
 
 
-def make_fake_kit(folder: Path, generated: dict[str, bytes], owner: dict[str, bytes], version: str = "1.1") -> None:
+def make_fake_kit(folder: Path, generated: dict[str, bytes], owner: dict[str, bytes], version: str = "1.1", sort: dict | None = None) -> None:
     """A kit folder with no brand project behind it: the files of `generated` and `owner`, the five scaffolded owner files (b"<name>" when `owner` does not hold them),
-    and a kit.json that kitcopy.problems accepts, hashing every generated file and every owner file. For the copy judge only; it has no SKILL.md unless `generated` holds one."""
+    and a kit.json that kitcopy.problems accepts, hashing every generated file and every owner file; `sort` is written as its `sort` key when given (a kit from before the key has none).
+    For the copy judge only; it has no SKILL.md unless `generated` holds one."""
     import hashlib
     owner = {**{rel: rel.encode() for rel in FAKE_OWNED}, **owner}
     for rel, data in {**generated, **owner}.items():
@@ -604,4 +605,6 @@ def make_fake_kit(folder: Path, generated: dict[str, bytes], owner: dict[str, by
            "generated": {rel: sha(data) for rel, data in sorted(generated.items())}, "owned": {rel: sha(data) for rel, data in sorted(owner.items())},
            "fonts": {"copied": [], "not_copied": []},
            "sources": {k: None for k in ("state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages")}, "reference_pages": []}
+    if sort is not None:
+        doc["sort"] = sort
     (folder / "kit.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")

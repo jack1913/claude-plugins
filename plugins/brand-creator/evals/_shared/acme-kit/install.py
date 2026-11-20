@@ -49,6 +49,7 @@ INSTALL_PY = "install.py"                                   # this module, as th
 ROOT_FILES = (SKILL_FILE, KIT_FILE, RULES_JSON, FACTS_JSON, BRAND_MD, CHECKLIST_MD, INSTALL_PY)  # the generated files that sit at the top of the kit folder, outside the generated folders
 OWNED_FILES = ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md")   # the five owner files the build scaffolds once from templates/kit/ (kit.json `owned` always lists them); any other file of the owner's travels too
 TOP_KEYS = ("schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages")
+OPTIONAL_TOP_KEYS = ("sort",)                                # written by every build since the key came; a kit.json from before has none, and is read as it is
 SOURCE_KEYS = ("state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages")
 OPTIONAL_SOURCE_KEYS = ("masters", "platform")              # present only when the project has files under assets/masters/ (masters) or emitted web, social or profile files (platform), so that a kit.json without them is the bytes it always was
 ALL_SOURCE_KEYS = SOURCE_KEYS + OPTIONAL_SOURCE_KEYS
@@ -76,11 +77,94 @@ def is_sha(value) -> bool:
     return isinstance(value, str) and bool(_SHA.fullmatch(value))
 
 
+# ---------------------------------------------------------------- the lines of the owner's files, and the sort of the rules (ADR-0015, ADR-0016)
+# The plugin's `kit check` reads the owner's files by these too (scripts/adaptlib/kitlib.py imports them).
+
+_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+TAG_EXAMPLE = "[example]"                                    # the tag that says a line shows one case and is no rule
+_RULE_TAG = re.compile(r"\[rule:([^\]\n]*)\]")
+_PLACEHOLDER_ID = re.compile(r"(?:(?:page|site):)?<[^<>]*>")   # `<id>`, `<rule id>`, `page:<id>`: the syntax of a tag, written as an example; no id of D12 holds an angle bracket
+_BULLET = re.compile(r"^\s*[-*]\s")
+_NUMBERED = re.compile(r"^\s*\d+[.)]\s")
+_THEMATIC_BREAK = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")   # `* * *` and `- - -` start with a bullet marker and are no bullet
+SORT_FILE = "golden-rules.md"                                # the owner file that sorts the brand's rules by weight
+WEIGHTS = ("fixed", "default", "example")                    # the three weights, and the keys of kit.json `sort`
+_SORT_HEADING = re.compile(r"^ {0,3}(#{1,2})\s+(.*?)\s*$")    # a heading of level 1 or 2: `## Fixed` starts a weight, any other ends it; a deeper heading changes nothing
+_HEADING_WEIGHT = {"fixed": "fixed", "defaults": "default", "examples": "example"}
+_LIST_MARKER = re.compile(r"^\s*(?:[-*]|\d+[.)])\s+")
+
+
+def outside_fences(text: str):
+    """The lines of a Markdown text that are not inside a fenced code block, as (line number from 1, line): the fence lines themselves are left out. A fence opens with three backticks
+    or tildes (up to three spaces in), and closes with the same character, at least as many, and nothing after."""
+    fence = None
+    for n, raw in enumerate(text.split("\n"), 1):
+        line = raw.rstrip("\r")
+        m = _FENCE.match(line)
+        if fence is None:
+            if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):   # a backtick fence's info string holds no backtick
+                fence = m.group(1)
+                continue
+            yield n, line
+        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
+            fence = None
+
+
+def rule_tags(line: str) -> list[str]:
+    """The ids named by the `[rule: <id>]` tags of a line, each trimmed, in order (an empty tag gives an empty id). A tag whose id is a placeholder in angle brackets (`[rule: <id>]`,
+    `[rule: <rule id>]`, `[rule: page:<id>]`, `[rule: site:<id>]`: a whole `<...>`, after `page:` or `site:` or not) names no id and is no citation: it shows the syntax, and a real id never holds an angle
+    bracket (D12). It is left out here, so `kit:tags` and `kit:numbers` read it as the plain text it is."""
+    ids = (m.group(1).strip() for m in _RULE_TAG.finditer(line))
+    return [i for i in ids if not _PLACEHOLDER_ID.fullmatch(i)]
+
+
+def needs_tag(line: str, kind: str) -> bool:
+    """Whether a line outside a code fence must carry a tag: a bullet (`- ` or `* `, indented or not, a thematic break such as `* * *` is none) in any judged file, and a numbered line (`1. ` or `1) `) in an `items` file."""
+    if _THEMATIC_BREAK.match(line):
+        return False
+    return bool(_BULLET.match(line) or (kind == "items" and _NUMBERED.match(line)))
+
+
+def sort_of(text: str) -> dict[str, list[str]]:
+    """The sort of the rules in a golden-rules.md: {"fixed": [line], "default": [line], "example": [line]}, each line a bullet or a numbered line outside the code fences, without its
+    marker and with single spaces, in the order of the file. The heading a line stands under is its weight (`## Fixed`, `## Defaults`, `## Examples`, in any case; a deeper heading
+    changes nothing). Under any other heading of level 1 or 2, or none, the tag decides: a line that cites a rule of the brand is fixed, one that cites only choices of a reference
+    page (`[rule: site:<id>]`) is a default, one tagged `[example]` alone is an example, and a line with no tag is fixed, as a rule nobody sorted is."""
+    out: dict[str, list[str]] = {w: [] for w in WEIGHTS}
+    weight = None
+    for _, line in outside_fences(text):
+        if m := _SORT_HEADING.match(line):
+            weight = _HEADING_WEIGHT.get(m.group(2).casefold()) if len(m.group(1)) == 2 else None
+            continue
+        if not needs_tag(line, "items"):
+            continue
+        ids = rule_tags(line)
+        by_tag = "default" if ids and all(i.startswith("site:") for i in ids) else "example" if not ids and TAG_EXAMPLE in line else "fixed"
+        out[weight or by_tag].append(" ".join(_LIST_MARKER.sub("", line, count=1).split()))
+    return out
+
+
+def sort_problems(sort) -> list[str]:
+    """What is wrong with the `sort` key of a kit.json: an object of the three weights, each a list of lines."""
+    ok = isinstance(sort, dict) and set(sort) == set(WEIGHTS) and all(isinstance(v, list) and all(isinstance(line, str) for line in v) for v in sort.values())
+    return [] if ok else ["sort: must be an object of fixed, default and example, each a list of lines"]
+
+
+def sort_differ(sort, repo: bytes | None) -> list[tuple[str, str, str | None]]:
+    """The lines of the brand's sort (`sort`, kit.json `sort` of the project's kit) that a repository's golden-rules.md (`repo`, its bytes) gives another weight or no longer holds:
+    [(line, its weight in the kit, its weight in the repository or None)], in the order of the brand's sort. A line the repository added is its own and is not listed. [] when the
+    kit.json records no sort (a kit built before the key) or the repository has no such file to read: a file that is gone is reported as an owner file is."""
+    if not isinstance(sort, dict) or repo is None:
+        return []
+    theirs = {line: w for w, lines in sort_of(repo.decode("utf-8", "replace")).items() for line in lines}
+    return [(line, w, theirs.get(line)) for w in WEIGHTS for line in sort.get(w, []) if theirs.get(line) != w]
+
+
 def problems(doc) -> list[str]:
     """What is wrong with a kit.json document, each as a sentence that names the key; [] when it is a kit.json this version reads."""
     if not isinstance(doc, dict):
         return ["the document must be a JSON object"]
-    bad = [f"{k}: unknown key (allowed: {', '.join(TOP_KEYS)})" for k in doc if k not in TOP_KEYS]
+    bad = [f"{k}: unknown key (allowed: {', '.join(TOP_KEYS + OPTIONAL_TOP_KEYS)})" for k in doc if k not in TOP_KEYS + OPTIONAL_TOP_KEYS]
     bad += [f"{k}: missing" for k in TOP_KEYS if k not in doc]
     if "schema" in doc and (type(doc["schema"]) is not int or doc["schema"] != SCHEMA):
         bad.append(f"schema: unknown schema {json.dumps(doc['schema'])} (this version reads {SCHEMA})")
@@ -99,6 +183,8 @@ def problems(doc) -> list[str]:
         bad += font_problems(doc["fonts"])
     if "reference_pages" in doc:
         bad += reference_page_problems(doc["reference_pages"])
+    if "sort" in doc:
+        bad += sort_problems(doc["sort"])
     src = doc.get("sources")
     if "sources" in doc:
         if not isinstance(src, dict):
@@ -287,7 +373,7 @@ def compare(kit: Path, installed: Path) -> dict:
     """The kit folder of the project (`kit`) against the folder a product repository holds (`installed`). Reads both, writes nothing, follows no link.
 
     Returns {"state": NOT_INSTALLED | CURRENT | NOT_CURRENT, "installed_version", "project_version", "differ": [(path, why)], "missing": [path], "left_over": [path],
-    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "brand": the name `brand_name` reads or None, "other_skills": [folder] (`other_brand_skills`), "global_skills": [folder] (`global_brand_skills`)}. The copy list `copy` is the
+    "owner_differ": [(path, why)], "sort_differ": [(line, weight in the kit, weight in the repository or None)] (`sort_differ`), "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "brand": the name `brand_name` reads or None, "other_skills": [folder] (`other_brand_skills`), "global_skills": [folder] (`global_brand_skills`)}. The copy list `copy` is the
     generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing), then the owner files the repository lacks (`copy_owner`: every
     owner file of the project, `owner_paths`, the five scaffolded ones first, then the others sorted), then the owner files to update (`update_owner`), and kit.json last of all.
     An owner file is judged by `owner_state` against the `owned` record of the repository's own kit.json (`installed_owned`): one the repository never changed since it was
@@ -326,7 +412,7 @@ def compare(kit: Path, installed: Path) -> dict:
         shown = ", ".join(unbuilt[:STATUS_SHOWN]) + (f", and {len(unbuilt) - STATUS_SHOWN} more" if len(unbuilt) > STATUS_SHOWN else "")
         raise KitError(EXIT_CANNOT, f"the owner's files in the project are not what kit.json records ({shown}), so a copy would not record them: run `brand-creator kit build --yes` first")
     out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
-           "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "brand": None, "other_skills": [], "global_skills": []}
+           "sort_differ": [], "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "brand": None, "other_skills": [], "global_skills": []}
     recorded = installed_owned(installed)
     if not os.path.lexists(installed / KIT_FILE):
         out["copy"] = list(wanted)
@@ -359,6 +445,7 @@ def compare(kit: Path, installed: Path) -> dict:
             out["owner_left_over"].append(rel)
     if out["update_owner"] or out["owner_left_over"]:
         out["state"] = NOT_CURRENT
+    out["sort_differ"] = sort_differ(doc.get("sort"), read_plain(installed, SORT_FILE)[0])   # the repository keeps its file (ADR-0014); what it changed of the brand's sort is named
     brand = out["brand"] = brand_name(kit)
     out["other_skills"] = other_brand_skills(installed.parent, installed.name, brand) if brand else []
     out["global_skills"] = global_brand_skills(brand) if brand else []
@@ -558,6 +645,8 @@ def status_lines(res: dict, kd_rel: str) -> list[str]:
                           res["left_over"]),
                          (f"owner files left over from an older kit, unchanged in the repository (move each to {left_over_to(kd_rel)} too)", res["owner_left_over"]),
                          ("owner files that differ (kept on update)", [f"{rel} (deleted in the repository)" if why == WHY_MISSING else rel for rel, why in res["owner_differ"]]),
+                         ("rules the repository's golden-rules.md sorts differently (the brand's sort is kit.json `sort`; the file is the repository's and is kept on update)",
+                          [f"{line} ({was} in the kit, {f'{now} in the repository' if now else 'not in the repository\'s file'})" for line, was, now in res["sort_differ"]]),
                          ("owner files to update (unchanged in the repository since the last copy)", res["update_owner"])):
         if items:
             L += [f"  {title}:", *(f"    {i}" for i in items)]
@@ -573,12 +662,13 @@ def status_lines(res: dict, kd_rel: str) -> list[str]:
 
 
 def result_json(res: dict, kd_rel: str) -> dict:
-    """One repository's entry of `kit status --json`: the keys in their order, `differ` and `owner_differ` as [{"file", "why"}], and `left_over_to` (where the files left over go,
+    """One repository's entry of `kit status --json`: the keys in their order, `differ` and `owner_differ` as [{"file", "why"}], `sort_differ` as [{"line", "kit", "repository"}], and `left_over_to` (where the files left over go,
     in the repository) only when there are some. `kd_rel` is the kit folder's path in a repository (`.claude/skills/<name>`)."""
-    keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "update_owner", "owner_left_over",
+    keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "sort_differ", "update_owner", "owner_left_over",
             "other_skills", "global_skills", "copy", "copy_owner", "read_only")
     res = {**res, "left_over_to": left_over_to(kd_rel) if res["left_over"] or res["owner_left_over"] else None}
-    return {k: ([{"file": rel, "why": why} for rel, why in res[k]] if k in ("differ", "owner_differ") else res[k]) for k in keys}
+    return {k: ([{"file": rel, "why": why} for rel, why in res[k]] if k in ("differ", "owner_differ") else
+                [{"line": line, "kit": was, "repository": now} for line, was, now in res[k]] if k == "sort_differ" else res[k]) for k in keys}
 
 
 # ---------------------------------------------------------------- install.py: copy the kit into a product repository

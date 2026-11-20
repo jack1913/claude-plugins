@@ -6,6 +6,18 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- Your kit records how you sorted your rules (fixed, default or example), and `kit status` names each rule that a
+  product's copy of `golden-rules.md` sorts differently or no longer holds. Before, a product could move a fixed rule to
+  the defaults and its copy still read as current, with nothing said. The product keeps its file; what follows is yours
+  to decide. The kit's installer says the same when it runs.
+
+### Changed
+
+- After this update, the next build changes `install.py` of every kit, so its version goes up by one and a product's copy
+  is behind until you update it.
+
 ## [0.14.0] - 2026-11-20
 
 A variable font that slants keeps its own italics in your kit, and your brand book embeds a variable font with its whole

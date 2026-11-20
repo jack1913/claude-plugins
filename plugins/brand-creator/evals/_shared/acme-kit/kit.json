@@ -4,7 +4,7 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.14.0",
-  "content_sha": "2fc94b6784c660030a477048092a66d834682e1fed3f35e78876c6b39036dd73",
+  "content_sha": "8f0a396782a5532fd74e41e5fe233cefde164e4fc286b10cbea3df5af360d473",
   "generated": {
     "SKILL.md": "c39b2a35dbebd7078f801e20302980b98eb66cc4d33616822f6b13fb2dd54f32",
     "brand.md": "eb89deb3f0905235c00d6a5784a6e993e9eec12c2fd31a729db8bc835e5ab8ae",
@@ -20,7 +20,7 @@
     "brand/assets/tokens/tokens.json": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
     "checklist.md": "85df971de7fcba2416e80a942576869685e3438dc4e533ddf0d5994cee402879",
     "facts.json": "15ab8ad3e2caa901c0b2bd94e9106fcbe2caa4f1097ada18ce35f1294b8ae924",
-    "install.py": "e6887f5a073f1addc3651cf9a44ba3424b69ed3fe546b3912199f2e1497f68b2",
+    "install.py": "14add4a801dd049e35354c9f9e67a9da65df912053f77d744f4392b20d1aa812",
     "rules.json": "8d05bfc7947b843ace2544184d8864a77f65744fb054837ee7b5bd8e6537678a",
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
@@ -46,5 +46,10 @@
     "fonts": null,
     "pages": null
   },
-  "reference_pages": []
+  "reference_pages": [],
+  "sort": {
+    "fixed": [],
+    "default": [],
+    "example": []
+  }
 }

@@ -2612,6 +2612,38 @@ def listed(out: str, title: str) -> list[str]:
     return items
 
 
+SORTED_RULES = ("# Acme golden rules\n\nWhat every piece keeps.\n\n## Fixed\n\n- The mark is never redrawn [rule: mark]\n- Text is never set in the accent [rule: accent]\n\n"
+                "## Defaults\n\n- Cards are square [example]\n")
+
+
+def test_the_build_records_the_sort_of_the_rules_and_status_names_what_a_repository_sorts_differently(pack, tmp_path):
+    """ADR-0016. The sort of golden-rules.md says what binds every product, and the file is an owner file: a repository that edits its copy keeps it, and the copy still reads as
+    current. So the build writes the sort into kit.json (`sort`, its last key), and `kit status` names every line of it that the repository's file gives another weight or no
+    longer holds, in text and with --json. The copy stays current and the file stays the repository's."""
+    assert build(pack).returncode == 0
+    fill_owned(kit_of(pack))
+    (kit_of(pack) / "golden-rules.md").write_text(SORTED_RULES, encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["sort"] == {"fixed": ["The mark is never redrawn [rule: mark]", "Text is never set in the accent [rule: accent]"], "default": ["Cards are square [example]"], "example": []}
+    assert list(kit_json(pack))[-1] == "sort"
+    repo = install(pack, tmp_path)
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and "golden-rules.md sorts differently" not in r.stdout, r.stdout + r.stderr
+    assert json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]["sort_differ"] == []
+    moved = SORTED_RULES.replace("- The mark is never redrawn [rule: mark]\n", "").replace("- Text is never set in the accent [rule: accent]\n", "")
+    moved = moved.replace("## Defaults\n\n", "## Defaults\n\n- Text is never set in the accent [rule: accent]\n- A rule of our own [example]\n")
+    (installed_of(repo) / "golden-rules.md").write_text(moved, encoding="utf-8")
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and f"site: current (version {kit_json(pack)['version']})" in r.stdout.splitlines(), r.stdout + r.stderr
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["golden-rules.md"]
+    assert listed(r.stdout, "rules the repository's golden-rules.md sorts differently") == [
+        "The mark is never redrawn [rule: mark] (fixed in the kit, not in the repository's file)",
+        "Text is never set in the accent [rule: accent] (fixed in the kit, default in the repository)"]
+    assert json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]["sort_differ"] == [
+        {"line": "The mark is never redrawn [rule: mark]", "kit": "fixed", "repository": None},
+        {"line": "Text is never set in the accent [rule: accent]", "kit": "fixed", "repository": "default"}]
+
+
 def paths_of(items: list[str]) -> list[str]:
     return [i.split(" (")[0] for i in items]
 
@@ -4899,7 +4931,7 @@ def test_a_project_without_the_masters_folder_builds_the_same_bytes_as_before(pa
     plain = (kit_of(pack) / "kit.json").read_bytes()
     snapshot = json.loads((EVAL_KIT / "kit.json").read_text(encoding="utf-8"))
     got = kit_json(pack)
-    assert list(got) == ["schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages"]
+    assert list(got) == ["schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages", "sort"]
     assert list(got["sources"]) == ["state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages"]
     assert got["generated"] == snapshot["generated"] and got["sources"] == snapshot["sources"] and got["fonts"] == snapshot["fonts"] and got["version"] == snapshot["version"] == "1.2"
     assert not any(r["id"] == "kit:masters" for r in report(pack, "kit")["results"])

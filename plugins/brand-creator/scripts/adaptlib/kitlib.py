@@ -37,7 +37,8 @@ from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CHECKLIST_MD, CURRENT, INSTALL_P
                      NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_ADDED, OWNED_CHANGED, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
                      STATUS_SHOWN, TOP_KEYS, WHY_BYTES, WHY_LINK, WHY_MISSING, _EDITION, _SHA, _VERSION, KitError, folder_state, font_problems,
                      generated_files_in, installed_version, is_owner_path, is_sha, json_object, not_current_text, owned_problems, owner_paths, owner_sorted,
-                     paths_in, plain_file, problems, read_plain, recorded_path, reference_page_problems)
+                     paths_in, plain_file, problems, read_plain, recorded_path, reference_page_problems,
+                     SORT_FILE, TAG_EXAMPLE, WEIGHTS, _BULLET, _NUMBERED, _PLACEHOLDER_ID, _RULE_TAG, _THEMATIC_BREAK, needs_tag, outside_fences, rule_tags, sort_of)
 from kitcopy import compare as _compare  # noqa: E402
 
 _json_object, _plain_file, _read_plain, _generated_files_in = json_object, plain_file, read_plain, generated_files_in   # the names these had before kitcopy
@@ -1597,13 +1598,22 @@ def next_version(prev: dict | None, edition: str, csha: str) -> str:
     return str(prev["version"]) if prev.get("content_sha") == csha else f"{edition}.{int(build) + 1}"
 
 
+def sort_plan(project: Path, owner: dict) -> dict:
+    """kit.json's `sort`: the sort of the rules (`kitcopy.sort_of`) in the golden-rules.md this build records in `owned`, which is the scaffold where the file is absent (`owner` is
+    the `owner_plan`) and the file of the kit folder otherwise."""
+    data = owner["files"][SORT_FILE] if SORT_FILE in owner["write"] else kit_bytes(project, SORT_FILE)
+    return sort_of(data.decode("utf-8", errors="replace") if data is not None else "")
+
+
 def kit_json_bytes(project: Path, files: dict[str, bytes], version: str, edition: str, csha: str, src: dict, fonts: dict, owned: dict[str, str],
-                   pages: dict | None = None, masters: dict | None = None) -> bytes:
+                   pages: dict | None = None, masters: dict | None = None, *, sort: dict) -> bytes:
     """kit.json for the generated files `files` (SKILL.md with the version in it); `fonts` is the `font_plan`, `owned` the owner's files with their sha256 (`owner_plan`), `pages` the
-    `reference_plan` (none: the project has no approved reference page), `masters` the `masters_plan`; the fonts they bring are in kit.json `fonts` too (`fonts_record`)."""
+    `reference_plan` (none: the project has no approved reference page), `masters` the `masters_plan`; the fonts they bring are in kit.json `fonts` too (`fonts_record`). `sort` is the
+    `sort_plan`."""
     doc = {"schema": SCHEMA, "kit": adapt.skill_name(project), "version": version, "edition": edition, "plugin_version": plugin_version(), "content_sha": csha,
            "generated": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "owned": dict(sorted(owned.items())), "fonts": fonts_record(fonts, pages, masters), "sources": src,
-           "reference_pages": pages["records"] if pages is not None else []}
+           "reference_pages": pages["records"] if pages is not None else [],
+           "sort": sort}                                          # the brand's sort of its rules, as golden-rules.md holds it at this build (ADR-0016)
     return (json.dumps(doc, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
 
 
@@ -1656,7 +1666,6 @@ OWNED_MISSING = "is missing"                                # a scaffolded file 
 OWNED_REMOVED = "was removed since the last build"          # any other owner file the owner took away: the build forgets it
 OWNED_NOT_FILE = "is no file the kit can read (a folder, or a link)"
 _VERSION_LINE = re.compile(r"Kit version (\S+) \(kit\.json\)\.")
-_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
 _MD_LINK = re.compile(r"\]\(\s*(<[^>\n]*>|[^\s)]*)")
 _CSS_URL = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]*))\s*\)""", re.I)
@@ -1744,22 +1753,6 @@ def fill_markers(project: Path) -> list[str]:
         if text is not None:
             out += [f"{rel}:{n}" for n, line in enumerate(text.split("\n"), 1) if FILL_MARKER in line.lower()]
     return out
-
-
-def outside_fences(text: str):
-    """The lines of a Markdown text that are not inside a fenced code block, as (line number from 1, line): the fence lines themselves are left out. A fence opens with three backticks
-    or tildes (up to three spaces in), and closes with the same character, at least as many, and nothing after."""
-    fence = None
-    for n, raw in enumerate(text.split("\n"), 1):
-        line = raw.rstrip("\r")
-        m = _FENCE.match(line)
-        if fence is None:
-            if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):   # a backtick fence's info string holds no backtick
-                fence = m.group(1)
-                continue
-            yield n, line
-        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
-            fence = None
 
 
 def md_links(text: str) -> list[tuple[int, str]]:
@@ -2014,18 +2007,12 @@ def behind_files(project: Path, doc: dict) -> tuple[list[str], list[str]]:
 # A rule id is judged against `known_rule_ids` of the project, and only when a line names one: `known` is a function the caller gives, so a project that cites no rule needs no site record.
 # When `known` cannot read the ids (a CliError), the lines that name a rule are left unjudged and counted (`unjudged`, `unread`); every other line is judged as always.
 
-TAG_EXAMPLE = "[example]"                                    # the tag that says a line shows one case and is no rule
 KIT_TOKENS_CSS = PREFIX + TOKENS_CSS                         # the token files as the kit holds them: a token reference is judged against these copies
 KIT_TOKENS_JSON = PREFIX + TOKENS_JSON
 ITEM_FILES = ("golden-rules.md", "visual.md")                # every bullet and every numbered line of these carries a tag
 NO_TAG = "untagged"
 TAG_HINT = ("tag each with `[example]` or `[rule: <id>]`, an id of rules.json (a rule of the brand written bare, `page:<id>`, `site:<id>`)")
 VALUE_HINT = ("cite a token (`var(--name)` of tokens.css, `{dotted.path}` of tokens.json) or a known `[rule: <id>]`, or tag the line `[example]`")
-_RULE_TAG = re.compile(r"\[rule:([^\]\n]*)\]")
-_PLACEHOLDER_ID = re.compile(r"(?:(?:page|site):)?<[^<>]*>")   # `<id>`, `<rule id>`, `page:<id>`: the syntax of a tag, written as an example; no id of D12 holds an angle bracket
-_BULLET = re.compile(r"^\s*[-*]\s")
-_NUMBERED = re.compile(r"^\s*\d+[.)]\s")
-_THEMATIC_BREAK = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")   # `* * *` and `- - -` start with a bullet marker and are no bullet
 _NOTES = re.compile(r"^reference-pages/[^/]+/notes\.md$")
 _NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)"
 _AFTER_VALUE = r"(?:(?<=\d(?:px|em|ms|vh|vw|ch|fr|pt)-)|(?<=\d(?:rem|svh|dvh|deg)-)|(?<=\d[s%]-))"   # a dash that follows a value: `2em-3em`, `16px-24px` (the lookbehinds are of one width each)
@@ -2053,21 +2040,6 @@ def judged_files(project: Path) -> list[tuple[str, str]]:
         elif _NOTES.match(rel) or (is_owner_path(rel) and Path(rel).suffix.lower() == ".md" and rel not in UNJUDGED_OWNED):
             out.append((rel, "bullets"))
     return out
-
-
-def rule_tags(line: str) -> list[str]:
-    """The ids named by the `[rule: <id>]` tags of a line, each trimmed, in order (an empty tag gives an empty id). A tag whose id is a placeholder in angle brackets (`[rule: <id>]`,
-    `[rule: <rule id>]`, `[rule: page:<id>]`, `[rule: site:<id>]`: a whole `<...>`, after `page:` or `site:` or not) names no id and is no citation: it shows the syntax, and a real id never holds an angle
-    bracket (D12). It is left out here, so `kit:tags` and `kit:numbers` read it as the plain text it is."""
-    ids = (m.group(1).strip() for m in _RULE_TAG.finditer(line))
-    return [i for i in ids if not _PLACEHOLDER_ID.fullmatch(i)]
-
-
-def needs_tag(line: str, kind: str) -> bool:
-    """Whether a line outside a code fence must carry a tag: a bullet (`- ` or `* `, indented or not, a thematic break such as `* * *` is none) in any judged file, and a numbered line (`1. ` or `1) `) in an `items` file."""
-    if _THEMATIC_BREAK.match(line):
-        return False
-    return bool(_BULLET.match(line) or (kind == "items" and _NUMBERED.match(line)))
 
 
 def _unknown_ids(ids: list[str], known, state: dict) -> list[str] | None:
