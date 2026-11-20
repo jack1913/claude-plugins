@@ -104,7 +104,9 @@ test("capture --frames: a motion a script starts when the page loads (a CSS tran
   ENTER_STARTERS.forEach(([what, html, css, ms], i) => {
     const page = writeMoving(p, `rounds/r1/Enter${i}`, css, html);
     const dir = path.join(p, `rounds/r1/Enter${i}/shots`);
-    const r = bc(["capture", page, "--project", p, "--frames"]);
+    // --wait 600: the still is compared with the frame at 100 %, so it must be the page at rest. With the default pause of 300 ms, the page's 300 ms timer has to fire within about 10 ms of its time, or the
+    // still is taken while the heading is on its way (seen on a GitHub macOS runner, and here with a timer set 15 ms later). The key frames do not read --wait: they still find a motion that starts later.
+    const r = bc(["capture", page, "--project", p, "--frames", "--wait", "600"]);
     assert.equal(r.status, 0, what + r.stdout + r.stderr);
     assert.match(r.stdout, new RegExp(`key frames: 3 of the first screen \\(1440, light\\) at 0, 50, 100 % of ${ms} ms`), what);
     const [f0, f50, f100, rest] = ["frame-1440-0.png", "frame-1440-50.png", "frame-1440-100.png", "1440-light.png"].map((f) => fs.readFileSync(path.join(dir, f)));
