@@ -6,6 +6,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-20
+
 ### Added
 
 - Your kit records how you sorted your rules (fixed, default or example), and `kit status` names each rule that a
