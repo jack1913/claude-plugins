@@ -83,9 +83,8 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
   vector and its curves are fixed by hand (`authored-vector`). Never ship a raster or an untouched trace as the logo.
 - **Drawing engine** (where marks are drawn): the use-llm design canvas, else Claude Code's /design (the owner types it),
   else Claude-drawn SVG, only on the owner's yes. Never switch silently. [drawing-engines.md](references/drawing-engines.md)
-- **Architecture** (inferred, default `standalone`): `standalone` | `family-member` | `product-in-family` | `family-parent`.
-  Ask only when the brief or the repo shows a parent brand, siblings or products under this brand; ask for `FAMILY.md` only
-  after family-member is picked. A `family-parent` writes the family's own `FAMILY.md` at its root (templates/FAMILY.md).
+- **Architecture** (inferred, default `standalone`; else `family-member` | `product-in-family` | `family-parent`).
+  Ask only when the brief or repo shows a parent, siblings or products; `FAMILY.md` only after family-member is picked.
 
 ## Phase map
 
