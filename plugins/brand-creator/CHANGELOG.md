@@ -6,6 +6,19 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-20
+
+### Added
+
+- `emit apple --drop-cards` skips the DMG background and the App Store frames and retires the ones an earlier run wrote:
+  they move to `removed-<date>/` and leave the manifest. `--no-cards` still keeps them.
+
+### Fixed
+
+- The DMG background and the App Store frames show the brand's drawn lockup or wordmark instead of typing the name in
+  the system font. With neither file drawn they still type it, and the report warns.
+- The App Store frames' screenshot area has square corners when every radius token of the brand is 0.
+
 ## [0.15.1] - 2026-11-20
 
 ### Fixed

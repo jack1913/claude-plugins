@@ -53,7 +53,9 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, run  # noqa: E402
-from _emit import Emit, fill_template, render_card, version_below  # noqa: E402
+from html import escape as html_escape  # noqa: E402
+from _emit import (Emit, art_img, fill_template, fit_art, lettering_art, lettering_files, lettering_kind, render_card, tokens_square,  # noqa: E402
+                   version_below)
 from tierb import FIT_MARGIN, FIT_STEP, INK_TOLERANCE_PX, fit_share, ink_bbox, ink_bbox_on, ink_far, label_note, label_report_row, unverified_rows  # noqa: E402
 from determinism import car_renditions  # noqa: E402
 from px_lib import Img, from_png  # noqa: E402
@@ -164,7 +166,10 @@ def main() -> int:
         ap.add_argument("--glass", action="store_true", help="leave the Liquid Glass effect on the layers (off by default: a flat brand mark)")
         ap.add_argument("--svg-mono", help="authored monochrome SVG for the menu-bar template (default: a black silhouette derived from the drawing)")
         ap.add_argument("--tagline", default="", help="one line on the App Store frames; must be a value in FACTS.md")
-        ap.add_argument("--no-cards", action="store_true", help="do not write the DMG background and the store frames (they need Chromium)")
+        ap.add_argument("--no-cards", action="store_true", help="do not write the DMG background and the store frames (they need Chromium); "
+                        "cards an earlier run wrote stay")
+        ap.add_argument("--drop-cards", action="store_true", help="do not write the cards, and retire the ones an earlier run wrote (moved to "
+                        "removed-<date>/, their manifest rows dropped)")
         ap.add_argument("--previews", action="store_true", help="also render ictool previews into _preview/ (never shipped, not in the manifest)")
 
     e = Emit.begin("apple", __doc__, add_args=args, preflight=preflight)
@@ -566,7 +571,9 @@ def main() -> int:
                                                                       "ictool has no tvOS platform, so there is no preview either (open the stack in Xcode)")
 
     # ---- 9. cards: DMG background and store frames (Chromium)
-    if e.a.no_cards:
+    if e.a.drop_cards:
+        e.rep.add("cards", "info", "DMG background and store frames dropped", detail="--drop-cards was given: cards an earlier run wrote are retired")
+    elif e.a.no_cards:
         e.rep.add("cards", "info", "DMG background and store frames skipped", detail="--no-cards was given")
         e.keep("dmg", "store")   # skipped on purpose, not dropped: cards an earlier run wrote stay
     else:
@@ -574,13 +581,29 @@ def main() -> int:
         muted = e.modes["light"].get("color.muted", fg)
         accent = e.modes["light"].get("color.accent", fg)
         mark_raw = re.sub(r"^\s*<\?xml[^>]*>\s*", "", master.svg)
+        mark_div = f'<div class="mark">{mark_raw}</div>'
+        found = lettering_art(e.project, None, e.rep.inputs, e.mark_id)       # the drawn lockup, else the wordmark; None when neither is drawn
+        art, kind = (found[0], lettering_kind(found[1], None)) if found else (None, "type")
+        if not found:
+            e.rep.add("note:cards name", "warn", "the cards type the name in the system font",
+                      detail=f"no {' or '.join(lettering_files(e.mark_id))}: draw the wordmark (outlined, P6) so the cards set the brand's own lettering")
+        slot_radius = "0" if tokens_square(e.tokens_path) else None             # every radius token 0: the screenshot area has square corners
+
+        def head(w: float, h: float, box_w: float, box_h: float, text: str) -> str:
+            """The brand at the top of a card: the lockup alone, the mark and the wordmark, or the mark and the typed name (`text`)."""
+            if kind == "lockup":
+                return art_img(art, *fit_art(art, w, h), e.brand)
+            img = art_img(art, *fit_art(art, box_w, box_h), e.brand) if kind == "wordmark" else text
+            return mark_div + img
         scratch = e.out + "/_build"
         dmg = e.sizes("apple-dmg-background")
         tpl = (plugin_root() / "templates" / "dmg-background.html").read_text(encoding="utf-8")
         for sc in dmg["scales"]:
             w, h = dmg["width"] * sc, dmg["height"] * sc
+            top = head(w * 0.6, h * 0.09, w * 0.5, h * 0.05, f"<b>{html_escape(e.brand)}</b>")
             html = fill_template(tpl, {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "mark": mark_raw,
-                                       "app_fx": DMG_APP[0], "app_fy": DMG_APP[1], "link_fx": DMG_LINK[0], "link_fy": DMG_LINK[1]})
+                                       "head": top, "app_fx": DMG_APP[0], "app_fy": DMG_APP[1], "link_fx": DMG_LINK[0], "link_fy": DMG_LINK[1]},
+                                 raw=("mark", "head"))
             src = confine(e.project, f"{scratch}/dmg-{sc}x.html", what="card source")
             src.parent.mkdir(parents=True, exist_ok=True)
             src.write_text(html, encoding="utf-8")
@@ -606,9 +629,17 @@ def main() -> int:
             sx = unit * 2
             slot_y = unit * 2 + head_h + unit
             rect = {"x": round(sx), "y": round(slot_y), "w": round(w - 2 * sx), "h": round(h - slot_y - 2 * unit)}
+            copy = f"<p>{html_escape(tagline)}</p>"
+            if kind == "lockup":
+                top = f"<div>{head(w - 4 * unit, head_h * 0.62, 0, 0, '')}{copy}</div>"
+            else:
+                name_part = (art_img(art, *fit_art(art, w - 5 * unit - head_h, unit * 2.6), e.brand) if kind == "wordmark"
+                             else f"<h1>{html_escape(e.brand)}</h1>")
+                top = f"{mark_div}<div>{name_part}{copy}</div>"
             html = fill_template(tpl, {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "tagline": tagline,
-                                       "mark": mark_raw, "unit": f"{unit:g}", "head_x": round(sx), "head_y": round(unit * 2), "head_h": round(head_h),
-                                       "slot_x": rect["x"], "slot_y": rect["y"], "slot_w": rect["w"], "slot_h": rect["h"]})
+                                       "mark": mark_raw, "head": top, "unit": f"{unit:g}", "head_x": round(sx), "head_y": round(unit * 2),
+                                       "head_h": round(head_h), "slot_radius": slot_radius or f"calc({unit:g}px * 1.2)",
+                                       "slot_x": rect["x"], "slot_y": rect["y"], "slot_w": rect["w"], "slot_h": rect["h"]}, raw=("mark", "head"))
             src = confine(e.project, f"{scratch}/frame-{fr['name']}.html", what="card source")
             src.write_text(html, encoding="utf-8")
             render_card(e.project, f"{scratch}/frame-{fr['name']}.html", w, h, f"{scratch}/frame-{fr['name']}.png", "light")

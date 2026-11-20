@@ -931,7 +931,10 @@ because each master has its own report (`assets/_checks/downscale/<slug>.json`).
 write this time: the file is moved to `removed-<date>/<path>` in the project (never deleted), the manifest row is dropped and the report gets a
 `retired:<path>` warning and a `retired` list. A removed tray state, a dropped deployment target or a feature option that is gone no longer ships.
 `emit social` writes the GitHub social preview and the README headers only when `INVENTORY.md` lists a repository row or `brief/BRIEF.md` names a repository URL, a Repository line or a README/GitHub required surface (`--repo-images yes|no` forces it); otherwise an `note:repo-images` info row says why they were skipped.
-A folder the run skipped on purpose (`emit apple --no-cards`) is spared (`Emit.keep()`), and `emit social` spares superseded fingerprinted
+A folder the run skipped on purpose (`emit apple --no-cards`) is spared (`Emit.keep()`); `emit apple --drop-cards` skips the cards too but
+spares nothing, so the `dmg/` and `store/` files of an earlier run are retired like any dropped slot. The DMG background and the store frames
+set the brand's drawn lettering (the lockup, else the mark and the wordmark, as `emit social` reads them; with neither file they type the
+name and warn `note:cards name`), and the store frames' screenshot area has square corners when every radius token is 0. And `emit social` spares superseded fingerprinted
 Open Graph files (cached link previews may still use their URL; it warns instead). Their rows stay in the manifest marked `"superseded": true`
 (a row an emit writes again has no mark), and the book's files chapter lists them with the note "superseded, kept for cached link previews"
 instead of as a second current card.

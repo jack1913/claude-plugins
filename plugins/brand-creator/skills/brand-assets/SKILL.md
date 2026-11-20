@@ -195,6 +195,7 @@ required surfaces in `brief/BRIEF.md`.
   `--visionos-content-fraction`; the gate fails rather than shrinking it silently.
 - The marketing icon is RGB with no alpha channel. The App Store no-alpha rule is status U in the spec table.
 - Without Chromium set up, pass `--no-cards`. Otherwise the DMG background and store frames stop the emit with exit 3.
+  `--no-cards` keeps the cards an earlier run wrote; `--drop-cards` retires them (moved to `removed-<date>/`).
 
 ## Tray
 

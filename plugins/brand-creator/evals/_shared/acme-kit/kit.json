@@ -3,7 +3,7 @@
   "kit": "acme-brand",
   "version": "1.2",
   "edition": "1",
-  "plugin_version": "0.15.1",
+  "plugin_version": "0.15.2",
   "content_sha": "8f0a396782a5532fd74e41e5fe233cefde164e4fc286b10cbea3df5af360d473",
   "generated": {
     "SKILL.md": "c39b2a35dbebd7078f801e20302980b98eb66cc4d33616822f6b13fb2dd54f32",
