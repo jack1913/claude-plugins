@@ -60,3 +60,11 @@ Rejected:
 - Nothing but the release procedure makes anyone start the workflow: a tag is accepted without it.
 - On the date of this record the workflow has not run yet. Its first run is recorded in brand-creator's
   `manual-checks.md` ("Release run"); until it passes, a release takes the Mac path.
+
+## Update 2026-11-20
+
+The workflow has run. Its first run, 44341529604 on 2026-11-18, passed on the release commit of brand-creator 0.13.0
+(8a6894b): the four `macos` jobs with no skip and the two `linux` jobs, 30 minutes in all. That release was cut from a
+Linux machine, so a release no longer has to take the Mac path. The record is in brand-creator's
+[Release run](../../plugins/brand-creator/docs/internals/manual-checks.md#release-run). The tag ruleset still does not
+require `brand-creator-release`: one run is not several releases in a row.
