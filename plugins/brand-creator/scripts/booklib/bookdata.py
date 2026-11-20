@@ -44,7 +44,8 @@ CHAPTERS = [
 CHAPTER_IDS = [c[0] for c in CHAPTERS]
 TITLES = {c[0]: c[1] for c in CHAPTERS}
 OPT_IN = [c[0] for c in CHAPTERS if c[3] == "opt-in"]
-FAMILY_MODES = ("family-member", "product-in-family")
+FAMILY_MODES = ("family-member", "product-in-family", "family-parent")
+PARENT_WORDED = ("family", "endorsement")   # chapters whose skeleton a family-parent gets as <id>.parent.md
 CONFIG_FILE = "book/book.json"
 CHAPTER_DIR = "book/chapters"
 DEFAULT_OUTPUT = "book.html"

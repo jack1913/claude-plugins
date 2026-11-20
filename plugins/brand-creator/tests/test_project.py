@@ -515,7 +515,7 @@ def test_state_set_rejects_values_outside_the_enum(tmp_path, key, bad):
 
 def test_state_set_accepts_every_documented_value(tmp_path):
     p = make_project(tmp_path)
-    vals = {"tier": ("quick", "standard", "full"), "architecture": ("standalone", "family-member", "product-in-family"),
+    vals = {"tier": ("quick", "standard", "full"), "architecture": ("standalone", "family-member", "product-in-family", "family-parent"),
             "mark_source": ("generated", "authored-vector", "existing"), "review_surface": ("auto", "artifact", "local"),
             "phase": tuple(f"P{i}" for i in range(14)) + ("P1b", "P1c")}
     for key, options in vals.items():

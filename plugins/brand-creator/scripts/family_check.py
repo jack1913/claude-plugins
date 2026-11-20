@@ -5,11 +5,16 @@
 # ///
 """brand-creator family-check: a family keeps its shared letters identical and its tiles in proportion.
 
-Family modes only (architecture family-member or product-in-family in BRAND-STATE.md); a standalone brand has nothing
-to compare and the command says so. It reads the machine-readable block of FAMILY.md (template: templates/FAMILY.md):
-  * shared glyphs: every name in glyphs.shared must be cell-equal in the family's source and in this product's source.
-    Sources are read, never executed: a .py file is parsed with ast.literal_eval of the named assignment, a .json file
-    is parsed as JSON. Reusing a family letter means copying its cells.
+Family modes only (architecture family-member, product-in-family or family-parent in BRAND-STATE.md); a standalone brand has
+nothing to compare and the command says so. It reads the machine-readable block of FAMILY.md (template: templates/FAMILY.md):
+  * shared glyphs: every name in glyphs.shared must be equal in the family's source and in this product's source. A glyph is
+    cells (row strings, or rows of 0 and 1) or polygons (a list of closed contours, each a list of at least three [x, y]
+    numbers, filled even-odd). Cells compare cell for cell; polygons compare point for point (exact) or, for shape, both
+    are moved to 0,0, scaled so the longer side of their ink box is 1, filled at POLY_PX px and must not differ in more
+    than 1 pixel in 1000. Sources are read, never executed: a .py file is parsed with ast.literal_eval of the named
+    assignment, a .json file is parsed as JSON. Reusing a family letter means copying it, never redrawing it.
+    A family-parent owns the family's source: glyphs.own is optional there, and without it every shared glyph must be
+    defined in the family source.
   * tile share: for each product mark the share of the tile its ink covers and the height of the ink's bounding box,
     which must agree across products within the tolerance (qa/rules.json family.tile_share_tolerance, proposal 0.05).
 A source that cannot be read (a sibling repository that is not checked out) makes the check "not verified" (exit 3).
@@ -28,7 +33,9 @@ from _common import (EXIT_USAGE, Parser, Report, add_project_arg, add_renderer_a
                      rasterise_svg, read_state)
 from pxio import read_png  # noqa: E402
 
-FAMILY_MODES = ("family-member", "product-in-family")
+FAMILY_MODES = ("family-member", "product-in-family", "family-parent")
+POLY_PX = 128              # polygon glyphs are filled at this many px on the longer side of their ink box (shape compare)
+POLY_TOLERANCE = 1 / 1000  # the share of those pixels that may differ (edge pixels a float rounding can flip)
 BLOCK = re.compile(r"```json\s+family-check\s*\n(.*?)\n```", re.S)
 EMPTY = set(". _0")
 RASTER = 256
@@ -86,6 +93,67 @@ def read_symbol(base: Path, spec: dict, what: str) -> dict:
     if not isinstance(val, dict):
         raise SourceError(f"{spec['file']}: {sym or 'the document'} must map glyph names to cells")
     return val
+
+
+def _number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def glyph_kind(name: str, g, where: str) -> str:
+    """cells or polygons; a polygon glyph whose contour is not at least three [x, y] number pairs is exit 2, named."""
+    if not (isinstance(g, (list, tuple)) and g and all(isinstance(c, (list, tuple)) for c in g)
+            and any(c and isinstance(c[0], (list, tuple)) for c in g)):
+        return "cells"
+    for i, c in enumerate(g):
+        if len(c) < 3 or not all(isinstance(pt, (list, tuple)) and len(pt) == 2 and all(_number(v) for v in pt) for pt in c):
+            fail(EXIT_USAGE, f"glyph {name} in {where}: contour {i} must be a list of at least three [x, y] number pairs")
+    return "polygons"
+
+
+def poly_raster(contours) -> list[list[bool]]:
+    """The contours moved to 0,0 and scaled so the longer side of their ink box is POLY_PX px, filled even-odd at pixel centres."""
+    pts = [(float(x), float(y)) for c in contours for x, y in c]
+    x0, y0 = min(p[0] for p in pts), min(p[1] for p in pts)
+    side = max(max(p[0] for p in pts) - x0, max(p[1] for p in pts) - y0) or 1.0
+    k = POLY_PX / side
+    rings = [[((float(x) - x0) * k, (float(y) - y0) * k) for x, y in c] for c in contours]
+    w = max(1, round(max(p[0] for r in rings for p in r)))
+    h = max(1, round(max(p[1] for r in rings for p in r)))
+    grid = []
+    for j in range(h):
+        yc = j + 0.5
+        xs = []
+        for r in rings:
+            for (ax, ay), (bx, by) in zip(r, r[1:] + r[:1]):
+                if (ay <= yc < by) or (by <= yc < ay):
+                    xs.append(ax + (yc - ay) * (bx - ax) / (by - ay))
+        xs.sort()
+        row = [False] * w
+        for a, b in zip(xs[0::2], xs[1::2]):
+            for i in range(max(0, int(a + 0.5)), min(w, int(b + 0.5))):   # pixel i's centre i+0.5 lies in [a, b)
+                row[i] = True
+        grid.append(row)
+    return grid
+
+
+def poly_difference(a, b, exact: bool):
+    if exact:
+        fa = [[(float(x), float(y)) for x, y in c] for c in a]
+        fb = [[(float(x), float(y)) for x, y in c] for c in b]
+        if len(fa) != len(fb):
+            return f"{len(fa)} vs {len(fb)} contours"
+        for i, (ca, cb) in enumerate(zip(fa, fb)):
+            if len(ca) != len(cb):
+                return f"contour {i} has {len(ca)} vs {len(cb)} points"
+            for j, (pa, pb) in enumerate(zip(ca, cb)):
+                if pa != pb:
+                    return f"contour {i}, point {j} differs ({pa[0]:g}, {pa[1]:g} vs {pb[0]:g}, {pb[1]:g})"
+        return None
+    ra, rb = poly_raster(a), poly_raster(b)
+    h, w = max(len(ra), len(rb)), max(len(ra[0]), len(rb[0]))
+    cell = (lambda g, y, x: y < len(g) and x < len(g[0]) and g[y][x])
+    n = sum(1 for y in range(h) for x in range(w) if cell(ra, y, x) != cell(rb, y, x))
+    return f"{n} pixel(s) of {w * h} differ, filled at {POLY_PX} px" if n > POLY_TOLERANCE * w * h else None
 
 
 def normalise(cells, exact: bool) -> list[list[str]]:
@@ -163,20 +231,33 @@ def main() -> int:
         exact = g.get("compare", "shape") == "exact"
         if g.get("compare", "shape") not in ("shape", "exact"):
             fail(EXIT_USAGE, "glyphs.compare must be shape or exact")
+        own_given = arch != "family-parent" or g.get("own") is not None   # the parent owns the family source; its own one is optional
         try:
-            fam_src, own_src = read_symbol(base, g.get("family"), "family"), read_symbol(base, g.get("own"), "own")
-            rep.inputs += [(base / g["family"]["file"]).resolve(), (base / g["own"]["file"]).resolve()]
+            fam_src = read_symbol(base, g.get("family"), "family")
+            own_src = read_symbol(base, g.get("own"), "own") if own_given else None
+            rep.inputs += [(base / g["family"]["file"]).resolve()] + ([(base / g["own"]["file"]).resolve()] if own_given else [])
         except SourceError as e:
             rep.add("glyphs:sources", "skipped", "shared glyphs", detail=f"not verified: {e}")
             shared = []
         for name in shared:
-            if name not in fam_src or name not in own_src:
+            if name not in fam_src or (own_src is not None and name not in own_src):
                 where = "the family source" if name not in fam_src else "this product's source"
                 rep.add(f"glyph:{name}", "fail", "shared glyph equals the family's", detail=f"{name} is missing from {where}")
                 continue
-            d = first_difference(normalise(fam_src[name], exact), normalise(own_src[name], exact))
+            kf = glyph_kind(name, fam_src[name], g["family"]["file"])
+            if own_src is None:
+                rep.add(f"glyph:{name}", "pass", "shared glyph is defined in the family source", detail=f"{name}: defined in the family source ({kf})")
+                continue
+            ko = glyph_kind(name, own_src[name], g["own"]["file"])
+            if kf != ko:
+                d = f"the family source draws it as {kf}, this product's as {ko}"
+            elif kf == "polygons":
+                d = poly_difference(fam_src[name], own_src[name], exact)
+            else:
+                d = first_difference(normalise(fam_src[name], exact), normalise(own_src[name], exact))
+            same = "cell-equal" if kf == "cells" else ("point-equal" if exact else "the same shape")
             rep.add(f"glyph:{name}", "fail" if d else "pass", "shared glyph equals the family's",
-                    detail=(f"{name}: {d}. Copy the family's cells; never redraw a shared glyph." if d else f"{name}: cell-equal to the family source"))
+                    detail=(f"{name}: {d}. Copy the family's glyph; never redraw a shared glyph." if d else f"{name}: {same} as the family source"))
         if not shared and not any(r["id"] == "glyphs:sources" for r in rep.results):
             rep.add("glyphs", "info", "shared glyphs", detail="glyphs.shared is empty: nothing to compare")
     tiles = doc.get("tiles") or []

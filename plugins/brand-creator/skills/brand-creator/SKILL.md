@@ -83,8 +83,9 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
   vector and its curves are fixed by hand (`authored-vector`). Never ship a raster or an untouched trace as the logo.
 - **Drawing engine** (where marks are drawn): the use-llm design canvas, else Claude Code's /design (the owner types it),
   else Claude-drawn SVG, only on the owner's yes. Never switch silently. [drawing-engines.md](references/drawing-engines.md)
-- **Architecture** (inferred, default `standalone`): `standalone` | `family-member` | `product-in-family`. Ask only
-  when the brief or the repo shows a parent brand or siblings; ask for `FAMILY.md` only after family-member is picked.
+- **Architecture** (inferred, default `standalone`): `standalone` | `family-member` | `product-in-family` | `family-parent`.
+  Ask only when the brief or the repo shows a parent brand, siblings or products under this brand; ask for `FAMILY.md` only
+  after family-member is picked. A `family-parent` writes the family's own `FAMILY.md` at its root (templates/FAMILY.md).
 
 ## Phase map
 
@@ -359,7 +360,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   Guardrails block.
 - [working-style.md](references/working-style.md): collaboration defaults and the per-project Collaboration block.
 - [anti-patterns.md](references/anti-patterns.md): case cards of costly mistakes and the check that catches each.
-- [architecture.md](references/architecture.md): standalone, family-member, product-in-family; layers; never-borrow.
+- [architecture.md](references/architecture.md): standalone, family-member, product-in-family, family-parent; layers; never-borrow.
 - [cascade.md](references/cascade.md): what to update when a rule, token or lockup changes.
 - [regulated-industries.md](references/regulated-industries.md): professions with promotion or naming rules.
 - [prompt-fragments.md](references/prompt-fragments.md): the prompt skeleton for designer, judge and reviewer passes.

@@ -109,6 +109,30 @@ def test_family_modes_add_endorsement_and_family_and_full_adds_adoption_and_laun
     assert "adoption" not in bookdata.chapters_for(tmp_path, view("standard", "family-member"))
 
 
+def test_a_family_parent_gets_the_family_chapters_like_a_member(tmp_path):
+    got = bookdata.chapters_for(tmp_path, view("standard", "family-parent"))
+    assert "endorsement" in got and "family" in got
+    quick = bookdata.chapters_for(tmp_path, view("quick", "family-parent"))
+    assert "family" not in quick and "endorsement" not in quick                   # Quick, as for a member: only through book_chapters
+    assert "family" in bookdata.chapters_for(tmp_path, view("quick", "family-parent", extra=["family"]))
+
+
+def test_book_init_writes_the_parent_worded_family_chapters_for_a_parent(proj):
+    for cid in ("family", "endorsement"):
+        (proj / f"book/chapters/{cid}.md").unlink(missing_ok=True)
+    assert bc("state", "--set", "architecture=family-parent", "--set", "book_chapters=family,endorsement", project=proj).returncode == 0
+    r = bc("book", "--init", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    for cid in ("family", "endorsement"):
+        parent = (ROOT / f"templates/book/{cid}.parent.md").read_text()
+        assert (proj / f"book/chapters/{cid}.md").read_text() == parent
+        assert parent != (ROOT / f"templates/book/{cid}.md").read_text()
+    (proj / "book/chapters/family.md").unlink()
+    assert bc("state", "--set", "architecture=family-member", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0
+    assert (proj / "book/chapters/family.md").read_text() == (ROOT / "templates/book/family.md").read_text()   # a member keeps the member wording
+
+
 # ---------------------------------------------------------------- a built book
 
 @pytest.fixture(scope="session")

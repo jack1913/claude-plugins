@@ -6,6 +6,26 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-20
+
+A brand can now be the parent of a product family, and family-check compares letters drawn as polygons.
+
+### Added
+
+- `architecture: family-parent` for the brand a family's products sit under. BRAND.md calls it a master brand that
+  houses its products (`branded-house`), and the intake asks about it when products sit under the brand.
+- A parent's book gets the family and endorsement chapters by the same rule as a member's, with chapter skeletons
+  worded for the parent.
+- The family's own `FAMILY.md` lives at the root of the parent's project. There, family-check checks that every shared
+  letter is defined in the family's source, and compares the tiles of the products it lists.
+- family-check compares letters drawn as polygons (lists of `[x, y]` outline points), point for point or as the same
+  shape at any position and size. A letter drawn as cells in one source and as polygons in the other fails.
+
+### Fixed
+
+- family-check no longer passes two polygon letters with the same number of contours and points as equal: before, it
+  read the points as filled cells and never compared them.
+
 ## [0.14.1] - 2026-11-20
 
 ### Added

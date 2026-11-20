@@ -183,7 +183,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
                                    its owner files are scaffolded once and are the owner's: see kit)
   tools/cascade.json                  documents outside the project that `check --cascade` searches too (optional)
   removed-<date>[-n]/              dated copies of what `collapse` changed and of slots an emitter retired (never deleted)
-  FAMILY.md                        family modes only (templates/FAMILY.md); read by family-check
+  FAMILY.md                        family modes only (templates/FAMILY.md; in a family-parent, the family's own); read by family-check
   history/<date>-<name>/  history/MANIFEST.sha256     frozen rounds (only `brand-creator freeze` adds files)
   DECISIONS.md  decisions/ADR-<NNNN>-<slug>.md   the decision log and the decision records (templates/DECISIONS.md, templates/ADR.md);
                                    append-only by convention (dated amendments), skipped by the cascade; the lint of a pages board lists both as inputs (`site:choices`), and `cleanup`
@@ -197,7 +197,7 @@ Folders are created when their phase starts. `check` gates only what exists.
 
 A `---` block of `key: value` lines, one level of nesting, trailing `# comments` allowed; the body is free markdown.
 Keys: `slug, name, created, plugin_version, tier (quick|standard|full), phase, architecture (standalone|family-member|
-product-in-family), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
+product-in-family|family-parent), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
 codes of the brand's own text, for example `pl` or `pl,en`; read by fontcheck, never defaulted from `language`), renderer, review_surface, review_url,
 site_research (auto|online|links-only|none: the owner's answer to online research for website references; `capture --url` needs online or links-only),
 incumbent (none or a line), inventory (path or "none (no target repo)"), edition (whole number, the brand book's), approved_edition (the edition G5 approved; `state --record G5` writes it), book_chapters (extra
@@ -1110,9 +1110,14 @@ the threshold. SVG states are rasterised at the set's `size`; PNG states must sh
 
 ### family-check (family modes only)
 
-`architecture: family-member | product-in-family`; a standalone brand gets one info row. It reads the ```` ```json family-check ```` block
-of `FAMILY.md` (template `templates/FAMILY.md`, which documents every field): `glyphs.shared` names must be cell-equal in the family's
-source and this product's source (`compare`: `shape` or `exact`), and the `tiles` marks must agree in ink share of the tile and ink-box
+`architecture: family-member | product-in-family | family-parent`; a standalone brand gets one info row. It reads the ```` ```json family-check ```` block
+of `FAMILY.md` (template `templates/FAMILY.md`, which documents every field): `glyphs.shared` names must be equal in the family's
+source and this product's source (`compare`: `shape` or `exact`). A glyph is cells (row strings, or rows of 0 and 1), compared cell for cell,
+or polygons (a list of closed contours, each at least three `[x, y]` numbers, filled even-odd): `exact` wants the same contours in the same
+order with the same points; `shape` moves both to 0,0, scales the longer side of their ink box to 128 px, fills them and passes when at most
+1 pixel in 1000 differs (the row names the count). A glyph drawn as cells in one source and as polygons in the other fails, named; a contour
+that is not at least three number pairs is exit 2. In a `family-parent`, which owns the family source, `glyphs.own` is optional: without it
+each shared name must be defined in the family source (`glyph:<name>` passes or fails "missing from the family source"). The `tiles` marks must agree in ink share of the tile and ink-box
 height within `tile_share_tolerance` (the ground is the most frequent colour on the image edge). Sources are read, never executed: a `.py`
 file through `ast.literal_eval` of the named top-level assignment, a `.json` file as JSON; a source that is missing or not a literal makes
 the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling repository is only ever read.
@@ -2082,7 +2087,7 @@ facts); `check` treats a report whose view changed as not verified. A change to 
 **Chapters.** Registry order, selected from `tier`, `architecture`, the project's files and `book_chapters`: quick `idea, mark, colour,
 files, changing` (plus `wordmark` when `assets/logo` has a wordmark or lockup); standard adds `motion` (when `motion/proof.json`,
 `motion/SPEC.md` or `motion/motion.json`, on or off, exists), `type`, `use`, `proof`, `donts`, `history`; full adds `adoption` and `launch`; `endorsement` and `family` in the
-family modes; `tone`, `photography`, `components`, `site` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
+family modes (a `family-parent` among them; `book --init` gives it `templates/book/<id>.parent.md`, worded for the parent); `tone`, `photography`, `components`, `site` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
 (`<id>.<lang>.md` for each language when `content_languages` has several; every language is required). `book --init` copies the skeletons
 from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter fails the build.
 
@@ -2506,7 +2511,7 @@ of those files, including the text of an adoption row's `change`, is searched li
 
 `adapters --brand-md --design-md [--primary ROLE] [--bm-type T] [--bm-architecture A] [--replace]` writes `BRAND.md` and `DESIGN.md` at the project root from the built
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
-master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
+master, endorsed; product-in-family: product, endorsed; family-parent: master, branded-house, and its Strategy says it is the parent of the family; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
 (colour roles in light and dark, type families with the sizes, weights, line height and tracking the tokens define, the spacing, radius and layout values, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,

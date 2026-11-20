@@ -29,7 +29,7 @@ PRIVATE_LABELS = re.compile(r"(?i)^(contact\b|postal address)")   # personal con
 # BRAND-STATE architecture -> BRAND.md type and architecture. These pairings are brand-creator's reading of the BRAND.md field values, not
 # something the format defines: override with --bm-type and --bm-architecture. They must agree with the BRAND.md column of the modes table
 # in skills/brand-creator/references/architecture.md (a family-member is a master brand, one of several the owner runs; a test ties the two).
-BM_MAP = {"standalone": ("master", "independent"), "family-member": ("master", "endorsed"), "product-in-family": ("product", "endorsed")}
+BM_MAP = {"standalone": ("master", "independent"), "family-member": ("master", "endorsed"), "product-in-family": ("product", "endorsed"), "family-parent": ("master", "branded-house")}
 BM_TYPES = ("master", "product", "sub-brand")
 BM_ARCHS = ("branded-house", "endorsed", "sub-brand", "independent")
 
@@ -383,7 +383,9 @@ def brand_md(project: Path, *, bm_type: str | None = None, bm_arch: str | None =
           "one source each; nothing else may be claimed in its name.", ""]
     if v["canonical_direction"]:
         L += [f"Direction: {v['canonical_direction']}" + (f" (register: {v['register']})" if v["register"] else "") + ".", ""]
-    if v["architecture"] != "standalone":
+    if v["architecture"] == "family-parent":
+        L += ["Family: this brand is the parent of a family; the family's profile, its rules and what a product never borrows from it are in FAMILY.md.", ""]
+    elif v["architecture"] != "standalone":
         L += ["Family: the profile of the parent brand and what a product never borrows from it are in FAMILY.md.", ""]
     L += ["### Facts", ""] + facts_table(public_facts(project)) + ["", "Contact rows are left out of this file on purpose.", ""]
     voice = [r for r in facts if re.match(r"(?i)^(voice|tone)\b", r.get("fact", ""))]

@@ -110,7 +110,7 @@ def test_brand_md_has_the_four_layers_and_the_frontmatter_of_the_architecture(pa
     assert heads == ["Strategy", "Voice", "Visual", "Governance"]
     assert "every tool has a published spare-parts list" in t and "| light | dark |" in t and "#007d71 | #4cd7c8" in t
     assert "Accessibility commitments" in t and "16.15:1" in t       # ink on paper: (0.0102 + .05) over (.9335 + .05) by hand is 16.15
-    for arch, want in (("family-member", ("master", "endorsed")), ("product-in-family", ("product", "endorsed"))):
+    for arch, want in (("family-member", ("master", "endorsed")), ("product-in-family", ("product", "endorsed")), ("family-parent", ("master", "branded-house"))):
         assert bc("state", "--set", f"architecture={arch}", project=pack).returncode == 0
         assert bc("adapters", "--brand-md", project=pack).returncode == 0
         fm = front((pack / "BRAND.md").read_text())

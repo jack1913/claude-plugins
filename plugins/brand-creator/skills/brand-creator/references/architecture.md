@@ -1,7 +1,9 @@
 # Brand architecture
 
 How a brand relates to other brands. Inferred at G0 (default `standalone`); asked only when the brief or a repo
-shows a parent or siblings. Full family profiles (`FAMILY.md`) are read from the owner's own repo, never shipped here.
+shows a parent or siblings. Full family profiles (`FAMILY.md`) are read from the owner's own repo, never shipped here: the
+family's own `FAMILY.md` sits at the root of the parent's brand project (`family-parent`), and a member or product keeps its
+own `FAMILY.md`, whose glyph sources, tiles and `parent_docs` point into the parent's project (read only).
 
 ## Modes
 
@@ -10,9 +12,12 @@ shows a parent or siblings. Full family profiles (`FAMILY.md`) are read from the
 | `standalone` | master | independent | nothing; the brand owns every layer | `master` / `independent` |
 | `family-member` | master, one of several brands the owner runs | family layer + own company layer | the family grammar from `FAMILY.md` | `master` / `endorsed` |
 | `product-in-family` | product or sub-brand | branded-house, endorsed, sub-brand or independent | tile construction, letters, UI rules from the parent | `product` / `endorsed` |
+| `family-parent` | master, the parent a family's products sit under | owns the family layer and its own company layer | defines the family grammar, the shared letters and the endorsement policy in its `FAMILY.md` | `master` / `branded-house` |
 
 The last column is what `brand-creator adapters --brand-md` writes by default (`--bm-type` and `--bm-architecture` override it). A
 family-member stays a master brand there; `endorsed` stands for the visible family link that each member keeps while it owns its name.
+A family-parent is a master brand whose system houses its products, hence `branded-house`; with the products shown only as
+endorsed, `--bm-architecture endorsed` says so instead.
 
 A standalone brand can still have **two registers** (for example warm for consumers, strict for company boards):
 that is one brand with two voices, not an architecture question.

@@ -36,8 +36,9 @@ from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, add
 def init_chapters(project: Path, build: "bookgen.BookBuild") -> int:
     tpl = plugin_root() / "templates" / "book"
     made = kept = 0
+    parent = build.view["architecture"] == "family-parent"
     for cid in build.chapter_ids:
-        src = tpl / f"{cid}.md"
+        src = tpl / (f"{cid}.parent.md" if parent and cid in bookdata.PARENT_WORDED else f"{cid}.md")
         if not src.is_file():
             fail(EXIT_FAIL, f"template missing: {src}")
         for lang in build.langs:

@@ -155,10 +155,12 @@ def fam(acme):
     return acme
 
 
-def write_family(proj, *, shared=("K", "e"), compare="shape", tiles=None, tol=None, family_file="../family/letters.py", own_file="tools/glyphs.py"):
+def write_family(proj, *, shared=("K", "e"), compare="shape", tiles=None, tol=None, family_file="../family/letters.py", own_file="tools/glyphs.py",
+                 family_symbol="LETTERS", own_symbol="GLYPHS"):
     block = {"schema": 1, "family": "Test family",
-             "glyphs": {"family": {"file": family_file, "symbol": "LETTERS"}, "own": {"file": own_file, "symbol": "GLYPHS"},
-                        "shared": list(shared), "compare": compare}}
+             "glyphs": {"family": {"file": family_file, "symbol": family_symbol}, "shared": list(shared), "compare": compare}}
+    if own_file is not None:
+        block["glyphs"]["own"] = {"file": own_file, "symbol": own_symbol}
     if tiles is not None:
         block["tiles"] = tiles
     if tol is not None:
@@ -274,3 +276,100 @@ def test_the_unfilled_template_is_refused_and_documents_the_format(fam):
     (fam / "FAMILY.md").unlink()
     r = bc("family-check", project=fam)
     assert r.returncode == 2 and "no FAMILY.md" in r.stderr
+
+
+# ---------------------------------------------------------------- the parent of a family
+
+@pytest.fixture
+def parent(acme):
+    """A family-parent project: it owns the family's letters (tools/glyphs.py) and FAMILY.md at its root, with no own source."""
+    assert bc("state", "--set", "architecture=family-parent", project=acme).returncode == 0
+    (acme / "tools").mkdir(exist_ok=True)
+    (acme / "tools/glyphs.py").write_text(lit("LETTERS", {"K": FAM_K, "e": FAM_E}))
+    write_family(acme, family_file="tools/glyphs.py", own_file=None)
+    return acme
+
+
+def test_a_parent_checks_that_every_shared_glyph_is_defined_in_its_own_family_source(parent):
+    r = bc("family-check", project=parent)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rows = res(parent, "family")
+    assert rows["glyph:K"]["status"] == rows["glyph:e"]["status"] == "pass" and "defined in the family source" in rows["glyph:K"]["detail"]
+    assert report(parent, "family")["architecture"] == "family-parent"
+    write_family(parent, shared=("K", "e", "z"), family_file="tools/glyphs.py", own_file=None)
+    assert bc("family-check", project=parent).returncode == 1
+    assert failing(report(parent, "family")) == ["glyph:z"] and "missing from the family source" in res(parent, "family")["glyph:z"]["detail"]
+
+
+def test_a_parent_compares_the_tiles_of_its_products(parent):
+    square_svg(parent / "assets/logo/a.svg", 50)
+    square_svg(parent.parent / "product/assets/logo/mark.svg", 50)
+    write_family(parent, family_file="tools/glyphs.py", own_file=None,
+                 tiles=[{"product": "parent", "mark": "assets/logo/a.svg"}, {"product": "product", "mark": "../product/assets/logo/mark.svg"}])
+    assert bc("family-check", project=parent).returncode == 0
+    assert res(parent, "family")["tiles:share"]["status"] == "pass"
+
+
+def test_a_member_still_needs_its_own_glyph_source(fam):
+    write_family(fam, own_file=None)
+    r = bc("family-check", project=fam)
+    assert r.returncode == 2 and "glyphs.own" in r.stderr
+
+
+# ---------------------------------------------------------------- letters drawn as polygons
+
+RING = [[[0, 0], [10, 0], [10, 10], [0, 10]], [[3, 3], [7, 3], [7, 7], [3, 7]]]   # a square with a square hole (even-odd)
+BAR = [[[0, 0], [4, 0], [4, 10], [0, 10]]]
+
+
+def moved(contours, k=3.0, dx=5.0, dy=-2.0):
+    return [[[x * k + dx, y * k + dy] for x, y in c] for c in contours]
+
+
+def poly_family(proj, family: dict, own: dict, compare="shape"):
+    (proj.parent / "family/letters.json").write_text(json.dumps({"LETTERS": family}))
+    (proj / "tools/glyphs.json").write_text(json.dumps({"GLYPHS": family if own is None else own}))
+    write_family(proj, shared=tuple(family), compare=compare, family_file="../family/letters.json", own_file="tools/glyphs.json")
+
+
+def test_polygon_glyphs_that_are_the_same_pass(fam):
+    poly_family(fam, {"O": RING, "I": BAR}, None)
+    r = bc("family-check", project=fam)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert res(fam, "family")["glyph:O"]["status"] == "pass"
+
+
+def test_a_moved_and_scaled_copy_is_the_same_shape_but_not_exact(fam):
+    poly_family(fam, {"O": RING}, {"O": moved(RING)})
+    assert bc("family-check", project=fam).returncode == 0
+    poly_family(fam, {"O": RING}, {"O": moved(RING)}, compare="exact")
+    assert bc("family-check", project=fam).returncode == 1
+    assert failing(report(fam, "family")) == ["glyph:O"]
+
+
+def test_one_moved_point_fails_with_a_pixel_count(fam):
+    bent = [[[0, 0], [10, 0], [10, 10], [2, 10]], RING[1]]
+    poly_family(fam, {"O": RING}, {"O": bent})
+    assert bc("family-check", project=fam).returncode == 1
+    d = res(fam, "family")["glyph:O"]["detail"]
+    assert "pixel" in d and "never redraw" in d
+
+
+def test_cells_against_polygons_fails_named(fam):
+    poly_family(fam, {"K": RING}, {"K": FAM_K})
+    assert bc("family-check", project=fam).returncode == 1
+    assert "cells" in res(fam, "family")["glyph:K"]["detail"] and "polygons" in res(fam, "family")["glyph:K"]["detail"]
+
+
+@pytest.mark.parametrize("bad", [[[[0, 0], [1, 1]]], [[[0, 0], [1, "x"], [2, 2]]], [[[0, 0, 0], [1, 1, 1], [2, 2, 2]]]])
+def test_a_malformed_contour_is_a_usage_error(fam, bad):
+    poly_family(fam, {"O": RING}, {"O": bad})
+    r = bc("family-check", project=fam)
+    assert r.returncode == 2 and "O" in r.stderr and "contour" in r.stderr
+
+
+def test_polygon_glyphs_from_a_py_literal_work_too(fam):
+    (fam.parent / "family/letters.py").write_text(lit("LETTERS", {"O": RING}))
+    (fam / "tools/glyphs.py").write_text(lit("GLYPHS", {"O": moved(RING)}))
+    write_family(fam, shared=("O",))
+    assert bc("family-check", project=fam).returncode == 0

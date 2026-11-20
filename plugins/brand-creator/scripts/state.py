@@ -47,7 +47,7 @@ import motionspec  # noqa: E402
 # Keys whose values other tools branch on (board_lint, freeze, prereq). A typo here must not pass silently.
 ENUMS = {
     "tier": ("quick", "standard", "full"),
-    "architecture": ("standalone", "family-member", "product-in-family"),
+    "architecture": ("standalone", "family-member", "product-in-family", "family-parent"),
     "mark_source": ("generated", "authored-vector", "existing"),
     "review_surface": ("auto", "artifact", "local"),
     "site_research": ("auto", "online", "links-only", "none"),

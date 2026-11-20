@@ -90,9 +90,11 @@ If the scaffold exits 3, tell the owner to run `/brand-creator:setup` first.
    | standalone | master | independent |
    | family-member | master (one of several owned brands) | shares a family layer, owns its company layer |
    | product-in-family | product or sub-brand | branded-house, endorsed or sub-brand under a parent |
+   | family-parent | master (the parent of a family) | defines the family layer its products keep |
 
-   Ask about family or product only when the brief or a repo shows a parent or siblings. Ask for `FAMILY.md` only
-   after family-member is picked. Write the never-borrow list (both directions) into BRIEF. Details:
+   Ask about family or product only when the brief or a repo shows a parent, siblings or products under this brand. Ask
+   for `FAMILY.md` only after family-member is picked; a family-parent writes the family's own `FAMILY.md` at its root
+   from templates/FAMILY.md. Write the never-borrow list (both directions) into BRIEF. Details:
    [architecture.md](../architecture.md).
 4. **Record the gating goal.** The external gate the brand must pass (a platform's organisation verification, a
    mandatory legal disclosure, a regulator's promotion rule) goes into BRIEF as a hard constraint. Every board is
@@ -113,8 +115,8 @@ One AskUserQuestion call of **at most 3 scope questions**, each with 2 to 4 choi
 ones that do not apply:
 
 1. **Tier**: Quick / Standard / Full (see the SKILL.md table). Say what each one produces in one line.
-2. **Architecture** (only when the brief or a repo shows a parent brand or siblings): standalone / family-member /
-   product-in-family. A plain brief skips it: standalone is inferred and stated. Ask for the `FAMILY.md` path as plain
+2. **Architecture** (only when the brief or a repo shows a parent brand, siblings or products under this brand): standalone /
+   family-member / product-in-family / family-parent. A plain brief skips it: standalone is inferred and stated. Ask for the `FAMILY.md` path as plain
    text after family-member is picked.
 3. **Name** (only when not decided): its language and status (keep / screen it / find one), or an irreversible choice
    that blocks round 1.
