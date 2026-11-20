@@ -245,3 +245,80 @@ def test_the_card_accent_line_has_square_ends_when_the_brand_has_no_round_corner
     f.write_text(json.dumps(doc))
     assert bc(*run, project=acme).returncode == 0
     assert rule.search((acme / "assets/social/_build/og.html").read_text()).group(1) == "0"
+
+
+# ---------------------------------------------------------------- emit apple (macOS with Xcode only)
+
+APPLE = "assets/apple"
+VIS = f"{APPLE}/Assets.xcassets/AppIconVision.solidimagestack"
+TVB = f"{APPLE}/tvos/Assets.xcassets/AppIconTV.brandassets/Small.imagestack"
+TARGETS = "# Acme: surface inventory\n\n## Deployment targets\n\n- iOS: 17.0\n- macOS: 14.0\n- visionOS: 2.0\n- watchOS: 10.0\n- tvOS: 17.0\n"
+
+
+def srgb(h: str) -> str:
+    return "srgb:" + ",".join(f"{int(h[i:i + 2], 16) / 255:.5f}" for i in (1, 3, 5)) + ",1.00000"
+
+
+def apple_rows(p) -> dict:
+    return {x["id"]: x for x in report(p, "emit-apple")["results"]}
+
+
+def watch_png(p) -> bytes:
+    return next((p / APPLE / "watchos").rglob("AppIcon-watchOS-*.png")).read_bytes()
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_resvg
+@pytest.mark.requires_macos
+@pytest.mark.requires_actool
+def test_apple_takes_the_drawings_own_ground_in_every_appearance_and_fits_the_circles_on_it(acme):
+    own_ground_mark(acme, CORNER)
+    set_rules(acme, icons={"ground": "drawing"})
+    (acme / "INVENTORY.md").write_text(TARGETS)
+    r = bc("emit", "apple", "--no-cards", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    doc = json.loads((acme / APPLE / "AppIcon.icon/icon.json").read_text())
+    fills = {s.get("appearance"): s["value"]["solid"] for s in doc["fill-specializations"]}
+    assert fills[None] == fills["dark"] == srgb("#0a0a0f")                      # the drawing's own ground, not the light color.bg
+    market = (acme / APPLE / "marketing/AppStore-1024.png").read_bytes()
+    assert near(corner(market), GROUND) and abs(light_side(market) - 0.8 * 1024) <= 3   # the drawing edge to edge by default
+    w = watch_png(acme)
+    assert near(corner(w), GROUND) and light_side(w) < 0.8 * read_png(w)[0] - 4         # shrunk on its own ground into the circle
+    back = (acme / VIS / "Back.solidimagestacklayer/Content.imageset/back.png").read_bytes()
+    assert near(corner(back), GROUND)
+    assert near(corner((acme / TVB / "Back.imagestacklayer/Content.imageset/back.png").read_bytes()), GROUND)
+    rows = apple_rows(acme)
+    for gate in ("check:watchOS circle", "check:visionOS safe circle", "check:tvOS safe area"):
+        assert rows[gate]["status"] == "pass", (gate, rows[gate])
+    mac = (acme / APPLE / "Assets.xcassets/AppIcon.appiconset/AppIcon-mac-512x512@2x.png").read_bytes()
+    mw, mh, mp = read_png(mac)
+    edge = next(x for x in range(mw) if mp[(mh // 2 * mw + x) * 4 + 3] == 255)   # the first opaque pixel of the rounded body on the middle row
+    assert near(tuple(mp[(mh // 2 * mw + edge + 2) * 4:(mh // 2 * mw + edge + 2) * 4 + 3]), GROUND)
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_resvg
+@pytest.mark.requires_macos
+@pytest.mark.requires_actool
+def test_apple_paints_the_dark_ground_and_the_dark_artwork_when_the_rules_say_dark(acme):
+    set_rules(acme, icons={"ground": "dark"})
+    r = bc("emit", "apple", "--no-cards", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    tokens = json.loads((acme / "assets/tokens/tokens.json").read_text())
+    dark = tokens["modes"]["dark"]["color.bg"]["hex"].lower()
+    doc = json.loads((acme / APPLE / "AppIcon.icon/icon.json").read_text())
+    assert {s.get("appearance"): s["value"]["solid"] for s in doc["fill-specializations"]}[None] == srgb(dark)
+    assert (acme / APPLE / "AppIcon.icon/Assets/mark.svg").read_text() == (acme / APPLE / "AppIcon.icon/Assets/mark-dark.svg").read_text()
+    assert near(corner((acme / APPLE / "marketing/AppStore-1024.png").read_bytes()), tuple(int(dark[i:i + 2], 16) for i in (1, 3, 5)))
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_resvg
+@pytest.mark.requires_macos
+@pytest.mark.requires_actool
+def test_apple_keeps_a_content_fraction_you_pass_on_the_drawings_ground(acme):
+    own_ground_mark(acme, CORNER)
+    set_rules(acme, icons={"ground": "drawing"})
+    assert bc("emit", "apple", "--no-cards", "--content-fraction", "0.5", project=acme).returncode == 0
+    market = (acme / APPLE / "marketing/AppStore-1024.png").read_bytes()
+    assert near(corner(market), GROUND) and abs(light_side(market) - 0.4 * 1024) <= 3

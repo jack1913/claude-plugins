@@ -324,7 +324,7 @@ def select_mark(a, rules: dict, *, required: bool = True) -> dict | None:
 
 
 def ground_for(rules: dict, mark_id: str | None) -> str:
-    """The ground of the touch, maskable and avatar icons for a mark: its own marks.<id>.ground, else icons.ground (light, dark or drawing)."""
+    """The ground of the touch, maskable, avatar and Apple app icons for a mark: its own marks.<id>.ground, else icons.ground (light, dark or drawing)."""
     own = mark_entry(rules, mark_id)["ground"] if mark_id else ""
     return own or rules["icons"]["ground"]
 

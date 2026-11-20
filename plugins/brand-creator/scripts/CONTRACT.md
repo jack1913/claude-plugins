@@ -1013,8 +1013,11 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
 ```
 
 `icons.ground` (`light` by default, `dark` or `drawing`; `marks.<id>.ground` overrides it for one mark, empty = `icons.ground`) is the ground of
-the icons that need one: the apple-touch and maskable icons and the manifest's `theme_color` and `background_color` (`emit web`), and the avatar
-(`emit profiles`). `light` and `dark` are `color.bg` of that mode, with the mark set inside the icon (the dark one: the drawing's `-dark.svg`, else
+the icons that need one: the apple-touch and maskable icons and the manifest's `theme_color` and `background_color` (`emit web`), the avatar
+(`emit profiles`), and the app icons of `emit apple` (the `.icon` fill and default layer, the marketing icon, the legacy iOS and macOS sizes, the
+watchOS icon and the tvOS and visionOS back layers; with `dark` the default appearance takes the dark ground and the dark artwork; with `drawing`
+every appearance, dark included, takes the drawing's own ground, `--content-fraction` defaults to 1.0, and the watchOS, tvOS and visionOS safe
+areas take the largest share whose ink stays inside them on that ground; the DMG background and the store frames stay on the light ground). `light` and `dark` are `color.bg` of that mode, with the mark set inside the icon (the dark one: the drawing's `-dark.svg`, else
 derived through the token roles with a warning). `drawing` is for a mark that carries its own ground (a light shape on a full-bleed dark square,
 made to be cropped by the phone): its ground is read from its corners, the touch icon takes the drawing edge to edge, and the maskable icon
 takes it on that ground at the largest share (up to 1.0, in whole percents) whose ink stays inside the safe circle (a report row

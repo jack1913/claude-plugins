@@ -6,6 +6,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-20
+
+### Fixed
+
+- `emit apple` now follows `icons.ground` in `qa/rules.json`, as `emit web` and `emit profiles` do. With `dark`, the app
+  icons use the dark background colour and the dark artwork. With `drawing`, every appearance uses the drawing's own
+  ground: the square icons show the whole drawing by default, and the watchOS, tvOS and visionOS icons shrink it onto
+  that ground until it fits their safe areas. The DMG background and the store frames stay light.
+
 ## [0.15.0] - 2026-11-20
 
 A brand can now be the parent of a product family, and family-check compares letters drawn as polygons.
