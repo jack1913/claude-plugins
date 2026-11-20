@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-18, 0.13.0, run 44341529604 on GitHub, commit 8a6894b | passed |
+| [Release run](#release-run) | 2026-11-20, 0.14.0, run 44686304119 on GitHub, commit ec0cf6f | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -435,7 +435,13 @@ It passes when the Mac's pytest reports no failure and no skip at all (no NOT VE
 both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
 with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
 
-**Last run:** 2026-11-18, brand-creator 0.13.0, on GitHub: run 44341529604 of `brand-creator-release.yml` on the release
+**Last run:** 2026-11-20, brand-creator 0.14.0, on GitHub: run 44686304119 of `brand-creator-release.yml` on the release
+commit ec0cf6f. The four `macos` jobs (`macos-26` on Apple silicon, Xcode 26.6): pytest 3555 passed and nothing skipped
+(1357, 833 and 1365 in the three shares), node 249 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and
+`QUICK SMOKE PASSED`. The two `linux` jobs printed `LINUX RUN OK`: pytest 3504 passed with 51 expected skips, node 249
+pass and the smoke. 27 minutes in all; the longest job, node and the smoke on macOS, took 27.
+
+The 0.13.0 run: 2026-11-18, brand-creator 0.13.0, on GitHub: run 44341529604 of `brand-creator-release.yml` on the release
 commit 8a6894b, the workflow's first run. The four `macos` jobs (`macos-26` on Apple silicon, Xcode 26.6): pytest 3552
 passed and nothing skipped (1357, 831 and 1364 in the three shares), node 249 pass and 0 fail, both halves of the Acme
 smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`. The two `linux` jobs printed `LINUX RUN OK`: pytest 3501 passed with 51
