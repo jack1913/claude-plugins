@@ -36,8 +36,9 @@ only does the housekeeping; every decision stays yours.
    the ones in my other project". Sessions you leave out are never touched or read. In the same question it asks
    whether it may compact your sessions, switch their model and effort for a job, and clear finished workers for
    you. Claude suggests yes, but nothing happens unless you answer yes.
-3. It sets one of them aside as the **analyst** and gives it no job. If none of your sessions is clean, it starts a
-   background session for that.
+3. It sets one of them aside as the **analyst** and gives it no job: a clean session open in the puppet-master
+   plugin's own repository when you have one, else another clean session you named. If none of your sessions is
+   clean, it starts a background session for that.
 
 ## Give it a job
 

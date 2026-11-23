@@ -88,6 +88,13 @@ test("on start the master names the open sessions and reserves the analyst befor
   assert.match(start, /Reviewed:/);
 });
 
+test("on start the analyst comes from a clean window in the puppet-master plugin's own checkout first (brainiac-pipeline, the user, 2026-11-23)", () => {
+  const start = section(readSkill(), "On start");
+  assert.match(start, /first\s+a\s+clean\s+session\s+open\s+in\s+the\s+puppet-master\s+plugin's\s+own\s+checkout/);
+  assert.match(start, /the\s+analyst\s+reports\s+on\s+this\s+plugin/);
+  assert.match(start, /only\s+when\s+none\s+is\s+open\s+there,\s+another\s+clean\s+session\s+the\s+user\s+named/);
+});
+
 test("on start the master warns once when it runs from a hand-installed copy", () => {
   const start = section(readSkill(), "On start");
   assert.ok(start.includes(".claude/skills/"));

@@ -19,7 +19,10 @@ Read this first, when this skill starts, and do it. Read it again when the user 
    session of yours is compacted, switched or cleared by the mod.
 3. Reserve the analyst before any job, but first ask whether another master on this machine already
    has an analyst the groups share: one analyst serves them all, and a second one made a third role
-   swap on 2026-11-03. Take one clean session from the user's answer:
+   swap on 2026-11-03. Take one clean session from the user's answer: first a clean session open in
+   the puppet-master plugin's own checkout (step 2 shows each session's folder), since the analyst
+   reports on this plugin; only when none is open there, another clean session the user named
+   (2026-11-23: the analyst put in a project window again while the plugin's window was free).
    `puppet adopt <session> --role analyst`, then send it `analyst-brief.md`, filled in. If none is
    clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier creative --job analyst`, then
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
