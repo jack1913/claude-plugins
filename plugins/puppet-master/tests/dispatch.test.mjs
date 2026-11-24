@@ -283,20 +283,38 @@ test("collision: a job whose scope folders are all absolute writes nothing in th
   assert.equal(collision({ scope: ["d:/x"], git: true }, { scope: ["."], git: true }), null);
 });
 
-test("an absolute --scope folder inside the checkout is refused by assign, pick and spawn; outside it is allowed (P-20261110-8)", async () => {
+test("an absolute --scope folder inside the checkout is made relative by assign, pick and spawn; the root is no scope; outside it is kept (P-20261124-6)", async () => {
   const t = setup([interactive("u1", 1), interactive("u2", 2)]);
   t.deps.platform = "win32";
   try {
     adoptSession(t.deps, "u1");
     adoptSession(t.deps, "u2");
-    assert.equal(await main(["assign", "u1", "x", "--scope", "C:\\Work\\Repo\\docs"], t.deps), 2);
-    assert.match(t.err.at(-1), /--scope "c:\/work\/repo\/docs" is inside the checkout; write it relative to it/);
-    assert.throws(() => pickSession(t.deps, REPO, { scope: "c:/work/repo" }), /inside the checkout/);
+    assert.equal(await main(["assign", "u1", "x", "--scope", "C:\\Work\\Repo\\docs", "--no-git"], t.deps), 0);
+    assert.deepEqual(t.readRegistry().workers.u1.scope, ["docs"]);
+    // pick converts the same way: the folder collides with u1's docs, a sibling folder does not
+    assert.equal(pickSession(t.deps, REPO, { scope: "c:/work/repo/docs/a" }), null);
+    assert.equal(pickSession(t.deps, REPO, { scope: "c:/work/repo/src" }).name, "u2");
     const brief = path.join(t.dir, "b.md");
     fs.writeFileSync(brief, "do it\n<!-- end of the puppet-master worker brief: keep this line -->\n");
-    assert.throws(() => spawnWorker(t.deps, "w9", REPO, brief, { scope: "C:/Work/Repo/x", effort: "high" }), /inside the checkout/);
+    const w = spawnWorker(t.deps, "w9", REPO, brief, { scope: "C:/Work/Repo/x/y, d:/plans", effort: "high", noGit: true });
+    assert.deepEqual(t.readRegistry().workers[w.name].scope, ["x/y", "d:/plans"]);
     // a sibling with the same prefix is outside it
-    assert.deepEqual(assignJob(t.deps, "u1", "x", { scope: "C:/Work/Repo2/docs" }).scope, ["c:/work/repo2/docs"]);
+    assert.deepEqual(assignJob(t.deps, "u2", "x", { scope: "C:/Work/Repo2/docs" }).scope, ["c:/work/repo2/docs"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("an absolute --scope equal to the checkout root is no scope, alone or among other folders (P-20261124-6)", () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2)]);
+  t.deps.platform = "win32";
+  try {
+    adoptSession(t.deps, "u1");
+    adoptSession(t.deps, "u2");
+    assert.equal(assignJob(t.deps, "u1", "x", { scope: "C:\\Work\\Repo" }).scope, undefined);
+    assert.equal(t.readRegistry().workers.u1.scope, undefined);
+    // the root among other folders is no scope too: u1 holds the whole checkout, so u2 collides
+    assert.throws(() => assignJob(t.deps, "u2", "y", { scope: "c:/work/repo/src, c:/work/repo/" }), /unless both jobs pass --scope/);
   } finally {
     t.cleanup();
   }

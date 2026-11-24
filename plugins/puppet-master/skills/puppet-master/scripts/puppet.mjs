@@ -508,7 +508,7 @@ export function isEditing(rec, agents) {
 
 // A job's write scope: folders in posix form, relative to its checkout ("." is the whole
 // checkout) or absolute and outside it (a temp plans folder). One that climbs out with ".."
-// is refused; the callers that know the checkout refuse an absolute one inside it.
+// is refused; the callers that know the checkout write an absolute one inside it relative.
 export function parseScope(deps, value) {
   if (value === undefined) return undefined;
   const win = (deps.platform ?? process.platform) === "win32";
@@ -530,17 +530,23 @@ export function parseScope(deps, value) {
 const isAbsoluteScope = (s) => s.startsWith("/") || /^[A-Za-z]:/.test(s);
 
 // The callers that know the checkout: an absolute folder inside it is written relative to it,
-// so the lock sees it.
-function refuseScopeInside(deps, job, checkout) {
+// so the lock sees it (job.scope is rewritten in place). The checkout root itself covers
+// everything, so it is no scope at all.
+function relativizeScopeInside(deps, job, checkout) {
   const p = pathApi(deps);
   const root = checkoutKey(deps, checkout);
-  for (const s of job.scope ?? []) {
-    if (!isAbsoluteScope(s)) continue;
-    const abs = checkoutKey(deps, s);
-    if (abs === root || abs.startsWith(root.endsWith(p.sep) ? root : root + p.sep)) {
-      throw new PuppetError(`--scope "${s}" is inside the checkout; write it relative to it`, 2);
+  if (!job.scope) return;
+  const next = [];
+  for (const s of job.scope) {
+    const abs = isAbsoluteScope(s) ? checkoutKey(deps, s) : null;
+    if (abs === root) {
+      delete job.scope;
+      return;
     }
+    const inside = abs !== null && abs.startsWith(root.endsWith(p.sep) ? root : root + p.sep);
+    next.push(inside ? p.relative(root, abs).replace(/\\/g, "/") : s);
   }
+  job.scope = next;
 }
 
 const overlaps = (x, y) => x === "." || y === "." || x === y || y.startsWith(`${x}/`) || x.startsWith(`${y}/`);
@@ -764,7 +770,7 @@ export function assignJob(deps, key, label, { reuse = false, extend = false, sco
   const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; the ${rec.role} takes no jobs`);
-  refuseScopeInside(deps, job, rec.checkout);
+  relativizeScopeInside(deps, job, rec.checkout);
   if (extend) return extendJob(deps, reg, agents, agent, rec, label, job, tier, git ? true : noGit ? false : undefined);
   tier ??= DEFAULT_TIER;
   const reusable = reuse && rec.jobState === "done";
@@ -862,7 +868,7 @@ export function pickSession(deps, cwd, { scope, noGit = false, tier = DEFAULT_TI
   tierMatch(tier, {});
   const job = jobFields(deps, { scope, noGit });
   const checkout = checkoutOf(deps, cwd);
-  refuseScopeInside(deps, job, checkout);
+  relativizeScopeInside(deps, job, checkout);
   const key = checkoutKey(deps, checkout);
   const agents = listAgents(deps);
   const reg = loadRoster(deps, agents);
@@ -917,7 +923,7 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
     throw new PuppetError(`a live session is already named "${name}" (id ${clash.id ?? clash.sessionId})`, 2);
   }
   const checkout = checkoutOf(deps, cwd);
-  refuseScopeInside(deps, fields, checkout);
+  relativizeScopeInside(deps, fields, checkout);
   const key = checkoutKey(deps, checkout);
   const reg = loadRoster(deps, agents);
   for (const [other, rec] of Object.entries(reg.workers)) {
