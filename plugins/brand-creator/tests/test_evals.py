@@ -837,7 +837,8 @@ def test_the_real_loader_accepts_every_case(tmp_path):
         n_real = len(list((c / "graders").glob("*.md")))
         assert c.name in ln and re.search(rf"graders\.{n_real}\.type: Invalid discriminator", ln), f"{c.name}: {ln}"
         assert ln.count("Invalid") == 1, ln
-    assert "0 case(s)" in out and f"{len(case_dirs())} case file(s) failed to load" in out
+    n = len(case_dirs())   # the summary line: "N case file(s) failed to load" in older Claude Code, "Couldn't load N case files" in 2.1.326
+    assert "0 case(s)" in out and re.search(rf"{n} case file\(s\) failed to load|Couldn't load {n} case files", out), out
     assert re.search(r"0 case\(s\) .*\$0\.00\b", out), "nothing may be billed by the loader check: " + out[-300:]
 
 
@@ -850,14 +851,70 @@ def test_every_trigger_list_has_polish_queries_and_the_plan_cases():
         assert any(pl.search(c["query"]) for c in cases), f"{name}: no Polish query"
         queries = [c["query"].strip().lower() for c in cases]
         assert len(queries) == len(set(queries)), name
-        if name in ("new", "round", "status", "setup", "brand-adopt", "check", "review", "launch"):
+        if name in ("round", "status", "setup", "brand-adopt", "check"):
             assert len(cases) >= 6 and not any(c["should_trigger"] for c in cases), name
     pos = " ".join(c["query"] for c in d["brand-creator"] if c["should_trigger"]).lower()
     for word in ("bakery", "coach", "photograph", "podcast", "etsy", "yoga", "florist", "nonprofit", "band", "have a logo already", "continue", "left off"):
         assert word in pos, f"brand-creator positives miss: {word}"
-    outward = " ".join(c["query"] for c in d["launch"] + d["brand-naming"] if not c["should_trigger"]).lower()
-    for word in ("buy the domain", "register the domain", "trademark", "register the instagram handle"):
-        assert word in outward, f"outward-action near miss missing: {word}"
+    # the launch hand-offs are brand-creator's now: an outward request is its positive (it hands the step over) and a naming near miss
+    outward = " ".join([c["query"] for c in d["brand-creator"] if c["should_trigger"]] + [c["query"] for c in d["brand-naming"] if not c["should_trigger"]]).lower()
+    for word in ("buy the domain", "register the domain", "trademark", "instagram handle"):
+        assert word in outward, f"outward-action query missing: {word}"
+    assert not {"new", "launch", "review"} & set(d), "those skills were folded into brand-creator and check --review"
+    # what the three removed lists held lives on in brand-creator's list, each with the answer it deserves against brand-creator's text
+    verdict = {c["query"]: c["should_trigger"] for c in d["brand-creator"]}
+    near_misses = (
+        "Launch the website", "Order business cards for us",                              # not a brand's launch steps
+        "Start a new React project called storefront", "Scaffold a new Next.js app",       # a code project, not a brand
+        "Create a new git branch for the logo work",                                       # a git act
+        "Review this pull request", "Review the diff",                                     # a code review
+        "Critique this board",                                                             # no brand cue at all
+        "Give me feedback on the brand book before I approve it", "Zrób przegląd księgi znaku")   # a book that exists is brand-book's
+    for q in near_misses:
+        assert verdict.get(q) is False, f"near miss missing or wrong: {q}"
+    # the two review queries of a book that exists are sibling cases: a near miss here and a positive in brand-book's list
+    book = {c["query"]: c["should_trigger"] for c in d["brand-book"]}
+    for q in ("Give me feedback on the brand book before I approve it", "Zrób przegląd księgi znaku"):
+        assert book.get(q) is True, f"sibling case missing or wrong in brand-book's list: {q}"
+    owned = (
+        # start (was `new`)
+        "I need a logo for my bakery", "Zacznij nowy projekt marki dla mojej kawiarni", "Open a new project folder for a rebrand of our accounting firm",
+        "Start a new brand project called Northlight", "Start a brand called Acme",
+        # launch hand-off (was `launch`): handed over, never done
+        "Buy the domain for me", "What do I need to do before the brand goes public?", "zarejestruj znak towarowy za mnie",
+        "Give me the launch checklist for the new brand", "Co zrobić przed publikacją marki?", "Register the Instagram handle for me",
+        "Pay for the trademark filing", "(inside a folder with BRAND-STATE.md) Help me launch", "(w folderze z BRAND-STATE.md) pomóż mi z premierą marki",
+        # review of a project's round boards (was `review`; the review list and the panel are typed `check --review [panel]`, a round's own self-review runs in brand-creator)
+        "(inside a folder with BRAND-STATE.md) Ask a panel of reviewers to critique the boards",
+        "(w folderze z BRAND-STATE.md) zrób przegląd tablic z kierunkami",
+        "(inside a folder with BRAND-STATE.md) Get a few reviewers' opinions on the direction board",
+        "(inside a folder with BRAND-STATE.md) Self-review the round before I see it")
+    for q in owned:
+        assert verdict.get(q) is True, f"brand-creator positive missing or wrong: {q}"
+    # the trigger text carries the phrases the docs promise
+    when = re.search(r"^when_to_use: (.*)$", (SKILLS / "brand-creator" / "SKILL.md").read_text(encoding="utf-8"), re.M).group(1).lower()
+    for phrase in ("start a brand called acme", "help me launch", "the launch checklist", "buy the domain", "file the trademark", "pomóż mi z premierą marki"):
+        assert phrase in when, phrase
     # every skill that exists has a list (the older test), and a user-invoked skill never has a positive
     skills = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").is_file()}
     assert set(d) == skills
+
+
+def test_the_manual_checks_page_records_the_trigger_run_of_the_text_as_it_ships():
+    """The 2026-11-03 run measured the brand-creator text that ships and brand-book's unchanged one: the record names the run, the
+    sibling method, the known misses and what the text lost, and the text in the skill is the one it names."""
+    page = (ROOT / "docs" / "internals" / "manual-checks.md").read_text(encoding="utf-8")
+    section = " ".join(page[page.index("## Trigger evals for the skill descriptions"):page.index("## Workflow trials")].split())
+    for needle in ("**Last run:** 2026-11-03", "| brand-creator | 78/81, 0.98, 0.96 |", "| brand-book | 42/43, 1.00, 0.96 |", "**Sibling run.**",
+                   "\"Register the Instagram handle for me\"", "\"Zrób przegląd księgi znaku\"", "1,021 characters",
+                   "checked against a word diff of the committed text", "\"przed publikacją marki\"", "\"znak towarowy\""):
+        assert needle in section, needle
+    # the run is done: nothing says it is still due
+    assert "None of them has run" not in section and "re-run the billed trigger evals for `brand-creator`" not in section
+    head = (ROOT / "skills" / "brand-creator" / "SKILL.md").read_text(encoding="utf-8").split("\n---\n", 1)[0]
+    fm = dict(re.match(r"^([a-z][a-z_-]*):\s*(.*)$", line).groups() for line in head.splitlines()[1:])   # one key: value per line (test_skills holds that)
+    assert len(fm["description"]) + len(fm["when_to_use"]) == 1021
+    for words in ("before the brand goes public, trademark fees too", "pick site references", "\"przed publikacją marki\"", "\"znak towarowy\""):
+        assert words in fm["when_to_use"], words
+    evals = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
+    assert len(evals["brand-book"]) == 43 and len(evals["brand-creator"]) == 81

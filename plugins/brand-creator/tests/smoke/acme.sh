@@ -21,7 +21,7 @@
 # The r1 page is the worked example filled from templates/round-page.html (three directions). A previous smoke folder
 # is moved aside (to <parent>/removed/), never deleted.
 # ACME_SMOKE_PART=finish or rest runs one half of it (default all: both): the shared build up to the frozen round, then
-# tools/finish.sh alone (finish) or every section after it (rest). CI runs the two halves side by side on macOS; neither
+# tools/finish.sh alone (finish) or every section after it (rest). tests/run-all.sh --smoke runs the two halves side by side; neither
 # half alone is the whole smoke, and each says which half passed.
 set -euo pipefail
 
@@ -472,7 +472,7 @@ step "freeze the approved round, then check again"
 expect_file "$P/history/MANIFEST.sha256"
 "${BC[@]}" check --project "$P"
 
-# The smoke's two halves start here, so CI can run them side by side on macOS (ACME_SMOKE_PART): finish is the next
+# The smoke's two halves start here, so tests/run-all.sh runs them side by side (ACME_SMOKE_PART): finish is the next
 # section alone, rest is every section after it. That works because tools/finish.sh runs on its own copy ($SMOKE/guard-finish),
 # taken before any later section writes into $P (names does), and nothing after it reads that copy or its logs.
 if [ "$PART" != rest ]; then

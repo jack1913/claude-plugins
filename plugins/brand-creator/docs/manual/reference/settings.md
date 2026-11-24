@@ -7,7 +7,7 @@ Change them in `/plugin` (Installed, then brand-creator, then **Configure option
 | Setting | What it does |
 | --- | --- |
 | `projects_root` | The folder for your brand projects. Empty: you're asked, with a folder named after the project (like `./my-bakery/`) offered first |
-| `review_surface` | Where boards show up. `auto` (default): asks once per project whether boards may go to claude.ai as a private page, and uses a local file until you answer. `artifact`: always a private claude.ai page. `local`: always a local file |
+| `review_surface` | Where boards show up. `auto` (default): asks once per project whether boards may go to claude.ai as a private page, and uses a local file until you answer. `artifact`: always a private claude.ai page. `local`: always a local file. A first-screen version you ask Claude to share as a private page follows the same answer |
 
 ## Where the plugin keeps things
 

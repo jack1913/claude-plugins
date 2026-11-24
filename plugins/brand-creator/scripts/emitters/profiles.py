@@ -8,7 +8,9 @@
 Writes under assets/profiles/ (override with --out-dir) and records every file in assets/manifest.json.
   avatar-<px>.png                  the profile photo at each size of the profile-avatar row (400 and 800): an opaque square with the mark centred, no alpha channel.
                                    Most networks show it in a circle, so the gate is the circle: the mark's ink must stay inside the row's safe circle
-                                   (a share of the radius). By default the mark is as large as fits (up to --content-fraction); a value you set is held to the same gate
+                                   (a share of the radius). By default the mark is as large as fits (up to --content-fraction); a value you set is held to the same gate.
+                                   The ground is qa/rules.json icons.ground: light (default) or dark color.bg, or drawing: a mark drawn on its own full-bleed ground
+                                   fills the avatar up to edge to edge, shrinking on that ground until what sits on it is inside the circle
   linkedin-banner-<w>x<h>.png, x-header-..., youtube-banner-..., facebook-cover-..., instagram-feed-..., instagram-story-...
                                    one image per platform at its row's size, from templates/profile/banner.html (or --template): the brand's drawn lettering (the
                                    lockup alone, or the wordmark next to the mark: --logo-svg, else assets/logo/lockup.svg, else wordmark.svg) and one line of real
@@ -33,7 +35,7 @@ import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, read_state, write_bytes_if_changed  # noqa: E402
 from _emit import (add_logo_arg, art_img, card_art, card_lettering_setup, fill_template, fit_art, mark_accent, mark_tagline, render_card,  # noqa: E402
-                   rule_radius, whole_px)
+                   rule_radius, whole_px, tokens_square)
 from px_lib import from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
 from tierb import INK_TOLERANCE_PX, PROFILE_BANNERS, TierBEmit, fit_share, ink_bbox_on, ink_far  # noqa: E402
@@ -84,7 +86,7 @@ def main() -> int:
     if a.content_fraction is not None and not (0 < a.content_fraction <= 1):
         fail(EXIT_USAGE, f"--content-fraction {a.content_fraction:g} is outside 0 to 1")
     av = e.sizes("profile-avatar")
-    ground = e.colour("light", "color.bg")
+    ground = e.colour("light", "color.bg")      # the banners' ground; the avatar's is the rules' icon ground (below)
     ground_rgb = parse_hex(ground)
     out = e.out
     proofs: dict[str, bytes] = {}      # written first, even when a gate fails below: the proof shows why
@@ -93,36 +95,41 @@ def main() -> int:
 
     # ---- avatar: the mark inside the circle, at every size
     biggest = max(av["px"])
-    full = e.png(svgtools.tile(e.drawing(biggest).svg, biggest, biggest, content=1.0), biggest, biggest)
-    far_full = ink_far(full)
+    art_top, av_ground, bleed = e.icon_ground(e.drawing(biggest), biggest)
+    av_rgb = parse_hex(av_ground)
+    full = e.png(svgtools.tile(art_top, biggest, biggest, content=1.0), biggest, biggest)
+    far_full = ink_far(full, ground=av_rgb) if bleed else ink_far(full)   # a drawing with its own ground: only what sits on that ground is ink
     if not far_full:
         fail(EXIT_FAIL, "the mark has no ink: there is nothing to put in an avatar")
     limit_top = av["safe_circle"] * biggest / 2
     auto = a.content_fraction is None
-    content = fit_share(limit_top, far_full, AVATAR_MAX_CONTENT) if auto else a.content_fraction
+    # a drawing on its own ground may fill the avatar edge to edge when its ink stays inside the circle; else it shrinks on that ground
+    content = fit_share(limit_top, far_full, 1.0 if bleed else AVATAR_MAX_CONTENT) if auto else a.content_fraction
     if content <= 0:
         fail(EXIT_FAIL, f"the mark does not fit the avatar's safe circle even at the smallest size (its ink reaches {far_full:.0f} px from the centre of a {biggest} px "
                         f"canvas at a box of 1.0, the limit is {limit_top:.0f} px). Nothing is written. Redraw the mark with a rounder silhouette")
-    rep.add("note:avatar content", "info", "the mark's box in the avatar", detail=f"{content:g} of the canvas ({'the largest that fits the safe circle' if auto else '--content-fraction'})")
+    rep.add("note:avatar content", "info", "the mark's box in the avatar", detail=f"{content:g} of the canvas ({'on its own ground, the largest that fits the safe circle' if bleed and auto else 'the largest that fits the safe circle' if auto else '--content-fraction'})")
     for n in av["px"]:
-        d, raw = e.tile_png(n, content=content, ground=True, flat=True)
+        d = e.drawing(n)
+        art, _g, _b = e.icon_ground(d, n)
+        raw = e.png(svgtools.tile(art, n, n, bg=av_ground, content=content), n, n, bg=av_ground)
         try:
             rgb = from_png(raw).png_rgb()
         except ValueError as err:
             fail(EXIT_FAIL, f"the avatar at {n} px has transparent pixels ({err})")
         radius = av["safe_circle"] * n / 2
-        far = ink_far(rgb, ground=ground_rgb)
+        far = ink_far(rgb, ground=av_rgb)
         ok = far <= radius + INK_TOLERANCE_PX
         rep.add(f"check:avatar-{n} circle", "pass" if ok else "fail", f"the mark stays inside {av['safe_circle']:g} of the avatar's circle at {n} px",
                 detail=f"farthest ink pixel {far:.0f} px from the centre, limit {radius:.0f}" + ("" if ok else "; lower --content-fraction"))
         if not ok:
             failures.append(f"avatar-{n}: ink {far:.0f} px from the centre, limit {radius:.0f}")
-        svg = svgtools.tile(d.svg, n, n, bg=ground, content=content)
+        svg = svgtools.tile(art, n, n, bg=av_ground, content=content)
         stroke = max(2, round(n / 200))
         marks = (f'<circle cx="{n / 2:g}" cy="{n / 2:g}" r="{n / 2 - stroke / 2:g}" fill="none" stroke="{PROOF_CROP}" stroke-width="{stroke}"/>'
                  f'<circle cx="{n / 2:g}" cy="{n / 2:g}" r="{radius:g}" fill="none" stroke="{PROOF_STROKE}" stroke-width="{stroke}" stroke-dasharray="{stroke * 4} {stroke * 3}"/>')
         head, _close, tail = svg.rpartition("</svg>")    # the wrapper's closing tag is the last one: the mark's own nested <svg> closes before it
-        proofs[f"avatar-{n}"] = e.png(head + marks + "</svg>" + tail, n, n, bg=ground)
+        proofs[f"avatar-{n}"] = e.png(head + marks + "</svg>" + tail, n, n, bg=av_ground)
         shipped.append((f"avatar-{n}.png", rgb, "profile-avatar", "profile-avatar", n, d,
                         f"profile photo, {n} px square, opaque; shown in a circle: the mark is {content:g} of the canvas and inside {av['safe_circle']:g} of the circle's radius",
                         {"safe_radius_px": round(radius, 2)}))
@@ -164,7 +171,7 @@ def main() -> int:
                   "safe_x": f"{s['x']:g}", "safe_y": f"{s['y']:g}", "safe_w": sw, "safe_h": sh,
                   "direction": "row" if wide else "column", "align": "left" if wide else "center", "items": "flex-start" if wide else "center",
                   "gap": round(short * GAP_SHARE), "mark_px": mark_px, "title_px": title_px, "sub_px": round(title_px * SUB_SHARE),
-                  "rule_w": title_px * 2, "rule_h": rule_h, "rule_radius": rule_radius(f"{rule_h}px", card_art(layout, d.svg, found[0] if found else None))}
+                  "rule_w": title_px * 2, "rule_h": rule_h, "rule_radius": rule_radius(f"{rule_h}px", card_art(layout, d.svg, found[0] if found else None), square=tokens_square(e.tokens_path))}
         pngs = {}
         for variant, proof in (("", ""), ("-proof", proof_overlay(w, h, s))):
             src_rel = f"{out}/_build/{fname}{variant}.html"

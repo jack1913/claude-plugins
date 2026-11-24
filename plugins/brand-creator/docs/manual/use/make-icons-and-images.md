@@ -10,16 +10,19 @@ a brand project.
 
 ## Make the files
 
-1. Ask in your own words, such as "favicons from my logo.svg", or type the command:
-
-   > /brand-creator:brand-assets
-
+1. Ask in your own words, such as "favicons from my logo.svg" or "make the .ico and tray icons". If Claude does not pick it up, say "use the brand-assets skill".
 2. Answer a couple of quick questions: which targets (web only, web and social, web and app icons, or every target), and
    whether a dark version of the logo exists. Your name, site address and any tagline come in one plain message.
 3. Claude draws each size at real pixels, checks small sizes, and records what it made in a manifest.
 
 Without a project, everything goes into `./brand-assets/`. Inside a brand project, the files follow your project's list of
 places that show an icon.
+
+Is your logo drawn on its own dark square, made to be cropped by a phone? Say so. Claude sets `icons.ground` to
+`drawing` in `qa/rules.json`, and the web and Apple app icons and the avatar show your square instead of a small dark
+tile on white.
+Where a phone or a profile page crops to a circle, your logo shrinks on its own square until nothing gets cut. `dark` puts them on your dark background colour instead. To put the Open Graph card and the GitHub
+preview on the dark background too, Claude sets `social.mode` to `dark`.
 
 ## What you can get
 

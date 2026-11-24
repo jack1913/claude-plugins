@@ -109,6 +109,30 @@ def test_family_modes_add_endorsement_and_family_and_full_adds_adoption_and_laun
     assert "adoption" not in bookdata.chapters_for(tmp_path, view("standard", "family-member"))
 
 
+def test_a_family_parent_gets_the_family_chapters_like_a_member(tmp_path):
+    got = bookdata.chapters_for(tmp_path, view("standard", "family-parent"))
+    assert "endorsement" in got and "family" in got
+    quick = bookdata.chapters_for(tmp_path, view("quick", "family-parent"))
+    assert "family" not in quick and "endorsement" not in quick                   # Quick, as for a member: only through book_chapters
+    assert "family" in bookdata.chapters_for(tmp_path, view("quick", "family-parent", extra=["family"]))
+
+
+def test_book_init_writes_the_parent_worded_family_chapters_for_a_parent(proj):
+    for cid in ("family", "endorsement"):
+        (proj / f"book/chapters/{cid}.md").unlink(missing_ok=True)
+    assert bc("state", "--set", "architecture=family-parent", "--set", "book_chapters=family,endorsement", project=proj).returncode == 0
+    r = bc("book", "--init", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    for cid in ("family", "endorsement"):
+        parent = (ROOT / f"templates/book/{cid}.parent.md").read_text()
+        assert (proj / f"book/chapters/{cid}.md").read_text() == parent
+        assert parent != (ROOT / f"templates/book/{cid}.md").read_text()
+    (proj / "book/chapters/family.md").unlink()
+    assert bc("state", "--set", "architecture=family-member", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0
+    assert (proj / "book/chapters/family.md").read_text() == (ROOT / "templates/book/family.md").read_text()   # a member keeps the member wording
+
+
 # ---------------------------------------------------------------- a built book
 
 @pytest.fixture(scope="session")
@@ -660,6 +684,66 @@ def test_a_missing_chapter_and_leftover_scaffolding_fail_book_lint(proj):
 
 @setup
 @resvg
+def test_an_open_item_builds_and_is_listed_as_info_but_an_unfilled_marker_still_fails(proj):
+    mutate(proj / "book/chapters/use.md", "## ", "- [ ] Domains: Open: waits for the name to be chosen.\n\nOpen: no repository exists yet.\n\n## ", 1)
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr                                    # an open item is no leftover marker: the build and its lint pass
+    assert bc("book-lint", project=proj).returncode == 0
+    row = next(x for x in report(proj, "book-lint")["results"] if x["id"] == "book:open-items")
+    assert row["status"] == "info" and "2 open" in row["detail"]
+    assert "use: Domains - waits for the name to be chosen." in row["detail"] and "use: no repository exists yet." in row["detail"]
+    mutate(proj / "book/chapters/use.md", "Open: no repository exists yet.", "[[fill: the repository]]")
+    build_fails(proj, "unfilled marker")
+    html = (proj / "book.html").read_text()
+    (proj / "book.html").write_text(html.replace("</li>", " [[fill: x]]</li>", 1))   # in the HTML too, a marker is a failure the open item is not
+    assert bc("book-lint", project=proj).returncode == 1
+    assert next(x for x in report(proj, "book-lint")["results"] if x["id"] == "words:scratch")["status"] == "fail"
+
+
+@setup
+@resvg
+def test_an_open_item_with_nothing_after_it_fails_and_a_book_with_none_passes_the_row(proj):
+    assert next(x for x in report(proj, "book-lint")["results"] if x["id"] == "book:open-items")["status"] == "pass"
+    html = (proj / "book.html").read_text()
+    end = html.index("</section>", html.index('data-chapter="use"'))
+    (proj / "book.html").write_text(html[:end] + "<ul><li>Handles: Open:</li></ul>" + html[end:])
+    assert bc("book-lint", project=proj).returncode == 1
+    row = next(x for x in report(proj, "book-lint")["results"] if x["id"] == "book:open-items")
+    assert row["status"] == "fail" and "use" in row["detail"]
+
+
+@setup
+@resvg
+def test_open_outside_a_chapter_or_with_a_colon_in_the_label_is_not_an_open_item(proj):
+    sec = '<section data-chapter="use">%s</section>'
+    assert booklint._open_rules("<p>Open: x</p>")[0]["status"] == "pass"                      # outside any chapter
+    assert booklint._open_rules(sec % "<p>A: B: Open: x</p>")[0]["status"] == "pass"          # a colon in the label
+    d = booklint._open_rules(sec % "<ul><li><strong>Handles</strong>: Open: x</li></ul>")[0]["detail"]
+    assert "use: Handles - x" in d and "  " not in d
+    nested = booklint._open_rules(sec % "<ul><li><p>Handles: Open: x</p></li></ul>")[0]["detail"]
+    assert nested.startswith("1 open: ") and nested.count("Handles - x") == 1, nested   # a <p> in an <li> is one item
+    two_p = booklint._open_rules(sec % "<ul><li><p>Handles: Open: a</p><p>Mail: Open: b</p></li></ul>")[0]["detail"]
+    assert two_p.startswith("2 open: ") and "Handles - a" in two_p and "Mail - b" in two_p, two_p   # two <p> in one <li> are two items
+    sub = booklint._open_rules(sec % "<ul><li>Handles: Open: a<ul><li>Mail: Open: b</li></ul></li></ul>")[0]["detail"]
+    assert sub.startswith("2 open: ") and "Handles - a" in sub and "Mail - b" in sub, sub   # a nested list holds its own item
+    named = booklint._open_rules(sec % "<ul><li>Handles: Open:<ul><li>the domain</li><li>the trademark</li></ul></li></ul>")[0]
+    assert named["status"] == "info" and named["detail"].startswith("1 open: "), named   # a nested list names what the `Open:` item waits for
+    assert booklint._open_rules(sec % "<ul><li>Handles: Open:</li></ul>")[0]["status"] == "fail"   # nothing after it, nothing nested
+    loose = booklint._open_rules(sec % "<ul><li><p>Handles: Open:</p><ul><li>the domain</li></ul></li></ul>")[0]
+    assert loose["status"] == "info" and loose["detail"] == "1 open: use: Handles - the domain", loose   # a loose list: the <p> stands for its <li>
+    assert booklint._open_rules(sec % "<ul><li><p>Handles: Open:</p></li></ul>")[0]["status"] == "fail"   # a loose item with nothing nested
+    for odd in ("<ul><li>Note: <p>Handles: Open:</p><ul><li>the domain</li></ul></li></ul>",
+                "<ul><li><p>Note: x</p>Handles: Open:<ul><li>d</li></ul></li></ul>"):
+        assert booklint._open_rules(sec % odd)[0]["status"] == "fail", odd   # an li that does not read as one item: the bare `Open:` is not dropped
+
+
+def test_the_adoption_and_launch_templates_offer_the_open_form():
+    for name in ("adoption", "launch"):
+        assert "Open: <what" in (ROOT / "templates" / "book" / f"{name}.md").read_text()
+
+
+@setup
+@resvg
 def test_duplicate_ids_and_broken_anchors_fail(proj):
     mutate(proj / "book.html", '<section class="ch" id="files"', '<section class="ch" id="idea"')
     mutate(proj / "book.html", 'href="#proof"', 'href="#nowhere"')
@@ -771,6 +855,48 @@ def test_the_fonts_of_the_project_are_embedded_as_data_uris(proj):
     html = (proj / "book.html").read_text()
     assert re.search(r'@font-face\{font-family:"Test Face";font-weight:400;font-style:normal;font-display:block;src:url\(data:font/ttf;base64,', html)
     assert "<link" not in html
+
+
+@setup
+@resvg
+def test_a_variable_font_is_embedded_with_its_weight_range(proj):
+    """A variable font embedded with one weight is held at it by the browser, which fakes the book's bolder headings. The current fontcheck report says what the file is: a
+    variable font is declared with its range, in the @font-face and in the type table; a static one keeps the weight book.json gives. Without a current report that reads the
+    file the book cannot tell: it keeps the one weight and warns."""
+    from helpers import font_variant
+    range_unknown = "the weight range of assets/fonts/test.ttf is not known"
+
+    def book_warnings():
+        return [r["detail"] for r in report(proj, "book")["results"] if r["id"] == "book:type" and r["status"] == "warn"]
+
+    (proj / "assets/fonts").mkdir(parents=True)
+    shutil.copy(ROOT / "tests/fixtures/fonts/TestFont-subset.ttf", proj / "assets/fonts/test.ttf")
+    (proj / "book/book.json").write_text(json.dumps({"schema": 1, "fonts": [{"family": "Test Face", "file": "assets/fonts/test.ttf", "weight": 400}]}))
+    r = bc("book", project=proj)                                                     # no fontcheck report yet
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '@font-face{font-family:"Test Face";font-weight:400;font-style:normal;' in (proj / "book.html").read_text()
+    assert [w for w in book_warnings() if w.startswith(range_unknown) and "brand-creator fontcheck" in w], book_warnings()
+
+    assert bc("fontcheck", "--lang", "en", "--no-platform", project=proj).returncode == 0
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert '@font-face{font-family:"Test Face";font-weight:100 900;font-style:normal;' in html     # the fixture's `wght` axis
+    assert re.search(r"<td[^>]*>Test Face</td><td[^>]*>100–900</td>", html)                        # the type table says the range too
+    assert not [w for w in book_warnings() if w.startswith(range_unknown)]
+
+    font_variant(proj / "assets/fonts/test.ttf", static=True)                        # the font changed: the report no longer reads this file
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '@font-face{font-family:"Test Face";font-weight:400;font-style:normal;' in (proj / "book.html").read_text()
+    assert [w for w in book_warnings() if w.startswith(range_unknown)]
+
+    assert bc("fontcheck", "--lang", "en", "--no-platform", project=proj).returncode == 0
+    r = bc("book", project=proj)                                                     # a static font: the weight book.json gives, and nothing to warn about
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert '@font-face{font-family:"Test Face";font-weight:400;font-style:normal;' in html and re.search(r"<td[^>]*>Test Face</td><td[^>]*>400</td>", html)
+    assert not [w for w in book_warnings() if w.startswith(range_unknown)]
 
 
 @setup
@@ -1305,3 +1431,117 @@ def test_a_changed_site_still_makes_the_book_report_stale(proj):
     r = bc("book", "--verify", project=proj)
     assert r.returncode == 1 and "edited by hand" in r.stdout + r.stderr
     assert bc("book", project=proj).returncode == 0 and "Pricing sits above the stages" in site_chapter(proj)
+
+
+# ---------------------------------------------------------------- the masters block and the opt-in masters chapter (0.10.0)
+
+def test_the_masters_chapter_is_opt_in_and_stands_after_the_site(tmp_path):
+    assert "masters" not in bookdata.chapters_for(tmp_path, view("standard"))
+    got = bookdata.chapters_for(tmp_path, view("standard", extra=["masters", "site", "components", "tone"]))
+    assert got == ["idea", "mark", "colour", "type", "tone", "components", "site", "masters", "use", "files", "proof", "donts", "changing", "history"]
+    assert bookdata.TITLES["masters"] == "Ads and decks" and "masters" in bookdata.OPT_IN
+    assert (ROOT / "templates/book/masters.md").is_file()
+
+
+def add_masters(proj: Path) -> None:
+    d = proj / "assets" / "masters"
+    (d / "png").mkdir(parents=True)
+    for name, shade in (("kalendarz-1080x1350", 40), ("lista-1080x1350", 200)):
+        (d / "png" / f"{name}.png").write_bytes(_png(27, 34, shade))
+        (d / "reklama").mkdir(exist_ok=True)
+        (d / "reklama" / f"{name}.html").write_text("<p>ad</p>")
+    (d / "masters.json").write_text(json.dumps({"round": 5, "approved": "2026-10-17 kalendarz and lista", "copy_rules": ["no amounts or names in ads"],
+                                                "builder": None, "entries": [
+                                                    {"file": "reklama/kalendarz-1080x1350.html", "kind": "ad", "canvas": [1080, 1350], "direction": "kalendarz"},
+                                                    {"file": "reklama/lista-1080x1350.html", "kind": "ad", "canvas": [1080, 1350], "direction": "lista"}]}))
+
+
+def masters_in_tone(proj: Path) -> None:
+    assert bc("state", "--set", "book_chapters=tone", project=proj).returncode == 0
+    tone = proj / "book/chapters/tone.md"
+    tone.write_text(tone.read_text(encoding="utf-8").rstrip("\n") + "\n\n{{masters}}\n", encoding="utf-8")
+
+
+@setup
+@resvg
+def test_the_masters_block_shows_each_direction_its_sizes_and_the_copy_rules(proj):
+    add_masters(proj)
+    masters_in_tone(proj)
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    book = (proj / "book.html").read_text()
+    assert 'data-masters-direction="kalendarz"' in book and 'data-masters-direction="lista"' in book
+    assert "1080 × 1350" in book and "no amounts or names in ads" in book and book.count('src="data:image/png;base64,') >= 2
+
+
+@setup
+@resvg
+def test_the_masters_block_needs_the_approved_masters(proj):
+    masters_in_tone(proj)
+    before = (proj / "book.html").read_bytes()
+    r = bc("book", project=proj)
+    err = r.stdout + r.stderr
+    assert r.returncode == 1 and "{{masters}} needs the approved masters (assets/masters/masters.json, from masters approve)" in err, err
+    assert (proj / "book.html").read_bytes() == before
+
+
+# ---------------------------------------------------------------- 0.12.0: rule lines with a note in the tag, the hex column, drawings with their own ground
+
+@pytest.mark.parametrize("line,rule,text", [
+    ("(rule) the accent is a fill", True, "the accent is a fill"),
+    ("(Rule) the accent is a fill", True, "the accent is a fill"),
+    ("(rule, approved by the owner 2026-11-16) no round corners", True, "no round corners"),
+    ("(rule; G4) no round corners", True, "no round corners"),
+    ("(rules) no round corners", False, None),
+    ("(ruler) no round corners", False, None),
+    ("a note under the rules", False, None),
+])
+def test_a_rule_line_may_carry_a_note_in_its_tag(line, rule, text):
+    assert bookdata.is_rule(line) is rule
+    if rule:
+        assert bookdata.rule_text(line) == text
+
+
+@setup
+@resvg
+def test_the_decided_block_keeps_rule_lines_with_a_note_shows_code_and_warns_about_a_line_it_leaves_out(proj):
+    mutate(proj / "BRAND-STATE.md", "- (rule) the accent is a fill, never text (proposal)",
+           "- (rule) the accent is a fill, never text (proposal)\n- (rule, approved by the owner 2026-11-16) keep `color.accent` for fills\n"
+           "- (rules) corners stay square\n- a note under the rules that is no rule line")
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert "<li>keep <code>color.accent</code> for fills</li>" in html and "`color.accent`" not in html
+    assert "corners stay square" not in html
+    rep = json.dumps(report(proj, "book"))
+    assert "(rules) corners stay square" in rep and "a note under the rules" not in rep
+
+
+@setup
+@resvg
+def test_a_hex_value_in_the_colour_table_never_breaks_across_lines(proj):
+    html = (proj / "book.html").read_text()
+    assert re.search(r'<code class="hex">#[0-9a-f]{6}</code>', html)
+    assert re.search(r"\.hex\{[^}]*white-space:nowrap", html)
+
+
+@setup
+@resvg
+def test_a_drawing_that_carries_its_own_ground_is_shown_on_both_grounds_without_a_dark_sibling(proj):
+    own = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0a0a0f"/>'
+           '<rect x="35" y="35" width="30" height="30" fill="#f5f5f0"/></svg>')
+    for name in ("mark", "grid-mark"):
+        (proj / f"assets/logo/{name}.svg").write_text(own)
+        (proj / f"assets/logo/{name}-dark.svg").unlink(missing_ok=True)
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no dark drawing" in (proj / "book.html").read_text()            # without the rule: the dark column is missing
+    rules = json.loads((proj / "qa/rules.json").read_text())
+    rules["icons"] = {"ground": "drawing"}
+    (proj / "qa/rules.json").write_text(json.dumps(rules))
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    dark = [t for t in htmlscan.tags(html) if t.name == "img" and re.fullmatch(r"Acme mark at \d+ px, dark ground", t.attrs.get("alt", ""))]
+    assert "no dark drawing" not in html and len(dark) == 7
+    assert "-dark.svg does not exist" not in json.dumps(report(proj, "book"))

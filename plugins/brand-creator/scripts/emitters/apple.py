@@ -23,10 +23,13 @@ Writes under assets/apple/ (override with --out-dir) and records every file in a
                                        iOS 1024 light, dark, tinted and the ten macOS sizes; the .icns by iconutil; compiled with actool too
   Assets.xcassets/AccentColor.colorset, Colors.xcassets   the colour sets build_tokens wrote (byte copies)
   Assets.xcassets/MenuBarTemplate.imageset   the menu-bar template, black plus alpha, at the apple-menubar-template size
-  marketing/AppStore-1024.png          flattened on the light ground, RGB with no alpha channel
+  marketing/AppStore-1024.png          flattened on the icons' ground, RGB with no alpha channel
   dmg/background.png, background@2x.png, layout.json   DMG window background (Chromium) and the icon positions it was drawn for
   store/frame-<name>.png, frames.json  App Store screenshot frames (Chromium): the mark, the name, one line of real copy and an empty screenshot area
   _preview/                            only with --previews: ictool renders (iOS, macOS, watchOS), never shipped
+The ground of the app icons is qa/rules.json icons.ground (marks.<id>.ground): light (default) or dark is color.bg of that mode with that mode's
+artwork on the default appearance; drawing is the drawing's own ground in every appearance, the drawing filling the square icons
+(--content-fraction 1.0 by default) and shrunk on that ground to fit the watchOS, tvOS and visionOS safe areas. The cards stay light.
 The drawing for the app icon is the one the band rule names for the layout size; --master-band picks another (a coarse-grid drawing for a
 file the system shrinks) and needs --exemption. Sizes come from platform-specs.json only. Needs gate G3, Xcode (actool, iconutil, assetutil)
 and, for the DMG and the frames, `brand-creator setup` (Chromium). Idempotent: a second run writes nothing.
@@ -50,8 +53,10 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, run  # noqa: E402
-from _emit import Emit, fill_template, render_card, version_below  # noqa: E402
-from tierb import FIT_MARGIN, FIT_STEP, INK_TOLERANCE_PX, fit_share, ink_bbox, ink_far, label_note, label_report_row, unverified_rows  # noqa: E402
+from html import escape as html_escape  # noqa: E402
+from _emit import (Emit, art_img, fill_template, fit_art, lettering_art, lettering_files, lettering_kind, render_card, tokens_square,  # noqa: E402
+                   version_below)
+from tierb import FIT_MARGIN, FIT_STEP, INK_TOLERANCE_PX, fit_share, ink_bbox, ink_bbox_on, ink_far, label_note, label_report_row, unverified_rows  # noqa: E402
 from determinism import car_renditions  # noqa: E402
 from px_lib import Img, from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
@@ -146,7 +151,8 @@ def icon_images(rends: list[dict]) -> list[dict]:
 
 def main() -> int:
     def args(ap):
-        ap.add_argument("--content-fraction", type=float, default=CONTENT, help=f"share of the icon the mark fills (default {CONTENT})")
+        ap.add_argument("--content-fraction", type=float, help=f"share of the icon the mark fills (default {CONTENT}; 1.0 when qa/rules.json icons.ground is "
+                        "drawing, the drawing filling the icon on its own ground)")
         ap.add_argument("--visionos-content-fraction", type=float, help="share of the visionOS layer the mark fills (default: --content-fraction; the circular mask "
                                                                         "is smaller than the square, so a mark that fills the square may need a lower value)")
         ap.add_argument("--watchos-content-fraction", type=float, help="share of the watchOS layout size the mark's box fills (default: the largest, up to --content-fraction, "
@@ -160,7 +166,10 @@ def main() -> int:
         ap.add_argument("--glass", action="store_true", help="leave the Liquid Glass effect on the layers (off by default: a flat brand mark)")
         ap.add_argument("--svg-mono", help="authored monochrome SVG for the menu-bar template (default: a black silhouette derived from the drawing)")
         ap.add_argument("--tagline", default="", help="one line on the App Store frames; must be a value in FACTS.md")
-        ap.add_argument("--no-cards", action="store_true", help="do not write the DMG background and the store frames (they need Chromium)")
+        ap.add_argument("--no-cards", action="store_true", help="do not write the DMG background and the store frames (they need Chromium); "
+                        "cards an earlier run wrote stay")
+        ap.add_argument("--drop-cards", action="store_true", help="do not write the cards, and retire the ones an earlier run wrote (moved to "
+                        "removed-<date>/, their manifest rows dropped)")
         ap.add_argument("--previews", action="store_true", help="also render ictool previews into _preview/ (never shipped, not in the manifest)")
 
     e = Emit.begin("apple", __doc__, add_args=args, preflight=preflight)
@@ -171,13 +180,29 @@ def main() -> int:
     tagline = e.require_fact(e.a.tagline, what="--tagline") if e.a.tagline else ""
     name = e.a.app_icon_name
     layout = app["layout_px"]
-    content = e.a.content_fraction
     target = f"{ic['min_target']}.0"
     light_bg, dark_bg = e.colour("light", "color.bg"), e.colour("dark", "color.bg")
     base = e.out
     e.check_master_band(layout, e.a.master_band, e.a.exemption)
     master = e.drawing(layout, band=e.a.master_band)
-    dark_art = e.dark_svg(master)
+    # the ground of every appearance, from qa/rules.json icons.ground (marks.<id>.ground): light and dark are color.bg of that mode with that
+    # mode's artwork on the default appearance; drawing is the drawing's own ground (exit 1 when it does not fill its canvas with one), in
+    # every appearance, the drawing serving both grounds unless a <name>-dark.svg is drawn
+    own = e.ground == "drawing"
+    if own:
+        _art, light_bg, _bleed = e.icon_ground(master, layout)
+        dark_bg = light_bg
+        dark_art = e.dark_file(master) or master.svg
+    else:
+        dark_art = e.dark_svg(master)
+        if e.ground == "dark":
+            light_bg = dark_bg
+    mode = "dark" if e.ground == "dark" else "light"       # the artwork on the default appearance's ground
+    default_art = dark_art if mode == "dark" else master.svg
+    content = e.a.content_fraction if e.a.content_fraction is not None else (1.0 if own else CONTENT)
+    on_ground = parse_hex(light_bg) if own else None      # with its own ground, ink is what differs from that ground, not what is opaque
+    e.rep.add("note:ground", "info", "the ground of the app icons", detail=f"qa/rules.json icons.ground {e.ground}: {light_bg} on the default appearance"
+              + (", the drawing's own, in every appearance" if own else ""))
     e.rep.add("master:drawing", "info", "drawing used for the app icon", detail=f"{master.rel or 'the mark'} (band {master.band or 'none'})")
 
     # ---- 0. watchOS and tvOS, only for targets the repo lists: the rasters and their gates come first, so a mark outside the margin writes nothing
@@ -189,7 +214,8 @@ def main() -> int:
         wpx = e.sizes("apple-watchos-appiconset")["appiconset_px"]   # the pre-26 appiconset: its own U row, not the .icon layout canvas (watchos_px)
         w_limit = wt_safe["watchos_safe_circle"] * wpx / 2
         art_w = e.drawing(wpx)
-        far_full = ink_far(e.png(svgtools.tile(art_w.svg, wpx, wpx, content=1.0), wpx, wpx))
+        w_art = art_w.svg if mode == "light" else e.dark_svg(art_w)
+        far_full = ink_far(e.png(svgtools.tile(w_art, wpx, wpx, content=1.0, bg=light_bg if own else None), wpx, wpx), ground=on_ground)
         if not far_full:
             fail(EXIT_FAIL, f"the drawing {art_w.rel or 'of the mark'} has no ink: nothing to put in the watchOS icon")
         w_auto = e.a.watchos_content_fraction is None
@@ -197,7 +223,7 @@ def main() -> int:
         if wc <= 0:
             fail(EXIT_FAIL, f"the mark does not fit the watchOS circle margin even at the smallest size (its ink reaches {far_full:.0f} px from the centre at a box of 1.0, "
                             f"the limit is {w_limit:.0f} px). Nothing is written. Redraw the mark with a rounder silhouette")
-        d_w, w_raw = e.tile_png(wpx, content=wc, ground=light_bg, flat=True)
+        d_w, w_raw = e.tile_png(wpx, content=wc, ground=light_bg, flat=True, mode=mode)
         watch_png = from_png(w_raw).png_rgb()
         w_far = ink_far(watch_png, ground=parse_hex(light_bg))
         w_ok = w_far <= w_limit + INK_TOLERANCE_PX
@@ -214,7 +240,9 @@ def main() -> int:
         tw, th = tv["width"], tv["height"]
         t_half = (wt_safe["tvos_safe_share"] * tw / 2, wt_safe["tvos_safe_share"] * th / 2)
         art_t = e.drawing(max(tw, th))
-        bb_full = ink_bbox(e.png(svgtools.tile(art_t.svg, tw, th, content=1.0), tw, th))
+        t_art = art_t.svg if mode == "light" else e.dark_svg(art_t)
+        t_box = (lambda png: ink_bbox_on(png, on_ground)) if own else ink_bbox    # own ground: measured on the layers composed, the ground not ink
+        bb_full = t_box(e.png(svgtools.tile(t_art, tw, th, content=1.0, bg=light_bg if own else None), tw, th))
         if bb_full is None:
             fail(EXIT_FAIL, f"the drawing {art_t.rel or 'of the mark'} has no ink: nothing to put in the tvOS icon")
         hx, hy = max(tw / 2 - bb_full[0], bb_full[2] - tw / 2), max(th / 2 - bb_full[1], bb_full[3] - th / 2)
@@ -222,9 +250,9 @@ def main() -> int:
         tc = round(math.floor(min(content, t_half[0] / hx * FIT_MARGIN, t_half[1] / hy * FIT_MARGIN) / FIT_STEP) * FIT_STEP, 2) if t_auto else e.a.tvos_content_fraction
         if tc <= 0:
             fail(EXIT_FAIL, "the mark does not fit the tvOS layer margin even at the smallest size. Nothing is written")
-        tv_front = e.png(svgtools.tile(art_t.svg, tw, th, content=tc), tw, th)
+        tv_front = e.png(svgtools.tile(t_art, tw, th, content=tc), tw, th)
         tv_back = Img(tw, th, light_bg).png_rgb()
-        bb = ink_bbox(tv_front)
+        bb = t_box(e.png(svgtools.tile(t_art, tw, th, content=tc, bg=light_bg), tw, th)) if own else ink_bbox(tv_front)
         t_ok = bb is not None and all(abs(v - c0) <= lim + INK_TOLERANCE_PX for v, c0, lim in
                                       ((bb[0], tw / 2, t_half[0]), (bb[2], tw / 2, t_half[0]), (bb[1], th / 2, t_half[1]), (bb[3], th / 2, t_half[1])))
         e.rep.add("check:tvOS safe area", "pass" if t_ok else "fail", f"the mark stays inside the central {wt_safe['tvos_safe_share']:g} of the layer in both directions",
@@ -257,7 +285,7 @@ def main() -> int:
     if len(grey_colours) < len(src_colours):
         e.rep.add("tinted:greys", "warn", "two colours of the mark become the same grey in the tinted icon",
                   detail=f"{', '.join(src_colours)} -> {', '.join(grey_colours)}; the tinted icon cannot show the difference")
-    layers = {"mark.svg": svgtools.tile(master.svg, layout, layout, content=content),
+    layers = {"mark.svg": svgtools.tile(default_art, layout, layout, content=content),
               "mark-dark.svg": svgtools.tile(dark_art, layout, layout, content=content),
               "mark-tinted.svg": svgtools.tile(tinted_art, layout, layout, content=content)}
     doc = {"fill-specializations": [{"value": {"solid": srgb(light_bg)}}, {"appearance": "dark", "value": {"solid": srgb(dark_bg)}},
@@ -321,7 +349,7 @@ def main() -> int:
     e.rep.add("check:icns opens", "pass" if n else "fail", "iconutil reads the actool .icns back", detail=f"{n} PNG renditions" if n else cp.stderr.strip()[:200])
 
     # ---- 3. marketing icon: flattened, no alpha channel
-    d_m, m_png = e.tile_png(market["px"], content=content, ground=light_bg, flat=True, band=e.a.master_band)
+    d_m, m_png = e.tile_png(market["px"], content=content, ground=light_bg, flat=True, band=e.a.master_band, mode=mode)
     img = from_png(m_png)
     flat = img.png_rgb()
     slot("marketing/AppStore-1024.png", flat, ["apple-marketing-icon"], slot="apple-marketing-icon", size_px=market["px"], drawing=d_m, qa=["downscale"],
@@ -333,12 +361,21 @@ def main() -> int:
     stack = "Assets.xcassets/AppIconVision.solidimagestack"
     vpx = vis["layer_px"]
     back_png = Img(vpx, vpx, light_bg).png_rgb()   # the back layer is the plain ground; the front layer is the mark alone, with alpha
-    vcontent = e.a.visionos_content_fraction or content
-    front_png = e.png(svgtools.tile(master.svg, vpx, vpx, content=vcontent), vpx, vpx)
-    fimg = from_png(front_png)
     radius = vis["safe_circle"] * vpx / 2
+    if e.a.visionos_content_fraction:
+        vcontent = e.a.visionos_content_fraction
+    elif own:   # the drawing on its own ground, as large as keeps its ink inside the circular mask
+        v_full = ink_far(e.png(svgtools.tile(default_art, vpx, vpx, content=1.0, bg=light_bg), vpx, vpx), ground=on_ground)
+        vcontent = fit_share(radius, v_full, content) if v_full else content
+    else:
+        vcontent = content
+    front_png = e.png(svgtools.tile(default_art, vpx, vpx, content=vcontent), vpx, vpx)
+    fimg = from_png(front_png)
     c0 = vpx / 2
-    far = max((((i % vpx + 0.5 - c0) ** 2 + (i // vpx + 0.5 - c0) ** 2) ** 0.5 for i in range(vpx * vpx) if fimg.p[i * 4 + 3]), default=0.0)
+    if own:
+        far = ink_far(e.png(svgtools.tile(default_art, vpx, vpx, content=vcontent, bg=light_bg), vpx, vpx), ground=on_ground)
+    else:
+        far = max((((i % vpx + 0.5 - c0) ** 2 + (i // vpx + 0.5 - c0) ** 2) ** 0.5 for i in range(vpx * vpx) if fimg.p[i * 4 + 3]), default=0.0)
     e.rep.add("check:visionOS safe circle", "pass" if far <= radius else "fail", f"the front layer stays inside {vis['safe_circle']:g} of the circular mask",
               detail=f"farthest ink pixel {far:.0f} px from the centre, limit {radius:.0f}" + ("" if far <= radius else "; lower --visionos-content-fraction"))
     for layer, png, rgb in (("Back", back_png, True), ("Front", front_png, False)):
@@ -405,7 +442,7 @@ def main() -> int:
         images = []
         if legacy_ios:
             lp = layout
-            _d, light_png = e.tile_png(lp, content=content, ground=light_bg, flat=True, band=e.a.master_band)
+            _d, light_png = e.tile_png(lp, content=content, ground=light_bg, flat=True, band=e.a.master_band, mode=mode)
             light_rgb = from_png(light_png).png_rgb()
             dark_png = e.png(svgtools.tile(dark_art, lp, lp, content=content), lp, lp)
             tint_png = from_png(e.png(svgtools.tile(tinted_art, lp, lp, bg="#000000", content=content), lp, lp, bg="#000000")).png_rgb()
@@ -424,7 +461,7 @@ def main() -> int:
                 for sc in mac["scales"]:
                     n = pt * sc
                     if n not in by_px:
-                        d, by_px[n] = e.tile_png(n, content=content, radius=RADIUS, body=body, band=e.a.master_band)
+                        d, by_px[n] = e.tile_png(n, content=content, radius=RADIUS, body=body, band=e.a.master_band, ground=light_bg, mode=mode)
                     fn = f"AppIcon-mac-{pt}x{pt}@{sc}x.png"
                     slot(f"{app_set}/{fn}", by_px[n], ["apple-macos-iconset"], slot="apple-appiconset-mac", size_px=n,
                          note=f"{pt} pt at {sc}x, rounded body, hand size", drawing=d)
@@ -534,21 +571,39 @@ def main() -> int:
                                                                       "ictool has no tvOS platform, so there is no preview either (open the stack in Xcode)")
 
     # ---- 9. cards: DMG background and store frames (Chromium)
-    if e.a.no_cards:
+    if e.a.drop_cards:
+        e.rep.add("cards", "info", "DMG background and store frames dropped", detail="--drop-cards was given: cards an earlier run wrote are retired")
+    elif e.a.no_cards:
         e.rep.add("cards", "info", "DMG background and store frames skipped", detail="--no-cards was given")
         e.keep("dmg", "store")   # skipped on purpose, not dropped: cards an earlier run wrote stay
     else:
-        bg, fg = light_bg, e.colour("light", "color.text")
+        bg, fg = e.colour("light", "color.bg"), e.colour("light", "color.text")   # the cards stay on the light ground whatever icons.ground says
         muted = e.modes["light"].get("color.muted", fg)
         accent = e.modes["light"].get("color.accent", fg)
         mark_raw = re.sub(r"^\s*<\?xml[^>]*>\s*", "", master.svg)
+        mark_div = f'<div class="mark">{mark_raw}</div>'
+        found = lettering_art(e.project, None, e.rep.inputs, e.mark_id)       # the drawn lockup, else the wordmark; None when neither is drawn
+        art, kind = (found[0], lettering_kind(found[1], None)) if found else (None, "type")
+        if not found:
+            e.rep.add("note:cards name", "warn", "the cards type the name in the system font",
+                      detail=f"no {' or '.join(lettering_files(e.mark_id))}: draw the wordmark (outlined, P6) so the cards set the brand's own lettering")
+        slot_radius = "0" if tokens_square(e.tokens_path) else None             # every radius token 0: the screenshot area has square corners
+
+        def head(w: float, h: float, box_w: float, box_h: float, text: str) -> str:
+            """The brand at the top of a card: the lockup alone, the mark and the wordmark, or the mark and the typed name (`text`)."""
+            if kind == "lockup":
+                return art_img(art, *fit_art(art, w, h), e.brand)
+            img = art_img(art, *fit_art(art, box_w, box_h), e.brand) if kind == "wordmark" else text
+            return mark_div + img
         scratch = e.out + "/_build"
         dmg = e.sizes("apple-dmg-background")
         tpl = (plugin_root() / "templates" / "dmg-background.html").read_text(encoding="utf-8")
         for sc in dmg["scales"]:
             w, h = dmg["width"] * sc, dmg["height"] * sc
+            top = head(w * 0.6, h * 0.09, w * 0.5, h * 0.05, f"<b>{html_escape(e.brand)}</b>")
             html = fill_template(tpl, {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "mark": mark_raw,
-                                       "app_fx": DMG_APP[0], "app_fy": DMG_APP[1], "link_fx": DMG_LINK[0], "link_fy": DMG_LINK[1]})
+                                       "head": top, "app_fx": DMG_APP[0], "app_fy": DMG_APP[1], "link_fx": DMG_LINK[0], "link_fy": DMG_LINK[1]},
+                                 raw=("mark", "head"))
             src = confine(e.project, f"{scratch}/dmg-{sc}x.html", what="card source")
             src.parent.mkdir(parents=True, exist_ok=True)
             src.write_text(html, encoding="utf-8")
@@ -574,9 +629,17 @@ def main() -> int:
             sx = unit * 2
             slot_y = unit * 2 + head_h + unit
             rect = {"x": round(sx), "y": round(slot_y), "w": round(w - 2 * sx), "h": round(h - slot_y - 2 * unit)}
+            copy = f"<p>{html_escape(tagline)}</p>"
+            if kind == "lockup":
+                top = f"<div>{head(w - 4 * unit, head_h * 0.62, 0, 0, '')}{copy}</div>"
+            else:
+                name_part = (art_img(art, *fit_art(art, w - 5 * unit - head_h, unit * 2.6), e.brand) if kind == "wordmark"
+                             else f"<h1>{html_escape(e.brand)}</h1>")
+                top = f"{mark_div}<div>{name_part}{copy}</div>"
             html = fill_template(tpl, {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "tagline": tagline,
-                                       "mark": mark_raw, "unit": f"{unit:g}", "head_x": round(sx), "head_y": round(unit * 2), "head_h": round(head_h),
-                                       "slot_x": rect["x"], "slot_y": rect["y"], "slot_w": rect["w"], "slot_h": rect["h"]})
+                                       "mark": mark_raw, "head": top, "unit": f"{unit:g}", "head_x": round(sx), "head_y": round(unit * 2),
+                                       "head_h": round(head_h), "slot_radius": slot_radius or f"calc({unit:g}px * 1.2)",
+                                       "slot_x": rect["x"], "slot_y": rect["y"], "slot_w": rect["w"], "slot_h": rect["h"]}, raw=("mark", "head"))
             src = confine(e.project, f"{scratch}/frame-{fr['name']}.html", what="card source")
             src.write_text(html, encoding="utf-8")
             render_card(e.project, f"{scratch}/frame-{fr['name']}.html", w, h, f"{scratch}/frame-{fr['name']}.png", "light")

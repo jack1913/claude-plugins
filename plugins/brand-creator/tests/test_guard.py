@@ -156,6 +156,20 @@ def test_bash_harmless_commands_are_allowed(proj, cmd):
     assert r.returncode == 0, (cmd, r.stderr)
 
 
+def test_rsync_of_the_latest_round_into_a_new_one_is_allowed_but_into_an_earlier_one_is_blocked(proj):
+    """The round copy of the site round (rsync, with the per-round files left out): into the next round it passes, onto an earlier round the guard still blocks."""
+    ok = "rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r2/ rounds/r3/"
+    assert run_guard(tool("Bash", command=ok, cwd=proj)).returncode == 0
+    assert blocked(run_guard(tool("Bash", command=ok.replace("rounds/r3/", "rounds/r1/"), cwd=proj)))
+
+
+def test_rsync_of_one_picked_variant_folder_into_the_new_round_is_allowed(proj):
+    """A later hero board copies each picked variant's folder (and board.html, _build/) into the new round, so the unpicked variants never need moving out."""
+    ex = "--exclude shots/ --exclude cold-review.md --exclude capture.json"
+    for src, dst in (("rounds/r2/Alpha/", "rounds/r3/Alpha/"), ("rounds/r2/board.html", "rounds/r3/board.html"), ("rounds/r2/_build/", "rounds/r3/_build/")):
+        assert run_guard(tool("Bash", command=f"mkdir rounds/r3 && rsync -a {ex} {src} {dst}", cwd=proj)).returncode == 0, (src, dst)
+
+
 def test_find_with_delete_flag_is_blocked(proj):
     cmd = "find history " + "-" + "delete"
     assert blocked(run_guard(tool("Bash", command=cmd, cwd=proj)))
@@ -611,3 +625,31 @@ def test_gate_value_reader_agrees_with_the_state_parser(tmp_path):
             p = _style_project(tmp_path / why.replace(" ", "-").replace("'", ""), line)
             recorded = bool(str((_common.State(p / "BRAND-STATE.md").get("gates", {}) or {}).get("G1s", "") or "").strip())
             assert g.gate_is_empty(p, "G1s") is (not recorded), (why, line)
+
+
+# ---- `brand-creator cleanup` (group 6): the guard does not inspect brand-creator commands, and every git deletion form stays blocked
+
+@pytest.mark.parametrize("cmd", [
+    "brand-creator cleanup",
+    "brand-creator cleanup --yes abc123def456",
+    "brand-creator cleanup --keep r2 --record-yes abc123def456 --said 'ok, remove them'",
+    'brand-creator --data "/x y" cleanup --yes abc123def456',
+    "/a/bin/brand-creator cleanup --yes abc123def456",
+    "bash -c 'brand-creator cleanup --yes abc123def456'",
+])
+def test_guard_allows_brand_creator_cleanup(proj, cmd):
+    r = run_guard(tool("Bash", command=cmd, cwd=proj))
+    assert r.returncode == 0, (cmd, r.stderr)
+
+
+@pytest.mark.parametrize("cmd", [
+    "git rm -r -q -- rounds/r1",
+    "git --literal-pathspecs rm -q -- rounds/r1/a.png",
+    "git -C . rm --pathspec-from-file=qa/list.txt",
+    "tr '\\n' '\\0' < qa/list.txt | xargs -0 git rm -q --",
+    "git checkout HEAD~1 -- rounds/r1",
+    "git restore --source=HEAD --staged --worktree -- rounds/r1",
+])
+def test_guard_still_blocks_git_rm_and_xargs_in_rounds(proj, cmd):
+    r = run_guard(tool("Bash", command=cmd, cwd=proj))
+    assert blocked(r), (cmd, r.returncode, r.stderr)

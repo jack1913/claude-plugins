@@ -8,6 +8,7 @@ optional speed-up for Standard and Full projects, used only after the fleet gate
 - [The fleet gate](#the-fleet-gate)
 - [The workflows](#the-workflows)
 - [Arguments every workflow needs](#arguments-every-workflow-needs)
+- [Measured costs](#measured-costs-fleet-costsjson)
 - [Models: the session model is a ceiling](#models-the-session-model-is-a-ceiling)
 - [The agents](#the-agents)
 - [Orchestration rules](#orchestration-rules)
@@ -26,17 +27,21 @@ Before any workflow or subagent fleet:
    brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan <workflow> --args @<args.json> --session-model <your model>
    ```
 
-   It runs the script with stub agents and prints the agent count, every agent with the model that will actually run,
-   whether `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` is set, the size guideline and the total `maxTurns`. Exit 1 means the
-   script refuses these arguments (for example more agents than approved) or an agent would run above the session
-   model.
+   It runs the script with stub agents and prints the agent count, every agent with the model that will actually run
+   and its cost in tokens, whether `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` is set, the size guideline and the total
+   `maxTurns`. Exit 1 means the script refuses these arguments (for example more agents than approved) or an agent
+   would run above the session model.
 2. Tell the owner, in one message:
    - **agent count** and who they are ("3 designers, 1 judge = 4 agents");
    - **models that will actually run**, from the plan ("4 on your session model"; never the frontmatter alone);
    - **size guideline**: small under 5, medium under 10 (a cross-check is 2 to 4 agents; one lookup needs none);
-   - **rough cost**: each agent costs about what that step costs single-thread, so 4 agents are roughly 4 times the
-     single-thread cost of those steps plus coordination; the plan's turn total is the ceiling. The first run of a
-     workflow on a project is the one to watch in `/workflows`;
+   - **rough cost**, in tokens, as the plan prints it: each agent's line says `tokens: about <low>-<high>k (measured
+     <date>)` or `tokens: not measured`, and the cost line adds up the measured ones and counts the rest. The figures
+     are the rows of [fleet-costs.json](fleet-costs.json), each from a dated, named run. An agent with no row is "not
+     measured": say so, and never fill it in from what the step would cost in one thread. A fleet with no workflow to
+     plan (the cold review of a site hero below, the research fan-out) has a row of its own there (`cold-review`,
+     `research-fleet`): state that row's figure, and for a `per: call` row multiply it by the number of calls (for the cold review, the number its stop rule allows, below). The
+     plan's turn total is the ceiling. The first run of a workflow on a project is the one to watch in `/workflows`;
    - that **single-thread is the default** and you will do it in this thread if they prefer.
 3. Wait for an explicit yes. Put the approved number in `approved_agents`; the scripts refuse to start a run that plans
    more agents than that. Claude Code then shows its own approval prompt for the workflow.
@@ -52,12 +57,16 @@ run.
 | Workflow | Phase | Default agents | What it returns | Ends before |
 |---|---|---|---|---|
 | `directions` | P3 round 1, G2b-a reset rounds; needs the style pick (G1s) first | 3 designers + 1 judge = 4; `inventory: true` adds 1 | one board per direction in `rounds/rN/<direction>/`, the judge's ranking, grafts, MUST-FIX and NICE lists, violations | G2 (the lead assembles the round page) |
-| `review-panel` | `/brand-creator:review panel` | 3 lenses + 1 judge = 4; each extra lens adds 1 | findings `{id, severity, where, evidence, why, change, effort}` per lens, then A / B / C, owner decisions, up to 5 strengths | the owner approving the list |
+| `review-panel` | `/brand-creator:check --review panel` | 3 lenses + 1 judge = 4; each extra lens adds 1 | findings `{id, severity, where, evidence, why, change, effort}` per lens, then A / B / C, owner decisions, up to 5 strengths | the owner approving the list |
 | `naming` | P2, brand-naming steps 3 to 11 | 2 hunters + 1 screener + 1 judge = 4 | candidates, shortlist with classes, the name checker run (`--plan` unless the owner OK'd lookups), verdicts | G1 |
 | `adopt` | P11 after G6 | 2 per repository (implementer, then reviewer) | rows done / partly / not done with evidence, `cmp` and build/test results, no-decision fixes, decisions | every commit (three separate asks) |
 
 The agent count is the number of `agent()` calls the script makes with the given arguments; `fleet-plan` counts them
 by running the script with stub agents, and a test keeps the default path of every workflow under 5.
+
+All four workflows show in the `/` menu: Claude Code has no documented way to keep a plugin workflow out of it. Typing one
+shows its phases and a "Yes, run it / No" prompt, not the agent count, models and cost. They are meant to be started by
+the lead, after the gate, with the arguments above.
 
 Copy panel and rule hardening are not shipped as workflows in this version. Nor is the style research (P1s): the lead builds
 the style board (`rounds/r0/board.html`) single-thread, and no designer starts before the owner's style pick is recorded as
@@ -94,6 +103,16 @@ fully: BRAND-STATE.md, brief/BRIEF.md, FACTS.md, research/cliches.md, the approv
   record, which are the old addresses.
 
 Example arguments (with placeholder paths) are in the plugin's `tests/fixtures/fleet/`.
+
+## Measured costs (`fleet-costs.json`)
+
+[fleet-costs.json](fleet-costs.json) (schema 1) is the only home of a cost in tokens. A row names one use of one agent
+type (`agent`, `workflow`, `what`), the measured range in thousands of tokens (`tokens_k: [low, high]`; a single figure
+has both the same), whether it is per call or for a whole round (`per`), the date (`measured`) and the run it came from
+(`source`). `fleet-plan` prints a row only for the calls of that agent in that workflow, and "not measured" for every
+other call: what one use of an agent cost says nothing about another use of the same agent. A row with `workflow: null`
+is a fleet that runs in this thread and has no plan to print. Add a row only from a run that was measured; a malformed
+table is refused by `fleet-plan` (exit 2) and by `fleet-plan --check`.
 
 ## Models: the session model is a ceiling
 
@@ -159,8 +178,19 @@ in-thread`), so an agent is the opt-in upgrade, only after the fleet gate: the c
 capped at the session model with the per-call `model`, and each call reads four pictures and two files. Each call gets the
 cold-review fragment of [prompt-fragments.md](prompt-fragments.md) and the six paths (the variant's four stills,
 `brief/BRIEF.md`, `FACTS.md`) and nothing else: not the board, the references or your reasons. The reviewer reports and
-never writes, so you write `rounds/r<N>/<name>/cold-review.md` from its reply, the verdict first and `by: agent`, with the
-sha256 of each input.
+never writes, so you write `rounds/r<N>/<name>/cold-review.md` from its reply, the verdict first (`ship`, `fix` or `owner`) and
+`by: agent`, with the sha256 of each input.
+
+At most two calls per hero variant per board: the first review, and one after the fixes; a third is not run, and a `verdict: owner`
+review is the last one for that variant (what is left is a choice only the owner can make, its findings written as questions to
+them). The fleet gate message for these calls states the number the rule allows: the calls now (one per variant) and the most it
+allows (2 variants: up to 4 calls; 3 variants: up to 6), each at the figure of the `cold-review` row, so that the owner's yes
+covers the second review too. A later hero board is a new board and counts afresh.
+
+The reviewer cannot tell its first call from its second, so the prompt of the second call of a variant states it in one line, "This
+is the second and last review of this variant." That line is an addition to the inputs above, as are the G4 rules as prompt text and the three key
+frames that [07p-site-round](phases/07p-site-round.md) allows. It is a line of the prompt, not an input, and never the first review's findings or your reasons. The prompt of a first call has no such line. The reviewer takes its
+push to `owner` (and its restraint with `fix`) from that line alone: "when the prompt says this is the second review", in its brief.
 
 ## A fleet without a workflow
 

@@ -12,10 +12,12 @@
                           it lints clean
   book --init             copy the skeleton of every chapter this book needs from templates/book/ into book/chapters/ (never overwrites)
   book --verify           rebuild in memory and compare with the book on disk (a hand edit or a stale book fails)
+  book chapter --replace|--add|--remove ID [--from FILE]   whole-chapter edits of a hand-authored book (below); recomputes the chapter count
+  book nbsp --fix [--yes]   no-break spaces after one-letter words in a hand-authored book; a dry run unless --yes
   book --allow-variants   build with choice scaffolding still open, for a review (book-lint still fails it until `collapse`)
 
-mark_source authored-vector: the book is hand-authored HTML; this command refuses. Edit it with `brand-creator patch` and gate it
-with `brand-creator book-lint`. Which chapters appear follows the tier, the architecture and BRAND-STATE.md (scripts/CONTRACT.md,
+mark_source authored-vector: the book is hand-authored HTML; the build refuses. Edit it with `brand-creator patch` (--loose-space
+matches around no-break spaces), `book chapter` and `book nbsp`, and gate it with `brand-creator book-lint`. Which chapters appear follows the tier, the architecture and BRAND-STATE.md (scripts/CONTRACT.md,
 "Brand book"). The output is byte-identical for the same inputs. Report: assets/_checks/book.json (and book-lint.json).
 """
 import sys
@@ -34,8 +36,9 @@ from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, add
 def init_chapters(project: Path, build: "bookgen.BookBuild") -> int:
     tpl = plugin_root() / "templates" / "book"
     made = kept = 0
+    parent = build.view["architecture"] == "family-parent"
     for cid in build.chapter_ids:
-        src = tpl / f"{cid}.md"
+        src = tpl / (f"{cid}.parent.md" if parent and cid in bookdata.PARENT_WORDED else f"{cid}.md")
         if not src.is_file():
             fail(EXIT_FAIL, f"template missing: {src}")
         for lang in build.langs:
@@ -55,6 +58,9 @@ def init_chapters(project: Path, build: "bookgen.BookBuild") -> int:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] in ("chapter", "nbsp"):   # the hand-authored book's tools (book_hand.py); the word comes first
+        import book_hand
+        return book_hand.main(sys.argv[1], sys.argv[2:])
     ap = Parser(prog="brand-creator book", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_project_arg(ap)
     add_renderer_arg(ap)
@@ -107,7 +113,7 @@ def main() -> int:
         return rc or EXIT_FAIL
     changed = write_bytes_if_changed(out, data)
     rep.extra["written"] = changed
-    lrep = booklint.write_report(project, out, results, view=build.view, state_view_sha=state_sha, self_consistency=True, book_file=out_rel)
+    lrep = booklint.write_report(project, out, results, view=build.view, state_view_sha=state_sha, self_consistency=True, book_file=out_rel, **({"allow_variants": True} if a.allow_variants else {}))
     lrep.finish(quiet_pass=True)
     rc = rep.finish(quiet_pass=True)
     print(f"book: {rel(project, out)} {'written' if changed else 'unchanged'} ({len(data)} bytes, {len(build.chapter_ids)} chapters, {','.join(build.langs)})")

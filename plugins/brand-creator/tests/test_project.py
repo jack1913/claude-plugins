@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ def test_new_scaffolds_a_project(tmp_path):
     st = _common.State(p / "BRAND-STATE.md").data()
     assert st["slug"] == "acme" and st["tier"] == "standard" and st["name"] == 'Acme "Quoted" Co'
     assert st["phase"] == "P0" and st["architecture"] == "standalone"
-    assert list(st["gates"]) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7"]
+    assert list(st["gates"]) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G4m", "G5", "G6", "G7"]
     assert all(v == "" for v in st["gates"].values())
     text = (p / "BRAND-STATE.md").read_text()
     assert "{{" not in text and "## Collaboration" in text and "## Directions" in text
@@ -46,6 +47,55 @@ def test_new_reads_projects_root_from_the_plugin_setting(tmp_path):
     assert r.returncode == 0 and (root / "viaconfig" / "BRAND-STATE.md").is_file()
 
 
+_NO_GIT_SETTINGS = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}   # the answer must come from the project's own file
+
+
+def _git_ignores(repo: Path, rel: str) -> bool:
+    """Whether git ignores the path in `repo` (exit 0: ignored, 1: not ignored; anything else is an error, not an answer)."""
+    r = subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", rel], capture_output=True, text=True, env=_NO_GIT_SETTINGS)
+    assert r.returncode in (0, 1), r.stderr
+    return r.returncode == 0
+
+
+def test_new_writes_a_gitignore_that_keeps_the_full_page_site_captures_out_of_git(tmp_path):
+    """G4-13 (O8): the whole-page still of every captured site is large and is not a file the owner works from; the boards use the smaller
+    stills and the thumbnails, so a new project ignores `research/site-refs/*/1440-full.png` and nothing else."""
+    r = bc("new", "acme", "--root", str(tmp_path), data=tmp_path / "d")
+    assert r.returncode == 0, r.stderr
+    assert "\n  .gitignore\n" in r.stdout                      # the run lists it with the other files it wrote
+    p = tmp_path / "acme"
+    text = (p / ".gitignore").read_text(encoding="utf-8")
+    assert "{{" not in text and "research/site-refs/*/1440-full.png" in text.splitlines()
+    # what git itself does with it, not only what the file says
+    assert subprocess.run(["git", "-C", str(p), "init", "-q"], capture_output=True, env=_NO_GIT_SETTINGS).returncode == 0
+    site = p / "research" / "site-refs" / "example-com"
+    site.mkdir(parents=True)
+    for name in ("1440.png", "390.png", "1440-full.png", "thumb-1440.jpg", "thumb-390.jpg", "capture.json"):
+        (site / name).write_bytes(b"x")
+    assert _git_ignores(p, "research/site-refs/example-com/1440-full.png")
+    for name in ("1440.png", "390.png", "thumb-1440.jpg", "thumb-390.jpg", "capture.json"):
+        assert not _git_ignores(p, f"research/site-refs/example-com/{name}"), name
+    assert not _git_ignores(p, "BRAND-STATE.md")
+
+
+def test_new_leaves_an_existing_gitignore_as_it_is(tmp_path):
+    """G4-13: an existing `.gitignore` is never overwritten. `new` refuses a folder that holds anything (this file included), so the file
+    keeps its bytes and nothing is written beside it."""
+    folder = tmp_path / "acme"
+    folder.mkdir()
+    mine = b"# the owner's own\r\n*.tmp\r\n"
+    (folder / ".gitignore").write_bytes(mine)
+    r = bc("new", "acme", "--root", str(tmp_path), data=tmp_path / "d")
+    assert r.returncode == 1 and "refusing to overwrite" in r.stderr
+    assert (folder / ".gitignore").read_bytes() == mine and [e.name for e in folder.iterdir()] == [".gitignore"]
+
+
+def test_the_manual_says_how_to_add_the_ignore_line_to_an_older_project():
+    """G4-13: a project made before this release has no `.gitignore` from `new`; the site references page says what to add by hand."""
+    page = (ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md").read_text(encoding="utf-8")
+    assert "`.gitignore`" in page and "research/site-refs/*/1440-full.png" in page
+
+
 def test_no_data_dir_is_a_clear_usage_error(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != "BRAND_CREATOR_DATA"}
     import subprocess
@@ -65,6 +115,72 @@ def test_project_discovery_walks_up_and_errors_clearly(tmp_path):
     assert r.returncode == 2 and "no brand project found; pass --project" in r.stderr
     r = bc("state", "--project-auto", cwd=empty, data=tmp_path / "d")
     assert r.returncode == 0 and "no brand project found" in r.stdout
+
+
+def test_raising_the_tier_names_the_chapters_and_facts_the_new_tier_needs(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert r.returncode == 0, r.stderr
+    assert "tier raised: standard -> full" in r.stdout
+    assert "adoption, launch" in r.stdout and "INVENTORY.md" in r.stdout and "Open: <what it waits for>" in r.stdout and "book:open-items" in r.stdout
+    for cid in ("adoption", "launch"):   # what the lint needs is named from the same registry: standard's own chapters are missing too, so they are listed first
+        assert cid in r.stdout.split("INVENTORY.md")[0]
+    same = bc("state", "--set", "tier=full", project=p)
+    assert same.returncode == 0 and "tier raised" not in same.stdout and same.stdout.strip() == ""
+    low = bc("state", "--set", "tier=standard", project=p)
+    assert low.returncode == 0 and low.stdout.strip() == ""
+    # what the project already has is not listed again
+    (p / "book" / "chapters").mkdir(parents=True)
+    for cid in ("adoption", "launch"):
+        (p / "book" / "chapters" / f"{cid}.md").write_text("## x\n")
+    (p / "INVENTORY.md").write_text("# Inventory\n")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "adoption" not in r.stdout and "launch" not in r.stdout and "INVENTORY.md" not in r.stdout
+    q = make_project(tmp_path, slug="two", tier="quick")
+    r = bc("state", "--set", "tier=standard", project=q)
+    assert "tier raised: quick -> standard" in r.stdout and "adoption" not in r.stdout and "INVENTORY.md" not in r.stdout
+    q1 = make_project(tmp_path, slug="five", tier="standard")
+    j = bc("state", "--set", "tier=full", "--json", project=q1)   # the lines go to stderr, so stdout still parses
+    assert j.returncode == 0 and isinstance(json.loads(j.stdout), dict) and "tier raised: standard -> full" in j.stderr
+    q2 = make_project(tmp_path, slug="four", tier="standard")
+    g = bc("state", "--set", "tier=full", "--get", "tier", project=q2)
+    assert g.stdout.strip() == "full" and "tier raised: standard -> full" in g.stderr
+    r = bc("state", "--set", "inventory=none (no target repo)", project=make_project(tmp_path, slug="three", tier="standard"))
+    assert r.stdout.strip() == ""
+
+
+def test_raising_the_tier_after_g4_names_the_motion_decision_and_reads_a_missing_tier_as_quick(tmp_path):
+    p = make_project(tmp_path, tier="quick")
+    assert bc("state", "--record", "G4", "approved", project=p).returncode == 0
+    r = bc("state", "--set", "tier=standard", project=p)
+    assert r.returncode == 0 and "motion decision" in r.stdout and "motion:decided" in r.stdout and "brand-creator motion --off" in r.stdout, (r.stdout, r.stderr)
+    (p / "motion").mkdir()
+    (p / "motion" / "motion.json").write_text('{"schema": 1, "motion": "off", "reason": "nothing moves"}\n')
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "motion decision" not in r.stdout, r.stdout
+    r0 = make_project(tmp_path, slug="beforeg4", tier="quick")           # G4 not recorded: no motion line
+    r = bc("state", "--set", "tier=standard", project=r0)
+    assert r.returncode == 0 and "motion decision" not in r.stdout, (r.stdout, r.stderr)
+    q = make_project(tmp_path, slug="notier", tier="quick")
+    st = q / "BRAND-STATE.md"
+    st.write_text("".join(ln for ln in st.read_text().splitlines(True) if not ln.startswith("tier:")))
+    r = bc("state", "--set", "tier=standard", project=q)
+    assert r.returncode == 0 and "tier raised: quick -> standard" in r.stdout, (r.stdout, r.stderr)
+
+
+def test_raising_the_tier_reads_the_chapter_file_of_each_content_language(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    assert bc("state", "--set", "content_languages=pl,en", project=p).returncode == 0
+    (p / "book" / "chapters").mkdir(parents=True)
+    for name in ("adoption.pl.md", "adoption.en.md", "launch.pl.md"):
+        (p / "book" / "chapters" / name).write_text("## x\n")
+    r = bc("state", "--set", "tier=full", project=p)
+    head = r.stdout.split("INVENTORY.md")[0]
+    assert "launch" in head and "adoption" not in head, r.stdout
+    (p / "book" / "chapters" / "launch.en.md").write_text("## x\n")
+    r = bc("state", "--set", "tier=standard", project=p)
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "launch" not in r.stdout.split("INVENTORY.md")[0], r.stdout
 
 
 def test_state_record_require_get_set_bump(tmp_path):
@@ -298,14 +414,14 @@ def _project_with_round(tmp_path, g3=True):
 
 def test_freeze_requires_g3(tmp_path):
     p = _project_with_round(tmp_path, g3=False)
-    r = bc("freeze", "r3", "--name", "approved", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "approved", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "G3" in r.stderr
     assert not (p / "history").exists()
 
 
 def test_freeze_copies_banners_and_writes_the_manifest(tmp_path):
     p = _project_with_round(tmp_path)
-    r = bc("freeze", "r3", "--name", "approved-board", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "approved-board", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 0, r.stderr
     dest = p / "history" / "2026-10-17-approved-board"
     html = (dest / "board.html").read_text()
@@ -325,19 +441,19 @@ def test_freeze_copies_banners_and_writes_the_manifest(tmp_path):
 
 def test_freeze_refuses_to_overwrite_and_accepts_a_second_name(tmp_path):
     p = _project_with_round(tmp_path)
-    assert bc("freeze", "3", "--name", "one", project=p, data=tmp_path / "d").returncode == 0
-    r = bc("freeze", "r3", "--name", "one", project=p, data=tmp_path / "d")
+    assert bc("freeze", "3", "--name", "one", "--whole", project=p, data=tmp_path / "d").returncode == 0
+    r = bc("freeze", "r3", "--name", "one", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "never overwrites" in r.stderr
-    assert bc("freeze", "r3", "--name", "two", project=p, data=tmp_path / "d").returncode == 0
+    assert bc("freeze", "r3", "--name", "two", "--whole", project=p, data=tmp_path / "d").returncode == 0
     assert len((p / "history" / "MANIFEST.sha256").read_text().splitlines()) == 6
 
 
 def test_freeze_refuses_when_history_was_tampered_with(tmp_path):
     p = _project_with_round(tmp_path)
-    assert bc("freeze", "r3", "--name", "one", project=p, data=tmp_path / "d").returncode == 0
+    assert bc("freeze", "r3", "--name", "one", "--whole", project=p, data=tmp_path / "d").returncode == 0
     victim = p / "history" / "2026-10-17-one" / "board.html"
     mutate(victim, "approved", "tampered")
-    r = bc("freeze", "r3", "--name", "two", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "two", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "not intact" in r.stderr and "modified" in r.stderr
     assert not (p / "history" / "2026-10-17-two").exists()
 
@@ -347,7 +463,7 @@ def test_freeze_validates_input(tmp_path):
     assert bc("freeze", "r9", "--name", "x", project=p, data=tmp_path / "d").returncode == 1
     assert bc("freeze", "r3", "--name", "Bad Name", project=p, data=tmp_path / "d").returncode == 2
     (p / "rounds" / "r3" / "link").symlink_to(p / "BRAND-STATE.md")
-    r = bc("freeze", "r3", "--name", "x", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "x", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "symlink" in r.stderr
 
 
@@ -399,7 +515,7 @@ def test_state_set_rejects_values_outside_the_enum(tmp_path, key, bad):
 
 def test_state_set_accepts_every_documented_value(tmp_path):
     p = make_project(tmp_path)
-    vals = {"tier": ("quick", "standard", "full"), "architecture": ("standalone", "family-member", "product-in-family"),
+    vals = {"tier": ("quick", "standard", "full"), "architecture": ("standalone", "family-member", "product-in-family", "family-parent"),
             "mark_source": ("generated", "authored-vector", "existing"), "review_surface": ("auto", "artifact", "local"),
             "phase": tuple(f"P{i}" for i in range(14)) + ("P1b", "P1c")}
     for key, options in vals.items():
@@ -422,14 +538,14 @@ def test_state_records_and_requires_the_website_gates(tmp_path):
     assert r.returncode == 0 and "G4w: recorded (2026-10-17 skipped by owner)" in r.stdout, r.stdout + r.stderr
     assert bc("state", "--require", "G4p", project=p).returncode == 1                       # recording one gate leaves the other open
     out = bc("state", project=p).stdout
-    assert "gates: G0 -  G1 -  G1s -  G2 -  G2b -  G3 -  G4 -  G4w recorded  G4p -  G5 -  G6 -  G7 -" in out, out
+    assert "gates: G0 -  G1 -  G1s -  G2 -  G2b -  G3 -  G4 -  G4w recorded  G4p -  G4m -  G5 -  G6 -  G7 -" in out, out
     assert "  G4w: 2026-10-17 skipped by owner" in out
     assert bc("state", "--record", "G4p", "approved start, pricing", project=p).returncode == 0
     out = bc("state", project=p).stdout
-    assert "G4 -  G4w recorded  G4p recorded  G5 -" in out
+    assert "G4 -  G4w recorded  G4p recorded  G4m -  G5 -" in out
     assert out.index("  G4w: ") < out.index("  G4p: ")                                         # the detail lines keep the gate order too
     gates = json.loads(bc("state", "--json", project=p).stdout)["state"]["gates"]
-    assert list(gates) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7"]
+    assert list(gates) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G4m", "G5", "G6", "G7"]
     assert gates["G4p"] == "2026-10-17 approved start, pricing"
     r = bc("state", "--record", "G4x", "nope", project=p)
     assert r.returncode == 2 and "G4w, G4p" in r.stderr, r.stderr                           # the refusal lists the gates in order
@@ -458,12 +574,12 @@ def test_an_older_project_without_the_website_gates_gets_them_on_record(tmp_path
     p = make_project(tmp_path)
     state = p / "BRAND-STATE.md"
     text = state.read_text(encoding="utf-8")
-    for gate in ("G4w", "G4p"):                                                              # a project made before the site work: no such lines
+    for gate in ("G4w", "G4p", "G4m"):                                                       # a project made before the site work and the masters: no such lines
         mutate(state, re.search(rf"(?m)^  {gate}:.*\n", text).group(0), "")
     mutate(state, re.search(r"(?m)^site_research:.*\n", text).group(0), "")
     assert "G4w" not in state.read_text(encoding="utf-8") and "site_research" not in state.read_text(encoding="utf-8")
     out = bc("state", project=p)
-    assert out.returncode == 0 and "G4 -  G4w -  G4p -  G5 -" in out.stdout, out.stdout + out.stderr   # it still reads, both gates open
+    assert out.returncode == 0 and "G4 -  G4w -  G4p -  G4m -  G5 -" in out.stdout, out.stdout + out.stderr   # it still reads, both gates open
     assert bc("state", "--require", "G4w", project=p).returncode == 1
     assert bc("state", "--get", "site_research", project=p).returncode == 1
     assert bc("state", "--record", "G4w", "skipped by owner", project=p).returncode == 0
@@ -472,7 +588,39 @@ def test_an_older_project_without_the_website_gates_gets_them_on_record(tmp_path
     data = _common.State(state).data()
     assert data["gates"]["G4w"] == "2026-10-17 skipped by owner" and data["gates"]["G4p"] == "2026-10-17 approved start", data["gates"]
     assert data["site_research"] == "online" and data["gates"]["G3"] == "" and data["gates"]["G5"] == ""
-    assert "G4 -  G4w recorded  G4p recorded  G5 -" in bc("state", project=p).stdout
+    assert "G4 -  G4w recorded  G4p recorded  G4m -  G5 -" in bc("state", project=p).stdout
+
+
+def test_a_tryout_url_is_a_key_of_its_own_apart_from_the_review_url(tmp_path):
+    """G4-17: the private page a shared try-out is on is `tryout_url`; `review_url` stays the one review page of the boards. Setting one never touches the other, the summary shows the try-out
+    page only while it is set, a project made before the key gets it on its first --set, and writing it leaves the G4 rules a page check holds (`--part g4-rules`) as they were."""
+    p = make_project(tmp_path)
+    assert re.match(r'tryout_url: ""(\s+#.*)?$', _state_line(p, "tryout_url")), _state_line(p, "tryout_url")        # the template carries the key, empty
+    review, tryout = "https://claude.example.invalid/artifact/review?v=1#top", "https://claude.example.invalid/artifact/atlas?v=2#top"
+    assert bc("state", "--set", f"review_url={review}", project=p).returncode == 0
+    rules = bc("state", "--part", "g4-rules", project=p).stdout
+    assert "try-out url" not in bc("state", project=p).stdout, "nothing to show while the key is empty"
+    r = bc("state", "--set", f"tryout_url={tryout}", project=p)
+    assert r.returncode == 0, r.stderr
+    assert bc("state", "--get", "tryout_url", project=p).stdout.strip() == tryout
+    assert bc("state", "--get", "review_url", project=p).stdout.strip() == review, "the review page is the one it was"
+    out = bc("state", project=p).stdout
+    assert f"review url: {review}" in out and f"try-out url: {tryout}" in out, out
+    data = json.loads(bc("state", "--json", project=p).stdout)["state"]
+    assert data["tryout_url"] == tryout and data["review_url"] == review
+    assert bc("state", "--part", "g4-rules", project=p).stdout == rules, "a page check holds the G4 rules only: this write leaves its reports current"
+    r = bc("state", "--set", f"review_url={review}x", project=p)                                                      # the other way round
+    assert r.returncode == 0 and bc("state", "--get", "tryout_url", project=p).stdout.strip() == tryout
+    assert bc("state", "--set", "tryout_url=", project=p).returncode == 0                                            # cleared at the stage gate
+    assert bc("state", "--get", "tryout_url", project=p).stdout.strip() == "" and "try-out url" not in bc("state", project=p).stdout
+    assert bc("state", "--get", "review_url", project=p).stdout.strip() == review + "x"
+    # a project made before the key: no such line, it still reads, and the first --set adds the key
+    state = p / "BRAND-STATE.md"
+    state.write_text(re.sub(r"(?m)^tryout_url:.*\n", "", state.read_text(encoding="utf-8")), encoding="utf-8")
+    assert "tryout_url" not in state.read_text(encoding="utf-8") and bc("state", project=p).returncode == 0
+    assert bc("state", "--get", "tryout_url", project=p).returncode == 1
+    assert bc("state", "--set", f"tryout_url={tryout}", project=p).returncode == 0
+    assert _common.State(state).data()["tryout_url"] == tryout and _common.State(state).data()["review_url"] == review + "x"
 
 
 def test_state_set_is_all_or_nothing_when_one_value_is_bad(tmp_path):
@@ -571,3 +719,30 @@ def test_reset_rounds_is_read_through_one_helper_that_takes_a_list_or_the_old_qu
     assert _common.State(f).reset_rounds() == rounds
     f.write_text("---\nslug: x\n---\n")
     assert _common.State(f).reset_rounds() == []                                         # a project without the key
+
+
+def test_raising_the_tier_on_a_hand_authored_book_reads_chapter_attributes_and_survives_a_broken_config(tmp_path):
+    p = make_project(tmp_path, slug="hand", tier="standard")
+    assert bc("state", "--set", "mark_source=authored-vector", project=p).returncode == 0
+    (p / "book").mkdir(exist_ok=True)
+    (p / "book" / "book.json").write_text("{not json")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert r.returncode == 0, r.stderr
+    assert "not checked" in r.stdout and "book.json" in r.stdout
+    (p / "book" / "book.json").write_text("{}")
+    out = (p / "book.html")
+    out.write_text("<section data-chapter='adoption'></section><section data-chapter=\"launch\"></section>")
+    r = bc("state", "--set", "tier=quick", project=p)
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "adoption" not in r.stdout.split("INVENTORY.md")[0].split("(in the book)")[-1] and "launch" not in r.stdout.split("(in the book)")[-1].split("INVENTORY.md")[0]
+
+
+def test_raising_the_tier_still_names_the_inventory_when_book_json_cannot_be_read(tmp_path):
+    p = make_project(tmp_path, tier="quick")
+    for kv in ("content_languages=pl", "mark_source=authored-vector"):
+        assert bc("state", "--set", kv, project=p).returncode == 0
+    (p / "book").mkdir(exist_ok=True)
+    (p / "book" / "book.json").write_text("{bad")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert r.returncode == 0, r.stderr
+    assert "book/book.json cannot be read" in r.stdout and "INVENTORY.md" in r.stdout, r.stdout

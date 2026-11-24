@@ -1,10 +1,10 @@
-"""Static checks over the shipped files: manifest shape, licences, pins, locks, README, no personal data."""
+"""Static checks over the shipped files: manifest shape, licences, pins, locks, README, no personal data. (Private terms are no test: whoever
+holds private brand projects scans their own pushes, tests/tools/private_terms.py.)"""
 import json
 import os
 import re
 import subprocess
 import sys
-import unicodedata
 from pathlib import Path
 
 import pytest
@@ -34,87 +34,6 @@ def text_files():
             continue
 
 
-# ---------------------------------------------------------------- anonymisation
-
-def _fold(s: str) -> str:
-    s = unicodedata.normalize("NFKD", s).lower().replace("ł", "l")
-    for a, b in (("‘", "'"), ("’", "'"), ("“", '"'), ("”", '"'), ("–", "-"), ("—", "-"), ("‑", "-")):
-        s = s.replace(a, b)
-    return re.sub(r"\s+", " ", "".join(c for c in s if not unicodedata.combining(c)))
-
-
-def _hexes(text: str):
-    for m in re.finditer(r"(?:#|%23)([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-z])", text, re.I):
-        h = m.group(1).lower()
-        if len(h) in (3, 4):
-            h = "".join(c * 2 for c in h[:3])
-        yield "#" + h[:6]
-    for m in re.finditer(r"rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})", text, re.I):
-        yield "#%02x%02x%02x" % tuple(min(255, int(x)) for x in m.groups())
-
-
-def _scan(deny: dict, files, root: Path) -> list[str]:
-    terms = [_fold(t) for t in deny["terms"] if t.strip()]
-    allow = [_fold(a) for a in deny.get("allow", [])]
-    hexes = {h.lower() for h in deny.get("hex", [])}
-    hits = []
-    for p in files:
-        relp = p.relative_to(root).as_posix()
-        folded_path = _fold(relp)
-        hits += [f"{relp}: path contains {t!r}" for t in terms if t in folded_path]
-        try:
-            text = p.read_bytes().decode("utf-8")
-        except UnicodeDecodeError:
-            continue
-        for n, line in enumerate(text.splitlines(), 1):
-            f = _fold(line)
-            for t in terms:
-                i = f.find(t)
-                while i >= 0:
-                    if not any(a.find(t) >= 0 and f.find(a) <= i < f.find(a) + len(a) for a in allow if a in f):
-                        hits.append(f"{relp}:{n}: {t!r}")
-                        break
-                    i = f.find(t, i + 1)
-            for h in _hexes(line):
-                if h in hexes:
-                    hits.append(f"{relp}:{n}: denylisted colour {h}")
-    return hits
-
-
-def test_anonymisation_scanner_catches_planted_terms(tmp_path):
-    """Mutation test for the scanner itself, with a synthetic denylist (nothing real is stored here)."""
-    deny = {"terms": ["Zorblax Industries", "dluga fraza"], "hex": ["#123abc"], "allow": ["zorblaxes"]}
-    f = tmp_path / "doc.md"
-    clean = "Nothing to see. Acme is fictional. Colour #ff00aa.\n"
-    f.write_text(clean)
-    assert _scan(deny, [f], tmp_path) == []
-    for planted in ("We worked for ZORBLAX industries.\n", "Colour #12ABC.\n", "colour #123abc\n", "rgb(18, 58, 188)\n", "Długa Fraza here\n", "color:%23123ABC\n"):
-        f.write_text(clean + planted)
-        assert f.read_text() != clean
-        hits = _scan(deny, [f], tmp_path)
-        assert hits or planted == "Colour #12ABC.\n", planted  # #12abc is a different colour than #123abc
-    (tmp_path / "zorblax industries.txt").write_text("x")
-    assert _scan(deny, [tmp_path / "zorblax industries.txt"], tmp_path)  # file names are scanned too
-
-
-def test_anonymisation():
-    """No client or brand names, real hex values or user quotes in any shipped file. The denylist is NOT shipped:
-    point BRAND_CREATOR_DENYLIST at it. Without it this test is skipped with a loud banner."""
-    path = os.environ.get("BRAND_CREATOR_DENYLIST", "").strip()
-    if not path:
-        banner = "NOT VERIFIED: BRAND_CREATOR_DENYLIST is not set, so the anonymisation test did NOT run"
-        print("\n" + "!" * len(banner) + "\n" + banner + "\n" + "!" * len(banner), file=sys.stderr)
-        import conftest
-        conftest.NOT_VERIFIED.append(("tests/test_static.py::test_anonymisation", "BRAND_CREATOR_DENYLIST is not set (anonymisation NOT verified)"))
-        if os.environ.get("BRAND_CREATOR_REQUIRE_ALL") == "1":
-            pytest.fail(banner)
-        pytest.skip(banner)
-    deny = json.loads(Path(path).read_text())
-    assert deny["terms"] and deny["hex"]
-    hits = _scan(deny, list(shipped_files()), ROOT)
-    assert hits == [], "anonymisation hits:\n" + "\n".join(hits[:20])
-
-
 # ---------------------------------------------------------------- no personal data, no network identity
 
 def test_user_agent_is_a_generic_constant_without_an_at_sign():
@@ -140,7 +59,7 @@ def test_no_personal_paths_or_email_addresses_in_shipped_files():
 def test_plugin_json_matches_the_plan():
     d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
-    assert d["version"] == "0.5.0" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
+    assert d["version"] == "0.15.2" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
     assert d["author"] == {"name": "Jacek Pytlik"} and d["license"] == "MIT" and d["keywords"]
     assert d["homepage"] == "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator"  # a homepage must parse as a URL
     assert d["repository"] == "https://github.com/jack1913/claude-plugins"
@@ -195,7 +114,7 @@ def test_node_dependencies_are_pinned_exactly_and_locked():
 def test_every_uv_script_has_a_committed_lock_and_pep723_metadata():
     bootstrap = {"setup.py", "prereq.py", "guard.py", "version_check.py"}
     for p in sorted((ROOT / "scripts").rglob("*.py")):
-        if {"lib", "vendor", "booklib", "boardlib", "marklib", "printlib", "adaptlib", "pagelib"} & set(p.relative_to(ROOT / "scripts").parts) or p.name in ("specs.py", "manifest.py", "_emit.py", "tierb.py"):
+        if {"lib", "vendor", "booklib", "boardlib", "marklib", "printlib", "adaptlib", "pagelib", "masterslib"} & set(p.relative_to(ROOT / "scripts").parts) or p.name in ("specs.py", "manifest.py", "_emit.py", "tierb.py"):
             continue
         text = p.read_text()
         assert "# /// script" in text and "requires-python" in text, p
@@ -216,6 +135,31 @@ def test_every_uv_script_starts_and_shows_help():
             assert r.returncode == 0 and "usage:" in r.stdout, (p, r.stderr)
 
 
+def _help_of(args, tmp_path):
+    env = {k: v for k, v in os.environ.items() if k not in ("BRAND_CREATOR_DATA", "CLAUDE_PLUGIN_DATA")}
+    return subprocess.run([str(ROOT / "bin" / "brand-creator"), *args], capture_output=True, text=True, env=env, cwd=tmp_path)
+
+
+def test_a_subcommand_prints_its_help_with_no_data_directory(tmp_path):
+    """`brand-creator <sub> --help` and `-h` need no data directory (a Claude Code Bash tool sets none): a Python one, a node one, the render.mjs ones and emit."""
+    for args in (["page-check", "--help"], ["board-lint", "-h"], ["state", "--help"], ["tokens", "--help"], ["fleet-plan", "--help"], ["emit", "web", "--help"], ["adoption", "survey", "-h"],
+                 ["shot", "--help"], ["card", "-h"], ["frames", "--help"], ["fonts", "--help"], ["capture", "--help"], ["capture", "-h"], ["emit", "--help"], ["smoke", "--help"], ["version", "--help"], ["root", "-h"]):
+        r = _help_of(args, tmp_path)
+        assert r.returncode == 0 and "usage:" in r.stdout and "no data directory" not in r.stderr, (args, r.returncode, r.stdout, r.stderr)
+    assert not list(tmp_path.iterdir()), "help creates nothing"
+
+
+def test_capture_help_lists_its_options_and_a_command_without_help_still_needs_the_data_directory(tmp_path):
+    r = _help_of(["capture", "--help"], tmp_path)
+    for opt in ("--project", "--wait", "--timeout", "--frames", "--url", "--name"):
+        assert opt in r.stdout, (opt, r.stdout)
+    assert "brand-creator shot" not in r.stdout and "  brand-creator capture <page.html>" in r.stdout, "capture shows its own usage lines, as brand-creator runs them"
+    r = _help_of(["page-check", "page.html"], tmp_path)
+    assert r.returncode == 2 and "no data directory" in r.stderr, (r.returncode, r.stderr)
+    r = _help_of(["capture", "--bogus"], tmp_path)
+    assert r.returncode == 2 and "no data directory" in r.stderr
+
+
 def test_executables_and_shebangs():
     assert os.access(ROOT / "bin" / "brand-creator", os.X_OK)
     assert (ROOT / "bin" / "brand-creator").read_text().startswith("#!/usr/bin/env bash")
@@ -231,9 +175,16 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     assert prereq.MIN_CLAUDE == max(runtime_versions, key=lambda v: tuple(map(int, v.split("."))))
     assert rows
     # the README is a storefront: install, first run and the one-time setup; the rest is in the manual
-    for section in ("## Install", "## Try it", "/brand-creator:setup", "/brand-creator:new", "marketplace add",
+    for section in ("## Install", "## Try it", "/brand-creator:setup", "marketplace add",
                     "/plugin install brand-creator@", "## What it never does", "## Something off?"):
         assert section in readme or section in (ROOT / "docs/manual/getting-started/make-your-first-brand.md").read_text(), section
+    # a brand is started in words, not with a command; the README's table lists the few things you type
+    assert "> A logo and a look for my bakery" in readme and "/brand-creator:new" not in readme
+    table = readme[readme.index("## What you can do"):readme.index("## What it adds to your sessions")]
+    for typed in ("`/brand-creator:round`, `status`", "`/brand-creator:check`", "`/brand-creator:brand-adopt`"):
+        assert typed in table, typed
+    assert '"help me launch"' in table and "--review" in table and "/brand-creator:launch" not in table and "/brand-creator:review" not in table
+    _readme_starts_column_is_one_set_and_every_row_is_true(table)
     for page, needle in (("platform-support", "## Linux"), ("permissions", "Bash(brand-creator *)"), ("troubleshooting", "# Troubleshooting"),
                          ("costs", "# Costs"), ("what-it-never-does", "# What it never does")):
         assert needle in (ROOT / "docs/manual/reference" / f"{page}.md").read_text(), page
@@ -241,6 +192,41 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     # a stranger reads the README: no build placeholders and no build-stage labels (the history is in docs/archive/build-log.md)
     assert not re.search(r"TODO|\(stage \d|\bstages? \d", readme), "README carries a build placeholder or stage label"
     assert "/plugin marketplace add jack1913/claude-plugins" in readme and "/plugin install brand-creator@jack1913" in readme
+
+
+def _readme_starts_column_is_one_set_and_every_row_is_true(table):
+    """The Starts column uses the three values of docs-standard section 5 and commands.md, and each row is true of the skill behind it:
+    `you only` is disable-model-invocation, `Claude only` is user-invocable: false (nothing to type), `you or Claude` is both ways."""
+    rows = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in table.splitlines() if ln.startswith("| ") and not ln.startswith("| ---")]
+    header, rows = rows[0], rows[1:]
+    assert header == ["Say or type", "Starts", "What you get"], header
+    values = {"you only", "you or Claude", "Claude only"}
+    assert {r[1] for r in rows} <= values, {r[1] for r in rows} - values
+    legend = table[:table.index("| Say or type")]
+    for value in values:
+        assert f"*{value}*" in legend, f"the legend before the table does not explain {value}"
+    by_words = {"favicons from my logo.svg": "brand-assets", "name ideas for my bakery": "brand-naming", "generate the brand book": "brand-book"}
+    skills = {p.parent.name: p for p in (ROOT / "skills").glob("*/SKILL.md")}
+    for say, starts, _ in rows:
+        commands = re.findall(r"`/brand-creator:([a-z-]+)", say)
+        typed_only = starts == "you only"
+        claude_only = starts == "Claude only"
+        if claude_only:
+            assert not commands, f"{say}: nothing to type, yet the row shows a command"
+        else:
+            assert commands, f"{say}: {starts!r} but no command is shown to type"
+        for name in commands:
+            text = skills[name].read_text(encoding="utf-8")
+            hidden = "\nuser-invocable: false\n" in text
+            typed = "\ndisable-model-invocation: true\n" in text
+            assert not hidden, f"{name} is not in the / menu: nothing to type"
+            if typed_only:
+                assert typed, f"{name} can be started by Claude: the row says you only"
+        for words, skill in by_words.items():
+            if words in say:
+                assert claude_only and "\nuser-invocable: false\n" in skills[skill].read_text(encoding="utf-8"), say
+        if "help me launch" in say or "write the brand kit" in say:
+            assert claude_only, f"{say}: there is no command for it"
 
 
 def test_wording_never_calls_dtcg_a_w3c_standard():

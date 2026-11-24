@@ -31,7 +31,7 @@ import svgtools  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _emit import (CARD_RULE_RADIUS, add_logo_arg, card_art, card_lettering, card_lettering_setup, card_mark_size, fill_template,  # noqa: E402
-                   mark_accent, mark_tagline, render_card, rule_radius)
+                   mark_accent, mark_tagline, render_card, rule_radius, tokens_square)
 from pxio import png_color_type, png_size, read_png  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from tierb import INK_TOLERANCE_PX, TierBEmit, ink_far, png_with_srgb  # noqa: E402
@@ -198,7 +198,7 @@ def main() -> int:
     values = {"width": fw, "height": fh, "bg": ground, "fg": fg, "muted": e.modes["light"].get("color.muted", fg), "accent": mark_accent(e.modes, "light", e.mark, fg),
               "name": e.brand, "tagline": tagline, "layout": layout, "lettering": card_lettering(layout, found[0] if found else None, e.brand, fw, fh),
               "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg), "mark_size": card_mark_size(mark_svg, fh),
-              "rule_radius": rule_radius(CARD_RULE_RADIUS, card_art(layout, mark_svg, found[0] if found else None))}
+              "rule_radius": rule_radius(CARD_RULE_RADIUS, card_art(layout, mark_svg, found[0] if found else None), square=tokens_square(e.tokens_path))}
     src_rel = f"{out}/_build/feature-graphic.html"
     src = confine(e.project, src_rel, what="card source")
     src.parent.mkdir(parents=True, exist_ok=True)

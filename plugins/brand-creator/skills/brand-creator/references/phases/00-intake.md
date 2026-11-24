@@ -5,6 +5,7 @@
 - [Goal](#goal)
 - [Inputs](#inputs)
 - [Outputs and paths](#outputs-and-paths)
+- [Starting from the owner's words](#starting-from-the-owners-words)
 - [Techniques](#techniques)
 - [Gate G0](#gate-g0)
 - [Pitfalls](#pitfalls)
@@ -40,6 +41,41 @@ then set what G0 decided:
 ... state --project <dir> --record G0 "standard tier, authored-vector mark (provisional), name decided"
 ```
 
+## Starting from the owner's words
+
+No command starts a project. The owner says so ("a logo for my bakery", "start a brand called acme"), and the
+brand-creator skill does this, in order:
+
+1. Step 0 of the orchestrator has already settled whether a project is open here and found none (or the owner chose a
+   new one next to the open one: then `--root` is that project's parent folder, and the steps below run as for a
+   first project), so do not look again.
+2. Read what already exists (site, repo, logo files) before asking anything. Then run G0 ([Gate G0](#gate-g0)): one
+   AskUserQuestion call of at most 3 scope questions (tier, architecture only when a parent or siblings show, name only
+   when open), each with a "(Recommended)" option, plus the upload question only when boards could go to claude.ai (the
+   orchestrator's Review surface). The mark source is inferred and stated, not asked. The facts you could not find go in
+   one plain-text message afterwards.
+   The project folder is not an AskUserQuestion item (G0 keeps its three questions). When the projects folder setting
+   (`${user_config.projects_root}`) is unset, that message names the folder (`./<slug>/` here) and says "I'll create
+   ./<slug>/ in the current folder unless you name another place"; for a new one next to the open project it names
+   that place instead ("I'll create <parent>/<slug>/ next to <open project> unless you name another place").
+3. The owner may name another place, or a folder name that differs from the brand name, in words ("put it in
+   ~/brands/acme-rebrand"). Then the last part of the path is the slug (the folder name) and the rest is `--root`, while
+   the brand name stays `--name "<Name>"`: the folder name is the slug, so it can differ from the brand name. The slug
+   takes lowercase letters, digits and hyphens; suggest the nearest one when the owner's does not. `--root` must already
+   exist (`new` exits 2 otherwise): ask for another place instead of creating one.
+4. Scaffold. The slug is, in this order: the folder name the owner gave (step 3; it wins over the name when both are
+   given), else one made from the name the owner gave (lowercase letters, digits and hyphens: `acme` for Acme, `my-bakery`
+   for My Bakery), else, when no name was given or the name is still open, `brand-<yyyymmdd>`:
+   `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
+   Only the working slug `brand-<yyyymmdd>` is renamed after G1; a folder name the owner gave keeps its name.
+5. Fill `brief/BRIEF.md` and `FACTS.md` from what you read and what the owner answered; set `mark_source` (provisional
+   until G2), `architecture`, `language`, `incumbent` and, when asked, `review_surface` with `state --set`; record G0 with
+   `state --record G0 "<decision>"`.
+6. Reply with the response template: what was created (paths), the tier with expected rounds and session length, what
+   comes next (category research in Standard and Full, then the style research and its board, then round 1), still open.
+
+If the scaffold exits 3, tell the owner to run `/brand-creator:setup` first.
+
 ## Techniques
 
 1. **Read before you ask.** When a site or repo exists, fetch it and extract fonts, colours and real copy into
@@ -54,9 +90,11 @@ then set what G0 decided:
    | standalone | master | independent |
    | family-member | master (one of several owned brands) | shares a family layer, owns its company layer |
    | product-in-family | product or sub-brand | branded-house, endorsed or sub-brand under a parent |
+   | family-parent | master (the parent of a family) | defines the family layer its products keep |
 
-   Ask about family or product only when the brief or a repo shows a parent or siblings. Ask for `FAMILY.md` only
-   after family-member is picked. Write the never-borrow list (both directions) into BRIEF. Details:
+   Ask about family or product only when the brief or a repo shows a parent, siblings or products under this brand. Ask
+   for `FAMILY.md` only after family-member is picked; a family-parent writes the family's own `FAMILY.md` at its root
+   from templates/FAMILY.md. Write the never-borrow list (both directions) into BRIEF. Details:
    [architecture.md](../architecture.md).
 4. **Record the gating goal.** The external gate the brand must pass (a platform's organisation verification, a
    mandatory legal disclosure, a regulator's promotion rule) goes into BRIEF as a hard constraint. Every board is
@@ -77,8 +115,8 @@ One AskUserQuestion call of **at most 3 scope questions**, each with 2 to 4 choi
 ones that do not apply:
 
 1. **Tier**: Quick / Standard / Full (see the SKILL.md table). Say what each one produces in one line.
-2. **Architecture** (only when the brief or a repo shows a parent brand or siblings): standalone / family-member /
-   product-in-family. A plain brief skips it: standalone is inferred and stated. Ask for the `FAMILY.md` path as plain
+2. **Architecture** (only when the brief or a repo shows a parent brand, siblings or products under this brand): standalone /
+   family-member / product-in-family / family-parent. A plain brief skips it: standalone is inferred and stated. Ask for the `FAMILY.md` path as plain
    text after family-member is picked.
 3. **Name** (only when not decided): its language and status (keep / screen it / find one), or an irreversible choice
    that blocks round 1.

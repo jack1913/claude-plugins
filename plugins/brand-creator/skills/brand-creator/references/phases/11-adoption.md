@@ -54,12 +54,12 @@ corner. The agent surveys read only, lists, and changes nothing until the owner 
    then `done` when committed (the owner's call; `doing` is made in the working tree and not committed). Survey again from time
    to time: a row marked done that still matches is flagged.
    A Brand kit row (added when the project has a kit and the owner wants it in a repository: `adoption add --repo <label> --kit`):
-   run `kit status --repo <path>` and copy exactly the files of its copy list (`mkdir -p` then `cp`, one file at a time; an owner
-   file the repository already has is never overwritten). When the brand changed and dropped a generated file, `kit status`
-   also names files left over from the older kit; they are not on the copy list: move each to `removed-<date>/` in that
-   repository, keeping its path inside that folder (`removed-<date>-2/` when a file is already there; never delete one),
-   then run `kit status --repo <path>` again, and it must say current. Never copy into
-   `~/.claude/skills` or any global folder. The kit is not committed.
+   run the kit's own installer, `python3 <project>/.claude/skills/<slug>-brand/install.py <path> --yes`. It copies exactly the
+   files of the copy list of `kit status --repo <path>` (an owner file only where the repository has none or never changed it;
+   one the repository changed is kept; kit.json last). When the brand changed and dropped a generated file, it moves files left
+   over from the older kit to `removed-<date>/` in that repository, keeping their paths inside that folder (`removed-<date>-2/`
+   when a file is already there; it never deletes one). Then run `kit status --repo <path>` again, and it must say current.
+   Never copy into `~/.claude/skills` or any global folder. The kit is not committed.
    A redesign of an existing site: the implementer ends with `adoption wiring --repo <label> --after` (the same `--page` URLs, or none to
    read the pages of the before record again; the owner's local server must be running, and a page that cannot be read is reported, never
    skipped). It never records a before or a drop.
@@ -107,7 +107,8 @@ push are separate asks. The survey and `adoption add` do not touch a repository 
 - `adoption verify` and `check` (`adoption:data`): the pins, the numbering, the accounting and that ADOPTION.md is what adoption.json renders.
 - `check --cascade "<old name>"` treats the adoption rows as the work list (a warning), not as a leftover.
 - A Brand kit row is proved by `kit status --repo <path>` (read only, writes nothing in the repository): exit 0 means every
-  generated file of the copy is the project's bytes; the owner files are the repository's and are never overwritten.
+  generated file of the copy is the project's bytes; an owner file the repository changed or added is the repository's and is
+  never overwritten, and one it never changed is updated with the kit (ADR-0014).
 - A redesign's wiring is recorded by `adoption wiring` (read only, and it proves it: `read-only:<label>`). `--compare` exits 1 on a loss nobody
   dropped with a reason, a review with such a loss fails, and `check` fails a recorded `--after` that lost wiring nobody dropped
   (`adoption:wiring:<label>`). The record is not proof that the site works: the repository's own build and tests stay the proof.

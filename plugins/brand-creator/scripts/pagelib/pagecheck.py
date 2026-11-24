@@ -18,6 +18,7 @@ paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<sc
 
 `motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
 is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
+`word_rows` gives `page:words` (a warning for each word the brand forbids (the Forbidden bullets of brief/BRIEF.md and research/cliches.md; book-lint also adds the book's own `lint.forbidden`), found in the text of the page; info when no word is listed).
 
 `rule_rows` gives `page:rule:<id>` for each brand rule of qa/rules.json `page.rules` (`rule_request` is what such rules ask of the browser): it fails when it is broken and its `g4` words are in a recorded
 "(rule)" line of BRAND-STATE.md Rules (G4), warns when it is broken and not yet tied, and passes when it holds.
@@ -25,6 +26,9 @@ is backed by FACTS.md) and `page:samples` (the before-publishing list, also the 
 `tell_rows` gives `tell:<id>` for each generic tell of skills/brand-creator/references/page-tells.json (an eyebrow over a heading, an arrow glued to a label, a run of middle dots, a stock label on
 the hero's second action, a hero with too much text, a mock-up built of styled boxes, three equal tiles in a row): a warning that names the hits, never a failure, until the owner adopts the tell
 as a brand rule (kind `tell` in qa/rules.json page.rules, which gives `page:rule:<id>` in its place), and `note:stock-anatomy`. `check_tell_rules` refuses a rule that names no tell.
+`tell:stray-box` looks for a box left outside its place once the animations that end have ended (`find_tells` reads `tell_facts.strays`, and `strays_tall` for the window 1300 px high every view is measured in again, and the
+view's `animations` fact): a box still shown outside its parent's box or off the screen by `min_outside_px` is a hit; a view whose wait was cut off, a view with an animation still running and an element
+that is still animating are NOT verified for it, never a pass.
 
 Standard library plus scripts/lib (_color, _common, qa_rules) only, and, imported when they are judged, scripts/booklib/bookdata.py (the FACTS.md table and the English status words, for the
 claims) and scripts/adaptlib/adapt.py (the recorded G4 rule lines, for the brand rules). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
@@ -47,7 +51,7 @@ from urllib.parse import urlsplit
 
 import qa_rules
 from _color import parse_hex, wcag_ratio
-from _common import CliError, EXIT_CANNOT, EXIT_USAGE, PartInput, Report, confine, fail, gate_recorded, plugin_root, rel, scratch_dir
+from _common import CliError, EXIT_CANNOT, EXIT_USAGE, PartInput, Report, confine, fail, forbidden_terms, gate_recorded, plugin_root, rel, scratch_dir
 
 REPORT_DIR = "page-check"
 SCHEMES = ("light", "dark")
@@ -268,8 +272,10 @@ def load_modern(project: Path) -> dict[str, str]:
 
 def base_inputs(project: Path, target: Target) -> list[Path | PartInput]:
     """The files every page check stands on: the built tokens (json and css), the rules, the facts and, of the state of the project, the G4 rules (BRAND-STATE.md "g4-rules": the G4 record
-    and the recorded "(rule)" lines, the only two things a page check reads from it; recording G5 or G6 or setting the phase does not make the report stale), and the page (a project target)."""
+    and the recorded "(rule)" lines, the only two things a page check reads from it; recording G5 or G6 or setting the phase does not make the report stale), whichever of brief/BRIEF.md and
+    research/cliches.md exist (the forbidden words of page:words come from them), and the page (a project target)."""
     files = [project / TOKENS_FILE, project / TOKENS_CSS, project / qa_rules.RULES_FILE, project / "FACTS.md", PartInput(project / "BRAND-STATE.md", "g4-rules")]
+    files += [project / r for r in FORBIDDEN_SOURCES if (project / r).is_file()]   # the lists of forbidden words page:words reads: a word added later makes an old pass stale
     if target.kind == "project" and target.file:
         files.append(target.file)
     return files
@@ -697,11 +703,16 @@ YEAR = re.compile(r"(?:19|20)\d{2}")
 COPYRIGHT_BEFORE = re.compile(r"(?:©|\(c\)|\bcopyright\b)\s*(?:(?:©|\(c\))\s*)?(?:(?:19|20)\d{2}\s*[-–—]\s*)?$", re.I)
 COPYRIGHT_LOOKBACK = 40                   # characters before a year that are looked at for the sign
 DATE_YEAR_R = re.compile(r"\.((?:19|20)\d{2})r(?!\w)")   # the Polish year written glued to the date: 15.11.2026r.
+FORBIDDEN_SOURCES = ("brief/BRIEF.md", "research/cliches.md")   # where `_common.forbidden_terms` reads the forbidden words
 STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an error page
 # The words that say a title or an h1 is about an error, per page language: a code in such a text counts as the page's status code only when the same text holds one of them.
 ERROR_WORDS = {"en": ("error", "not found", "forbidden", "unauthorized", "unavailable", "gone", "bad request", "server error"),
                "pl": ("błąd", "nie znaleziono", "nie istnieje", "brak dostępu", "odmowa dostępu", "niedostępna", "niedostępny")}
 ERROR_WORD_PATTERNS = {lang: re.compile(r"(?<!\w)(?:" + "|".join(r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases) + r")(?!\w)", re.I) for lang, phrases in ERROR_WORDS.items()}   # whole words, any letter case, any white space between the words of a phrase
+ERROR_FILLERS = {"en": ("page", "site"), "pl": ("strona", "witryna")}   # words that may stand between the code and the error phrase: "404 Page Not Found", "404 – Strona nie istnieje"
+ERROR_WORD_GAP = {lang: r"(?:[\s\-–—·•|:/()]|(?<!\w)(?:" + "|".join(words) + r")(?!\w))*" for lang, words in ERROR_FILLERS.items()}   # the gap (O10): white space, the separators - – — · • | : / , a pair of parentheses round the code, and the filler words, in any letter case
+ERROR_WORD_BEFORE = {lang: re.compile(p.pattern + ERROR_WORD_GAP[lang] + r"$", re.I) for lang, p in ERROR_WORD_PATTERNS.items()}    # "Error 404", "Błąd 404", "Service Unavailable 503"
+ERROR_WORD_AFTER = {lang: re.compile(ERROR_WORD_GAP[lang] + p.pattern, re.I) for lang, p in ERROR_WORD_PATTERNS.items()}            # "404 Not Found", "404 · Nie znaleziono"
 
 # A date written with a month name is one date, not numbers, in the languages whose month names are listed (the page language decides: any other, or none, keeps the numbers as they are).
 # Polish: "21 października 2026", "21 października", and a month with a year, in the nominative, genitive or locative ("Październik 2026", "października 2026", "w październiku 2026"), in any
@@ -835,17 +846,19 @@ def target_stem(target) -> str:
 def status_codes(views: list[dict], target=None) -> set[str]:
     """The status codes of an error page. A page is an error page when its file name, without the extension, is a 4xx or 5xx code (`404.html`, `500.html`), or its `<title>` or an `<h1>`
     (`document.title` and `claim_h1` of a view) holds one as a bare number. The text counts only when that number is the only one in it (every number, a bare single digit and a copyright
-    year too), no `+` stands before or after it, and the same text holds an error word of the page's language (ERROR_WORDS: English and Polish; the language is the view's `lang`, the
-    document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and `404 · Nie znaleziono` on a Polish page, `Error 500` on an English one do; a count in a
-    heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
+    year too), no `+` stands before or after it, and an error word of the page's language stands right beside it, with nothing between them but white space, the separators `-`, `–`, `—`, `·`, `•`, `|`, `:`
+    and `/`, parentheses round the code (`Not Found (404)`) and the filler words `page`, `site` (English) or `strona`, `witryna` (Polish), in any letter case (ERROR_WORDS: English and Polish; the language is the view's `lang`, the document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme`,
+    `404 · Nie znaleziono` and `404 – Strona nie istnieje` on a Polish page, `Error 500`, `404 Page Not Found`, `Not Found (404)` and `Service Unavailable 503` on an English one do; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500
+    firm`, `Over 400 clients`), an error word away from the number (`450 tickets, all gone`, `Gone in 450 seconds`, `Ponad 400 produktów, żaden niedostępny`), `500+ firm nam ufa`,
+    `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
     A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
     codes = set()
     stem = target_stem(target)
     if STATUS_CODE.fullmatch(stem):
         codes.add(stem)
     for v in views:
-        error_words = ERROR_WORD_PATTERNS.get(_primary_language(v.get("lang") or ""))
-        if error_words is None:
+        lang = _primary_language(v.get("lang") or "")
+        if lang not in ERROR_WORD_PATTERNS:
             continue   # the page is in a language whose error words are not listed: the file name is the only rule
         for text in [(v.get("document") or {}).get("title"), *(v.get("claim_h1") or [])]:
             if not isinstance(text, str):
@@ -854,7 +867,8 @@ def status_codes(views: list[dict], target=None) -> set[str]:
             if len(found) == 1:
                 (n,) = found
                 plus = re.search(r"\+\s?$", text[:n["at"]]) or re.match(r"\s?\+", text[n["at"] + len(n["text"]):])   # +500 and 500+ are counts
-                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and error_words.search(text):
+                beside = ERROR_WORD_BEFORE[lang].search(text[:n["at"]]) or ERROR_WORD_AFTER[lang].match(text[n["at"] + len(n["text"]):])   # the error word right beside the code (O10)
+                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and beside:
                     codes.add(n["number"])
     return codes
 
@@ -986,6 +1000,51 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     if samples:
         rep.add("page:samples", "info", "before publishing: sample content on the page", detail=f"{len(samples)} labelled sample(s) pass as samples and must be replaced with real content before the page is published: "
                 + _names([f"{s['label']} ({s['text'][:40] or 'no text'}) in {s['selector']}, {s['view']}" for s in samples.values()], NAMED), samples=list(samples.values()))
+
+
+def word_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:words: none of the words the brand forbids is in the text of the page. The words are `_common.forbidden_terms`: the bullets under a
+    heading "Forbidden" in brief/BRIEF.md and research/cliches.md only (the book check adds the book's own `lint.forbidden` to that list, the page check does not); both files are inputs of the report, so a change to either makes it stale; a word is found as a whole word in any letter case, in the same runs of text the claims are read from, a
+    labelled sample included (a made-up sentence is still wording the brand forbids; the hit says it is in a sample). A hit warns, never fails; the same block in another view is
+    one hit, named at the first view that has it. With no word listed the row is info (nothing was checked, so it is never a pass). `skipped` when no view was measured, and a
+    warning "NOT verified beyond the first blocks of text" when a view had more blocks than were measured."""
+    rid, label = "page:words", "none of the brand's forbidden words is on the page"
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and "claim_text" in v]
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    terms = forbidden_terms(ctx.project)
+    if not terms:
+        rep.add(rid, "info", label, detail="no forbidden words are listed, so none was looked for: list them, one per bullet, under a Forbidden heading in brief/BRIEF.md or research/cliches.md",
+                forbidden_hits=[], forbidden_checked=0, forbidden_words=[])
+        return
+    patterns = [(t, re.compile(r"(?<!\w)" + re.escape(t) + r"(?!\w)", re.I)) for t in terms]
+    hits: dict[tuple, dict] = {}
+    seen_runs: set[tuple] = set()
+    truncated = []
+    for v in views:
+        if v.get("claim_text_total"):
+            truncated.append(f"{v['claim_text_total']} blocks of text at {v.get('width')} px, {len(v['claim_text'])} measured")
+        for run in v["claim_text"]:
+            text = run["text"]
+            if (run["sel"], text) in seen_runs:
+                continue
+            seen_runs.add((run["sel"], text))
+            sample = str(run.get("sample_label") or "").strip()
+            for term, pattern in patterns:
+                m = pattern.search(text)
+                if m and (term.lower(), run["sel"]) not in hits:
+                    hits[(term.lower(), run["sel"])] = {"word": term, "selector": run["sel"], "context": _context(text, m.start(), len(m.group(0))), "width": v.get("width"), "sample": sample or None}
+    found = list(hits.values())
+    extra = {"forbidden_hits": found[:100], "forbidden_checked": len(terms), "forbidden_words": terms[:200]}
+    notes = ["NOT verified beyond the first blocks of text of a view: " + _names(truncated, 2)] if truncated else []
+    if found:
+        said = [f"'{h['word']}' in {h['selector']}{' in a sample (' + h['sample'] + ')' if h['sample'] else ''} (\"{h['context']}\")" for h in found]
+        rep.add(rid, "warn", label, detail="; ".join([f"{len(found)} forbidden word(s) found: " + _names(said, NAMED) + "; reword it, or take the word off the list if the brand no longer forbids it"] + notes), **extra)
+    elif notes:
+        rep.add(rid, "warn", label, detail="; ".join(notes), **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"{len(terms)} forbidden word(s) looked for, none found in the text of the page", **extra)
 
 
 # ---------------------------------------------------------------- the mark
@@ -1666,7 +1725,7 @@ TIE_MIN_WORDS = 2                         # content words the g4 text needs when
 
 def _tie_body(text: str) -> str:
     """The words of a rule line without its "(rule)" marker, white space collapsed and case ignored."""
-    return re.sub(r"^\(rule\)\s*", "", _squash(text))
+    return _bookdata().RULE_MARK.sub("", _squash(text), count=1)
 
 
 def _tie(g4: dict, text: str) -> tuple[str | None, str]:
@@ -1729,8 +1788,20 @@ def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 TELLS_FILE = "skills/brand-creator/references/page-tells.json"
 TELLS_CAP = 100                           # hits one tell row keeps in its `hits`
 ELEMENT_CAP_NOTE = "NOT verified beyond the first elements of a view (the page has more than the check walks)"
-TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles")   # the tells found by walking every element, which stops at a cap
+TILT_CAP_NOTE = "NOT verified beyond the first forms and form controls found drawn rotated (the page has more of them than the check lists)"
+STRAY_CAP_NOTE = "NOT verified beyond the first boxes found outside their place (the page has more of them than the check lists, so the later ones were not looked at)"
+TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles", "stray-box")   # the tells found by walking every element, which stops at a cap
+SIDE_OF_PARENT = {"below": "below", "above": "above", "right": "to the right of", "left": "to the left of"}   # where a stray lies against its parent, as a phrase
 EPSILON = 1e-6
+
+
+def stray_min_px() -> float:
+    """The stray-box tell's own threshold (`min_outside_px` of page-tells.json): the browser is asked to keep only candidates at or past it, so a small offset never fills its list."""
+    t = next((t for t in load_tells()["tells"] if t["id"] == "stray-box"), {})
+    px = (t.get("threshold") or {}).get("min_outside_px")
+    if not isinstance(px, (int, float)) or isinstance(px, bool) or px < 0:
+        fail(EXIT_CANNOT, f"{TELLS_FILE}: the stray-box tell has no threshold.min_outside_px: reinstall the plugin")
+    return px
 
 
 def load_tells() -> dict:
@@ -1769,6 +1840,42 @@ def _widths(widths: list) -> str:
     return ", ".join(f"{w:g}" for w in seen[:NAMED]) + (f" and {len(seen) - NAMED} more" if len(seen) > NAMED else "") + " px"
 
 
+def _is_stray(c: dict, t: dict) -> bool:
+    """A candidate of the stray-box tell is a hit when it lies outside its parent's box, or outside the viewport, by `min_outside_px` or more."""
+    return any(c[k] is not None and c[k]["px"] >= t["min_outside_px"] - EPSILON for k in ("parent", "viewport"))
+
+
+def _stray_text(c: dict, t: dict, at_tall: bool, tall_height) -> str:
+    """What was seen of a stray, in words: where it lies against its parent and against the screen, and that it is still shown once the page has settled."""
+    parts = []
+    if c["parent"] is not None and c["parent"]["px"] >= t["min_outside_px"] - EPSILON:
+        parts.append(f"{c['parent']['px']:g} px {SIDE_OF_PARENT[c['parent']['side']]} its parent {c['parent']['sel']}")
+    if c["viewport"] is not None and c["viewport"]["px"] >= t["min_outside_px"] - EPSILON:
+        parts.append(f"{c['viewport']['px']:g} px past the {c['viewport']['side']} edge of the screen")
+    what = f"\"{c['text']}\" " if c["text"] else ""   # the hit line names the selector before this
+    return f"{what}is still shown {' and '.join(parts)} after the page settled" + (f", in a window {tall_height:g} px high" if at_tall and tall_height else "")
+
+
+def _stray_notes(unseen: dict[str, list], tall_height) -> list[str]:
+    """The NOT verified notes of the stray-box tell. A view whose wait for the animations that end was cut off is not judged for it, and neither is a view that still has an animation running
+    (one that never ends, or waits for a scroll: where it leaves its element is not known); an element that is still animating is not counted as a stray. A tall window the browser could not measure is said too."""
+    notes = []
+    def where(items: list) -> str:   # items are (width, at a tall window, ...)
+        own, tall = [x[0] for x in items if not x[1]], [x[0] for x in items if x[1]]
+        return ", and ".join(([_widths(own)] if own else []) + ([_widths(tall) + " in a tall window"] if tall else []))
+    if unseen["capped"]:
+        notes.append(f"NOT verified at {where(unseen['capped'])}: the page's animations were still running when the check stopped waiting for them, so what they leave on the page was not judged")
+    if unseen["running"]:
+        n = max(x[2] for x in unseen["running"])
+        notes.append(f"NOT verified at {where(unseen['running'])}: {n} animation(s) never end or wait for a scroll, so where they leave their elements was not judged"
+                     + (f" (still animating: {_names(sorted(set(unseen['animating'])), NAMED)})" if unseen["animating"] else ""))
+    elif unseen["animating"]:
+        notes.append(f"NOT verified: still animating after the page settled, so where it ends was not judged: {_names(sorted(set(unseen['animating'])), NAMED)}")
+    for width, why, height in unseen["tall"]:
+        notes.append(f"NOT verified at {width} px in a window {height or 'a tall'} px high: {why}")
+    return notes
+
+
 def find_tells(measures: dict, cfg: dict) -> dict:
     """Apply the thresholds and word lists of page-tells.json to the candidates each view holds (`tell_facts`, see page_measure.mjs). -> {"views": the number of views judged,
     "hits": {tell id: [hit]} (a hit is {selector, text, widths}, the same place in other views merged), "unverified": {tell id: [reason]}, "anatomy": {...} or None}."""
@@ -1781,6 +1888,8 @@ def find_tells(measures: dict, cfg: dict) -> dict:
     unverified: dict[str, list[str]] = {t["id"]: [] for t in cfg["tells"]}
     stock_langs: set[str] = set()
     anatomy = None
+    stray_unseen: dict[str, list] = {"capped": [], "running": [], "animating": [], "tall": []}   # what the stray-box tell could not judge: see _stray_notes
+    stray_tall_height = None
 
     def add(tid: str, key, view: dict, selector: str, text: str) -> None:
         h = merged.setdefault((tid, key), {"selector": selector, "text": text, "widths": []})
@@ -1798,6 +1907,13 @@ def find_tells(measures: dict, cfg: dict) -> dict:
         for c in f.get("arrows", []):
             if c["gap_chars"] <= t["max_gap_chars"]:
                 add("arrow-glued", (c["sel"], c["label"]), v, c["sel"], f"\"{c['label']}\" has {c['glyph']} at its {c['edge']}")
+        t = th["tilted-form"]
+        for c in f.get("tilts", []):
+            if abs(c["angle"]) >= t["min_degrees"] - EPSILON:
+                whose = "its own transform" if c["by"] == "self" else f"the transform of {c['by']}"
+                add("tilted-form", (c["sel"], c["angle"]), v, c["sel"], f"the {c['tag']} is drawn rotated {c['angle']:g} degrees by {whose}")
+        if f.get("tilts_capped") and TILT_CAP_NOTE not in unverified["tilted-form"]:
+            unverified["tilted-form"].append(TILT_CAP_NOTE)
         t = th["middot-run"]
         for c in f.get("separators", []):
             if c["count"] >= t["min_separators"]:
@@ -1824,12 +1940,12 @@ def find_tells(measures: dict, cfg: dict) -> dict:
         for b in boxes:
             media = b["media_px"]
             pictured = any(n in media for n in ("canvas", "video")) or any(media.get(n, 0) > t["max_icon_px"] for n in ("img", "svg", "picture"))   # an img, svg or picture this small is an icon
-            section = b["h1"] > 0 or b["headings"] > t["max_headings"]   # the page, or a band of it, and not a drawing in it
+            section = b["h1"] > 0 or b["headings"] > t["max_headings"] or b.get("band", False)   # the page, or a band of it (O9: the boxes inside a band are still judged), and not a drawing in it
             # a list excuses a box only when the box is the list, or the items of the lists are nearly all of it: all its styled parts but at most one, or most of its area (the area of the items themselves, not of a list stretched past them)
             listed = b["in_lists"] > 0 and (b["styled"] - b["in_lists"] <= t["max_unlisted_styled"] or b["list_area"] >= t["min_list_area_ratio"] * b["width"] * b["height"] - EPSILON)
             # a table is data, a badge in one of its cells too: the box is a table or a table section, or every styled part of it sits in a cell
             tabular = b["table"] or (b["in_cells"] > 0 and b["styled"] == b["in_cells"])
-            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"] and not (pictured or section or listed or tabular or b["labelled"]):
+            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] - b.get("in_bands", 0) >= t["min_styled_descendants"] and not (pictured or section or listed or tabular or b["labelled"]):
                 meets[b["id"]] = b
         outer = set()
         for i in meets:
@@ -1851,6 +1967,40 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 if in_row and max(widths) - min(widths) <= tol + EPSILON and max(heights) > 0 and min(heights) / max(heights) >= t["min_height_ratio"] - EPSILON:
                     rows.append((min(x["top"] for x in ts), g))
                     add("three-equal-tiles", g["sel"], v, g["sel"], f"three tiles of {widths[0]:g} px side by side, each with a heading")
+        t = th["stray-box"]
+        walks = [(False, f.get("strays", []), v.get("animations"))]   # (at a tall window, the candidates, the animations the wait left running): the view's own walk first, then the tall one
+        tall = f.get("strays_tall")
+        if isinstance(tall, dict):
+            if tall.get("error"):
+                stray_unseen["tall"].append((width, tall["error"], (tall.get("viewport") or {}).get("height")))
+            else:
+                walks.append((True, tall.get("strays", []), tall.get("animations")))
+                if tall.get("capped") and STRAY_CAP_NOTE not in unverified["stray-box"]:
+                    unverified["stray-box"].append(STRAY_CAP_NOTE)
+                elif tall.get("truncated") and ELEMENT_CAP_NOTE not in unverified["stray-box"]:
+                    unverified["stray-box"].append(ELEMENT_CAP_NOTE)
+                stray_tall_height = (tall.get("viewport") or {}).get("height") or stray_tall_height
+                if tall.get("load"):   # what only the resize brought (a page error, a request stopped or failed): page:load judges the view at its own height, so it is said here
+                    load = tall["load"]
+                    unverified["stray-box"].append(f"NOT verified at {width} px in a window {stray_tall_height} px high: the page logged {load[0]}"
+                                                   + (f" and {len(load) - 1} more" if len(load) > 1 else "") + " only after the resize, which page:load does not judge")
+        standing: set[str] = set()   # what the view's own walk counted as a hit: the tall walk adds only what it alone shows
+        for at_tall, strays, anim in walks:
+            anim = anim if isinstance(anim, dict) else {}
+            if anim.get("capped"):
+                stray_unseen["capped"].append((width, at_tall))
+            elif anim.get("running"):
+                stray_unseen["running"].append((width, at_tall, anim["running"]))
+            for c in strays:
+                if not _is_stray(c, t) or (at_tall and c["sel"] in standing):
+                    continue
+                if c["animating"]:
+                    stray_unseen["animating"].append(c["sel"])
+                elif not anim.get("capped"):
+                    add("stray-box", (c["sel"], at_tall), v, c["sel"], _stray_text(c, t, at_tall, stray_tall_height))
+                    standing.add(c["sel"])
+        if f.get("strays_capped") and STRAY_CAP_NOTE not in unverified["stray-box"]:
+            unverified["stray-box"].append(STRAY_CAP_NOTE)
         if f.get("truncated"):
             for tid in TELL_NEEDS_WALK:
                 if ELEMENT_CAP_NOTE not in unverified[tid]:
@@ -1868,6 +2018,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
     if stock_langs:
         shown = ", ".join(sorted(k or "an unknown language (the page sets no lang)" for k in stock_langs))
         unverified["stock-second-action"].append(f"NOT verified: no word list for {shown} (only {' and '.join(languages)} are listed)")
+    unverified["stray-box"].extend(_stray_notes(stray_unseen, stray_tall_height))
     hits: dict[str, list[dict]] = {t["id"]: [] for t in cfg["tells"]}
     for (tid, _), h in merged.items():
         hits[tid].append(h)
@@ -1919,8 +2070,130 @@ def tell_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
                 anatomy=a)
 
 
+def first_screen_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:first-screen: in each measured view the bottom edge of the hero's main heading (the first shown h1) and of its first action (the first shown link or button in the hero,
+    outside a nav) is inside the first screen, the viewport height of that view (the browser's window the check sets for the width, not a height of the page's own). A warning, never a
+    failure (a tall hero may be meant): it names each view with something below the fold, by how many px, and what. A page with no hero (no shown h1) is info "not measured: <why>", a
+    hero with no action is measured on its heading and says so; a view with no shown h1 is named as not measured and the row is then a warning, never a pass; no view measured is skipped.
+    The hero box is the h1's nearest section, header, banner or hero element (else its parent), so the first link there counts, a logo link included."""
+    rid, label = "page:first-screen", "the hero's heading and main action in the first screen"
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and isinstance(v.get("tell_facts"), dict)]
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    heroes = [(v, (v["tell_facts"].get("hero") or {})) for v in views]
+    if not any(h.get("found") for _, h in heroes):
+        rep.add(rid, "info", label, detail="not measured: the page has no hero (no shown h1 in any view), so there is no heading or main action to place in the first screen")
+        return
+    over, actionless, unmeasured, nowindow, measured = [], [], [], [], 0
+    for v, h in heroes:
+        if not h.get("found") or not isinstance(h.get("h1_bottom"), (int, float)):
+            unmeasured.append(f"{v.get('width')}-{v.get('scheme')}")
+            continue
+        view = f"{v.get('width')}-{v.get('scheme')}"
+        vh = (v.get("viewport") or {}).get("height") or h.get("viewport_height")
+        if not isinstance(vh, (int, float)) or isinstance(vh, bool):
+            nowindow.append(view)
+            continue
+        measured += 1
+        a = h.get("first_action")
+        if not a:
+            actionless.append(view)
+        for what, sel, text, bottom in (("heading", h.get("h1_sel"), h.get("h1_text") or "", h["h1_bottom"]),
+                                        ("action", (a or {}).get("sel"), (a or {}).get("label") or "", (a or {}).get("bottom"))):
+            if isinstance(bottom, (int, float)) and bottom > vh + EPSILON:
+                px = round(bottom - vh, 1)
+                over.append({"view": view, "width": v.get("width"), "scheme": v.get("scheme"), "viewport_height": vh, "what": what, "selector": sel, "text": text, "px_below": px})
+    notes = [f"no action in the hero at {', '.join(actionless[:3])}{' and more' if len(actionless) > 3 else ''}: only its heading was measured"] if actionless else []
+    if unmeasured:
+        notes.append(f"not measured at {', '.join(unmeasured[:6])}{' and more' if len(unmeasured) > 6 else ''}: no shown h1 there")
+    if nowindow:
+        notes.append(f"not measured at {', '.join(nowindow[:6])}{' and more' if len(nowindow) > 6 else ''}: no window height")
+    extra = {"viewport_heights": sorted({(v.get("viewport") or {}).get("height") for v, _ in heroes if (v.get("viewport") or {}).get("height")}), "below_fold": over[:100]}
+    if not measured:
+        rep.add(rid, "info", label, detail="not measured: no view shows the page's hero with a measured heading", **extra)
+    elif over or unmeasured or nowindow:
+        lines = [f"at {o['view']} (window {o['viewport_height']:g} px high) the {o['what']} {o['selector']}" + (f" \"{o['text']}\"" if o["text"] else "") + f" ends {o['px_below']:g} px below the fold" for o in over]
+        head = [_names(lines, NAMED)] if lines else []
+        rep.add(rid, "warn", label, detail="; ".join(head + ["the first screen is the window height the check sets for each width; a tall hero may be meant, so this never fails"] + notes), **extra)
+    else:
+        rep.add(rid, "pass", label, detail="; ".join(["the hero's heading" + (" ends" if actionless and len(actionless) == measured else " and first action end") + f" inside the first screen in {measured} view(s)"] + notes), **extra)
+
+
+MOTION_MESSAGE_MS = 500    # page:first-screen-motion: the hero's heading and first action are shown this long into the motion on load at the latest
+MOTION_PAUSE_MS = 5000     # page:first-screen-motion: motion on load that lasts longer (or repeats forever) needs a way to pause, stop or hide it (WCAG 2.2.2)
+
+
+def first_screen_motion_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:first-screen-motion: the motion of the first screen, from render.mjs's two more loads of the narrowest and the widest view (light): the animations that run
+    on load paused and seeked from 0 to the end of the longest finite one, and the same page with prefers-reduced-motion: reduce. A warning, never a failure. It warns
+    when (1) the hero's heading or first action is shown only later than MOTION_MESSAGE_MS into that motion, or not at all (shown: at least half of it in the window and
+    its clipping ancestors, at an opacity of at least half); (2) motion in the first screen runs longer than MOTION_PAUSE_MS or repeats forever, which WCAG 2.2.2 asks a
+    way to pause, stop or hide for (the check does not look for one); (3) with reduced motion something in the first screen still moves on load (a transform, a
+    position, a margin, a size: a fade does not move), a script still draws frames once the page settled, or the heading is not shown at the end. What it cannot see
+    is said: motion driven by requestAnimationFrame (not seekable), animations on a scroll timeline, a clip-path on the heading's way (not read). A page with no motion
+    on load passes; no measured motion view is skipped."""
+    rid, label = "page:first-screen-motion", "the first screen's motion shows the message at once and respects reduced motion"
+    got = [m for m in measures.get("first_screen_motion", []) if isinstance(m, dict)]
+    if not got:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured for motion (see the page:load rows)")
+        return
+    warns, notes, measured, moving = [], [], [], False
+    for m in got:
+        view = f"{m.get('width')}-{m.get('scheme')}"
+        if m.get("error") or not isinstance(m.get("normal"), dict) or not isinstance(m.get("reduced"), dict):
+            notes.append(f"not measured at {view}: {m.get('error') or 'no measurement'}")
+            continue
+        measured.append(view)
+        n, r = m["normal"], m["reduced"]
+        first = [a for a in n.get("first") or [] if isinstance(a, dict)]
+        length = n.get("length") or 0
+        if first or n.get("real_time"):
+            moving = True
+        for k, what in (("heading", "heading"), ("action", "first action")):
+            if not (n.get("found") or {}).get(k):
+                continue
+            at = (n.get("shown_at") or {}).get(k)
+            clip = " (a clip-path on its way is not read)" if (n.get("clip") or {}).get(k) else ""
+            if at is None and length:
+                warns.append(f"at {view} the hero's {what} is not shown at any moment of the {length / 1000:g} s motion on load{clip}")
+            elif at is not None and at > MOTION_MESSAGE_MS:
+                warns.append(f"at {view} the hero's {what} is shown only {at / 1000:g} s into the motion on load (at most {MOTION_MESSAGE_MS} ms: show the message first, then move){clip}")
+        long = [a for a in first if a.get("infinite")]
+        ends = [a["end"] for a in first if isinstance(a.get("end"), (int, float))]
+        if long:
+            warns.append(f"at {view} {_names([a['name'] for a in long], NAMED)} in the first screen repeat(s) forever: WCAG 2.2.2 asks for a way to pause, stop or hide it (not looked for)")
+        elif ends and max(ends) > MOTION_PAUSE_MS:
+            warns.append(f"at {view} the motion in the first screen runs {max(ends) / 1000:g} s on load: past {MOTION_PAUSE_MS / 1000:g} s WCAG 2.2.2 asks for a way to pause, stop or hide it (not looked for)")
+        still = [a["name"] for a in r.get("first") or [] if isinstance(a, dict) and a.get("moves")]
+        if still:
+            warns.append(f"at {view} with reduced motion {_names(still, NAMED)} still move(s) on load")
+        if r.get("alive"):
+            warns.append(f"at {view} with reduced motion a script still draws frames after the page settled ({r['alive']} requestAnimationFrame call(s) in {QUIET_NOTE})")
+        if (r.get("found") or {}).get("heading") and (r.get("rest") or {}).get("heading", 1) < 0.5:
+            warns.append(f"at {view} with reduced motion the hero's heading is not shown once the page settled")
+        if n.get("real_time"):
+            notes.append(f"at {view} the page also moves by requestAnimationFrame, which cannot be seeked: that motion is NOT verified")
+        if n.get("unseekable"):
+            notes.append(f"at {view} {n['unseekable']} animation(s) run on a scroll or view timeline: NOT verified")
+    extra = {"motion_views": measured, "message_ms": MOTION_MESSAGE_MS, "pause_ms": MOTION_PAUSE_MS}
+    if not measured:
+        rep.add(rid, "skipped", label, detail="not verified: " + "; ".join(notes), **extra)
+    elif warns or notes:
+        rep.add(rid, "warn", label, detail="; ".join(warns + notes + (["a hero may be meant to move first, so this never fails"] if warns else [])), **extra)
+    elif not moving:
+        rep.add(rid, "pass", label, detail=f"nothing in the first screen moves on load at {', '.join(measured)}", **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"at {', '.join(measured)} the hero's message is shown within {MOTION_MESSAGE_MS} ms, the first screen's motion ends within "
+                                           f"{MOTION_PAUSE_MS / 1000:g} s, and with reduced motion nothing moves on load", **extra)
+
+
+QUIET_NOTE = "the last 500 ms of a 1 s wait"
+
+
 # each (rep, measures, ctx); a later family of rows is added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows, tell_rows, rule_rows]
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, word_rows, mark_rows, font_rows, display_size_rows, tell_rows, first_screen_rows,
+              first_screen_motion_rows, rule_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

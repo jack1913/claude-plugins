@@ -1,10 +1,10 @@
 # Extending the {{brand}} brand kit
 
-This folder, `.claude/skills/{{skill}}/`, is the {{brand}} brand kit. It holds two kinds of file: the ones the kit generates and the ones that are yours.
+This folder, `.claude/skills/{{skill}}/`, is the {{brand}} brand kit. This file is for whoever maintains the brand. The kit holds two kinds of file: the ones the kit generates and the ones that are yours.
 
 ## What is generated
 
-`SKILL.md`, `kit.json`, `rules.json`, `facts.json` and everything under `brand/`, `snippets/` and `reference-pages/` come from the brand project. `brand-creator kit build --yes` writes them. Never edit one, in this folder or in a copy of the kit in a product repository: the next build stops on a hand edit, and `brand-creator kit check` and `brand-creator check` fail it.
+`SKILL.md`, `brand.md`, `checklist.md`, `install.py`, `kit.json`, `rules.json`, `facts.json` and everything under `brand/`, `snippets/` and `reference-pages/` come from the brand project. `brand-creator kit build --yes` writes them. Never edit one, in this folder or in a copy of the kit in a product repository: the next build stops on a hand edit, and `brand-creator kit check` and `brand-creator check` fail it.
 
 The masters you approved are copied in too: everything in the brand project's `assets/masters/` arrives under `brand/assets/masters/`, byte for byte. Only approved masters belong in that folder, because the kit cannot know which are approved. A font among them is copied only when it is under the SIL Open Font License and its licence text is in `assets/fonts/`; any other is listed in `kit.json` and left out.
 
@@ -12,7 +12,7 @@ To change something generated, change the brand project (the tokens, the logo, t
 
 ## What is yours
 
-`EXTENDING.md` (this file), `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md`. The build writes each of them once, from a scaffold, only when the file is absent. It never overwrites or moves one. If you delete one, the next build writes the scaffold again.
+`EXTENDING.md` (this file), `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md`. The build writes each of them once, from a scaffold, only when the file is absent. It never overwrites or moves one. If you delete one, the next build writes the scaffold again. Once the brand's approved masters list an ad or a deck (`brand/assets/masters/masters.json`), `recipes/ad.md` and `recipes/presentation.md` are scaffolded the same way.
 
 Every other file in this folder that the build does not generate is yours too, and it travels with the kit: a recipe you add, a folder of your own, a PDF or a spreadsheet in it. The build only reads these files, to record them. A symbolic link is not a file of yours: the build stops on one and never reads through it.
 
@@ -20,13 +20,22 @@ Every other file in this folder that the build does not generate is yours too, a
 
 ## How to extend
 
-- A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Write numbered steps and no values; take the shape of `recipes/web-page.md`. A file you add travels with the kit: the next build records it, and it is on the copy list a product repository gets, copied only where the repository has none.
-- A folder of your own sits beside the generated ones, for example `notes/`. Its files travel too. A Markdown file there is read by `brand-creator kit check` like your recipes (a fill marker, a tag on each bullet, a source for each value); a file of another kind is copied and never read for fill markers, tags or values. The links in an `.html` or `.css` file of yours must still lead to a file inside the kit, as in any file of the kit. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
+- A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Take the shape of `recipes/web-page.md`: what is fixed, the numbered steps under Defaults, the examples, and no values. A file you add travels with the kit: the next build records it, and it is on the copy list a product repository gets, copied where the repository has none and updated where the repository never changed it.
+- A folder of your own sits beside the generated ones, for example `notes/`. Its files travel too, and the map of `SKILL.md` names the folder after the next build. A Markdown file there is read by `brand-creator kit check` like your recipes (a fill marker, a tag on each bullet, a source for each value); a file of another kind is copied and never read for fill markers, tags or values. The links in an `.html` or `.css` file of yours must still lead to a file inside the kit, as in any file of the kit. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
 - A link inside the kit points at a file inside the kit, so that it still resolves in a product repository.
 
 ## Test the kit
 
 To find out whether the kit is enough on its own, ask in the brand project for a kit test. A builder works from a copy of this kit alone and makes a hero and one other piece, `brand-creator page-check` scores them against the brand, and a cold reader says ship or fix. Each gap goes back to the brand project's tokens, rules or facts, or to one of your own files above, and then the kit is built again. A generated file is never patched. The result is written in the project's `BRAND-STATE.md`.
+
+## Weights
+
+`SKILL.md` tells a reader that every line of the kit has one of three weights: Fixed (kept in every piece), Default (the brand's usual pattern and its practice: used, or bettered) and Example (one good application, to take what helps from). A product follows your practice or uses a better way of its own; only the fixed lines bind it.
+
+- In your files the heading a line stands under says its weight: `## Fixed`, `## Defaults`, `## Examples`. The steps of a recipe go under Defaults.
+- Sort the brand's rules that way in `golden-rules.md`. A rule you do not sort reads as fixed, and a choice made for a reference page reads as a default until a file of yours lists it under Fixed.
+- The tag is the source of a line and the heading is its weight, so check that the two agree: a `[rule: <id>]` line under Examples, or an `[example]` line under Fixed, is a mistake.
+- Put under Fixed only what the brand decided. A rule id on a line the rule never decided binds every product to something nobody chose, and `kit check` cannot see it: it checks that the id exists, not what the rule says.
 
 ## Tags and values
 
@@ -43,4 +52,4 @@ The version is `<edition>.<build>`. It lives in `kit.json`, and `SKILL.md` print
 
 ## A product repository's copy
 
-A product repository gets the kit as a byte copy, made on a branch you name with `/brand-creator:brand-adopt`. `brand-creator kit status --repo <folder>` says whether the copy is current and lists what to copy. An update copies the generated files. The owner files in the repository belong to the repository, the ones you added included: an update copies one only where the repository has none, and reports the ones that differ.
+A product repository gets the kit as a byte copy, made by the kit's own installer: `python3 install.py <folder in the repository> --yes` (without `--yes` it only says what it would copy), run by `/brand-creator:brand-adopt` on a branch you name, or by anyone with a copy of the brand project. `brand-creator kit status --repo <folder>` says whether the copy is current and lists what to copy. An update copies the generated files, copies an owner file where the repository has none, and updates one the repository never changed since it was copied. An owner file the repository changed or added is the repository's own: it is kept, and reported. A product also copies the files it serves (the tokens, the fonts, the logo) into its own folders and may write an adapter for its stack: where those live is the product's choice, and their content stays as the kit gives it.

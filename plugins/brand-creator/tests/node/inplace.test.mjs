@@ -216,7 +216,7 @@ test("a still hidden by a backwards fill and a moving copy shown by one are, onc
 test("the settle step writes what an animation draws and keeps what it cannot write: a pseudo-element, and a property whose value reads empty", async (t) => {
   if (needSetup(t)) return;
   const src = fs.readFileSync(path.join(ROOT, "scripts/render.mjs"), "utf8");
-  const settle = /function inPageSettle\(\) \{[\s\S]*?\n\}\n/.exec(src)?.[0];
+  const settle = /function inPageSettle\([^)]*\) \{[\s\S]*?\n\}\n/.exec(src)?.[0];
   assert.ok(settle, "inPageSettle is in render.mjs");
   process.env.PLAYWRIGHT_BROWSERS_PATH = readSetup().browsers_path;
   const browser = await (await loadDep("playwright-core")).chromium.launch({ headless: true });

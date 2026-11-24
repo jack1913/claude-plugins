@@ -6,6 +6,607 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-20
+
+### Added
+
+- `emit apple --drop-cards` skips the DMG background and the App Store frames and retires the ones an earlier run wrote:
+  they move to `removed-<date>/` and leave the manifest. `--no-cards` still keeps them.
+
+### Fixed
+
+- The DMG background and the App Store frames show the brand's drawn lockup or wordmark instead of typing the name in
+  the system font. With neither file drawn they still type it, and the report warns.
+- The App Store frames' screenshot area has square corners when every radius token of the brand is 0.
+
+## [0.15.1] - 2026-11-20
+
+### Fixed
+
+- `emit apple` now follows `icons.ground` in `qa/rules.json`, as `emit web` and `emit profiles` do. With `dark`, the app
+  icons use the dark background colour and the dark artwork. With `drawing`, every appearance uses the drawing's own
+  ground: the square icons show the whole drawing by default, and the watchOS, tvOS and visionOS icons shrink it onto
+  that ground until it fits their safe areas. The DMG background and the store frames stay light.
+
+## [0.15.0] - 2026-11-20
+
+A brand can now be the parent of a product family, and family-check compares letters drawn as polygons.
+
+### Added
+
+- `architecture: family-parent` for the brand a family's products sit under. BRAND.md calls it a master brand that
+  houses its products (`branded-house`), and the intake asks about it when products sit under the brand.
+- A parent's book gets the family and endorsement chapters by the same rule as a member's, with chapter skeletons
+  worded for the parent.
+- The family's own `FAMILY.md` lives at the root of the parent's project. There, family-check checks that every shared
+  letter is defined in the family's source, and compares the tiles of the products it lists.
+- family-check compares letters drawn as polygons (lists of `[x, y]` outline points), point for point or as the same
+  shape at any position and size. A letter drawn as cells in one source and as polygons in the other fails.
+
+### Fixed
+
+- family-check no longer passes two polygon letters with the same number of contours and points as equal: before, it
+  read the points as filled cells and never compared them.
+
+## [0.14.1] - 2026-11-20
+
+### Added
+
+- Your kit records how you sorted your rules (fixed, default or example), and `kit status` names each rule that a
+  product's copy of `golden-rules.md` sorts differently or no longer holds. Before, a product could move a fixed rule to
+  the defaults and its copy still read as current, with nothing said. The product keeps its file; what follows is yours
+  to decide. The kit's installer says the same when it runs.
+
+### Changed
+
+- After this update, the next build changes `install.py` of every kit, so its version goes up by one and a product's copy
+  is behind until you update it.
+
+## [0.14.0] - 2026-11-20
+
+A variable font that slants keeps its own italics in your kit, and your brand book embeds a variable font with its whole
+weight range. After you update, run the font check again, then build the kit and the book: until you do, the kit build
+leaves your fonts out.
+
+### Changed
+
+- The font check records the slant range of every font, and the kit build refuses a report from before this version. Run
+  `brand-creator fontcheck` once, then `kit build`. The kit's version goes up only if one of your fonts slants.
+- The book warns when it cannot tell whether an embedded font is variable, because no current font-check report reads the
+  file. Run the font check, then build the book again.
+
+### Fixed
+
+- A variable font with a slant axis is declared in the kit's `fonts.css` with its slant range, so italic text in a product
+  uses the font's own slant. Before, the browser faked the italics from the upright letters.
+- The brand book embeds a variable font with its weight range, and its type table shows the range. Before, the font was
+  held at one weight and the book's bolder headings were faked. A book with such a font looks different at its next
+  build, and its PDF pages may break elsewhere: look at it again before you approve it.
+
+## [0.13.0] - 2026-11-18
+
+Your brand kit now says how much each part binds, so a product team keeps its own way of working. After you update, run
+the font check again and build the kit: until you do, the build leaves your fonts out of it.
+
+### Changed
+
+- The kit's `SKILL.md` opens with three weights. **Fixed** is your identity: the logo files, the token colours, the type,
+  your rules, and claims that are true. **Default** is your usual pattern and your way of working, which whoever builds
+  uses or betters. **Example** is one good application, such as a reference page. Before, every line read as an
+  instruction of the same force.
+- The steps in `SKILL.md` and in the recipes stay, and now say they are your brand's own practice: follow them, or use a
+  better way. The page check is named for where the plugin and your brand project are at hand.
+- The kit no longer tells whoever builds to ask you before every choice your brand hasn't made. Three things stay with
+  you: a new brand colour, a claim your facts don't hold, and a redrawn logo. The rest they decide in line with what is
+  fixed, and say what they decided. A missing fact stays a marked sample or is left out, and you are told.
+- The starter `golden-rules.md` asks for your rules sorted under Fixed, Defaults and Examples, and the starter recipes
+  have the same three headings. A rule you don't sort counts as fixed. Files you already have are left as they are.
+- The note on each reference page says which of its choices are defaults and which are examples, as the page itself is.
+- After this update, the next build changes `SKILL.md` and `checklist.md` of every kit, so its version goes up by one and
+  a product's copy is behind until you update it.
+
+### Fixed
+
+- The kit's font code now declares the full weight range of a variable font. Before, it named one weight, so a browser
+  held the font there and faked the bolder ones. It also shows text in a fallback font while yours loads
+  (`font-display: swap`). Run the font check again, then build the kit. Until you do, the build leaves your fonts out
+  of the kit and says why, because a font check made before this update did not read the weight range.
+- The font check no longer stops on a font file with a damaged table. It reports that one font as unreadable and goes
+  on with the others.
+
+## [0.12.1] - 2026-11-18
+
+### Fixed
+
+- With `icons.ground` `drawing`, the maskable icon now shrinks the drawing on its own ground until its ink is inside the
+  safe circle, instead of always failing the safe-zone check; the touch icon stays edge to edge.
+- With `icons.ground` `drawing`, the avatar does the same by default, so `--content-fraction` is no longer needed to pass
+  its circle check.
+- With `icons.ground` `dark`, a band drawing that already is a `-dark.svg` is used as it is, instead of stopping the run
+  while looking for a `-dark-dark.svg`.
+
+## [0.12.0] - 2026-11-17
+
+A mark that carries its own dark ground now gets icons, an avatar and cards on that ground; the brand book and the
+brand kit catch up with it.
+
+### Added
+
+- `qa/rules.json` `icons.ground` (`light`, `dark` or `drawing`; per mark `marks.<id>.ground`) sets the ground of the
+  touch and maskable icons, the web manifest colours and the profile avatar. With `drawing`, a mark drawn on its own
+  full-bleed square fills the icon edge to edge, and the safe-zone checks measure only what sits on that square. A
+  drawing that does not fill its canvas stops the run with a message, instead of falling back to the light ground.
+- `qa/rules.json` `social.mode` (`light` or `dark`) sets the ground of the Open Graph card and the GitHub preview;
+  dark uses the dark mark and lettering, as the dark README header does.
+- The brand kit carries the files `emit web`, `emit social` and `emit profiles` made (icons, cards, avatar,
+  banners), byte for byte, and its map points to them.
+
+### Changed
+
+- The accent line on cards and banners has square ends when every corner radius token of the brand is 0.
+- With `icons.ground` set to `drawing`, the brand book shows a drawing that carries its own ground on both grounds
+  (the size table and the marks block) instead of warning "no dark drawing".
+
+### Fixed
+
+- The brand book keeps rule lines written as "(rule, approved by the owner ...)"; before, only lines starting with
+  "(rule)" were kept and the others were dropped without a word. A line whose tag is some other form of "rule" is now
+  named in a warning. Code in backticks in a rule line shows as code.
+- A hex value in the brand book's colour table no longer breaks across two lines.
+
+## [0.11.2] - 2026-11-10
+
+Fixes left over from the 0.11.0 review, and a clearer message after a plugin update.
+
+### Changed
+
+- After a plugin update, the check's out-of-date rows for the plugin version, its code or a changed input now name
+  the command that fixes them, `bash tools/finish.sh`, when your brand project has it.
+
+### Fixed
+
+- `install.py` writes the kit's files with normal permissions, so everyone who checks out the repository can read
+  them. Before, they were readable by their owner only.
+- The warning about another skill for your brand no longer fires on the brand's letters inside another word, such as
+  "Ace" in "spacecraft". It now also finds the brand written without its accents ("Lakowo" for "Łąkowo") and in a
+  description that goes over several lines.
+- Two installs running at the same time now stop with a message that names the file, instead of a Python error.
+- The kit's text, the manual and the adoption guide no longer say your own files in a product's copy are never
+  overwritten: since 0.11.0, a file of yours that the product never changed is updated.
+
+## [0.11.1] - 2026-11-09
+
+Fixes from moving the pilot brand onto the generated kit.
+
+### Added
+
+- `kit check --all` lists every line that lacks a tag and every value without a source, not only the first six: useful
+  when you move a large hand-made kit into your own files.
+- `install.py` and `kit status` warn when Claude's global skills folder (`~/.claude/skills`) holds a skill for your
+  brand, which Claude loads in every project.
+
+### Changed
+
+- The kit's `SKILL.md` map names the folders and files you add to the kit, such as `guides/` or `code/`, so Claude finds
+  them.
+- A file of yours that a product took out stays out: `install.py` no longer copies it back, and reports it as deleted in
+  the repository.
+
+### Fixed
+
+- A board you approved in an earlier round no longer fails the check for a missing Idea line: the round is read only,
+  so the line only warns there.
+- The kit check no longer fails a `{{...}}` field in a template, such as `{{logo_url}}` in a print template: it is no
+  link.
+- When `--yes` would refuse, the plan of `install.py` says why instead of "run again with --yes to copy".
+
+## [0.11.0] - 2026-11-09
+
+One brand kit. The generated kit takes over what made the pilot brand's hand-made kit work: a short first page with steps
+and a map, a checklist, recipes for your ads and decks, and an installer it carries, so a product gets the kit and its
+updates without the plugin. On the pilot brand the kit's first page went from 3,812 words to 1,739.
+
+### Added
+
+- `brand.md` in the kit: your colours and their contrast, type, layout, logo sizes, motion and what may be claimed, on one
+  page. The kit's `SKILL.md` keeps how to work, your rules, the "never" list and a map of where everything is.
+- `checklist.md` in the kit: a checklist to go through before anything is handed over, built only from your rules, your
+  logo sizes, your contrast pairs, your forbidden words and your page rules.
+- `install.py` in the kit: `python3 .claude/skills/<brand>-brand/install.py <folder in a product> [--yes]` says what it
+  would copy, or copies it, with no plugin installed. It judges a copy with the same code as `kit status`, never deletes,
+  commits or pushes, never installs globally or into the brand project, and never writes through a link. It never puts an
+  older kit over a newer one (update your copy of the brand project first), and a file of the product's own where the kit
+  now writes one of its files is moved to a `removed-` folder first.
+- Starter recipes `recipes/ad.md` and `recipes/presentation.md` once the masters you approved hold an ad or a deck.
+- `kit status` warns when a product also holds another skill for the same brand, such as an older hand-made kit.
+
+### Changed
+
+- A recipe or other file of yours that a product never changed is now updated when you change it in the brand project; one
+  the product changed or added stays its own, as before (ADR-0014).
+- `kit.json` is now the last file of every copy, after your own files, so a copy that stops halfway, a first one too, is
+  finished by the next run.
+- `kit status` and `install.py` stop when one of your own files in the kit changed since the last build: build the kit
+  first, so the copy records it.
+- `kit status --repo <folder>` reads the kit at the root of the repository the folder is in, where `install.py` puts it.
+- `/brand-creator:brand-adopt` puts the kit into a product with the kit's own `install.py` instead of copying it file by
+  file.
+- The first build on 0.11.0 moves every kit's build number up by one: the kit gains `brand.md`, `checklist.md` and
+  `install.py`, and its `SKILL.md` changes.
+
+## [0.10.0] - 2026-11-08
+
+Your ads and decks become part of the brand, and frozen rounds shrink to what they show. A masters round builds approved
+ads and a deck in two or three directions, checks every file, and puts them into `assets/masters/` with a README. `freeze`
+keeps only what a round's boards show, and `cleanup --history` slims the rounds frozen before: on the pilot brand, 291 MB of
+`history/` became 21 MB.
+
+### Added
+
+- A masters round (`/brand-creator:round masters`, Standard and Full, after the system rules and after the site): your ads and
+  your deck as masters, two or three directions first, each listed in the round's `masters.json`, on a new masters board.
+  The owner's approval is the new gate G4m, with their answer on how the PowerPoint deck looks in PowerPoint.
+- `brand-creator masters check` opens every ad and slide at its size after its animations end, saves a picture of each, and
+  fails what was found only by eye before: an element past the edge, a text running into another text, a deck PDF with the
+  wrong pages or its own dates, and a PowerPoint deck whose fonts are not inside it. Something painted over a word warns
+  unless it is marked as drawn there on purpose; a box past a PowerPoint slide's edge warns. The PowerPoint render is your
+  check in PowerPoint: Keynote and Google Slides ignore embedded fonts.
+- `brand-creator masters approve` copies the approved masters, and every file they load, into `assets/masters/` with a
+  `README.md` (each file, its size, your copy rules, how to rebuild) and `masters.json`; `--replace` moves earlier masters to
+  `removed-<date>/` first.
+- `brand-creator masters embed-fonts` puts TrueType fonts inside a PowerPoint deck, and `brand-creator pdf normalise` fixes a
+  PDF's dates so the same input gives the same file. `setup` installs `pptxgenjs` for a round's deck builder.
+- The brand book's opt-in chapter "Ads and decks" and its `{{masters}}` block; `check` says when the masters are older than
+  the approved site; `kit check` names your ad and presentation recipes once the masters change.
+- `brand-creator cleanup --history` slims the rounds frozen before 0.10.0 to what their boards show, the scripts that built
+  them and their notes, through the same plan, yes and restore record as round cleanup, and rewrites the checksum list.
+- A new manual page: [Make your ads and decks](docs/manual/use/make-your-ads-and-decks.md).
+
+### Changed
+
+- `freeze` keeps what a round's boards show: the board pages, every file they load (read from the files and in the browser,
+  so a picture a script adds is kept too), the scripts that built the round and its text records. `FROZEN.md` says how much
+  was left out. `--whole` keeps the old copy of everything; without a set-up data directory `freeze` stops and names
+  `--static` (the files only).
+
+## [0.9.0] - 2026-11-06
+
+Fixes from the same client's later rounds. `cleanup` takes old rounds out of a project through git, three book tools replace
+the one-off chapter scripts, and a chapter can carry an open item. The page check gains two rows for the first screen: what
+fits in it, and what moves when the page opens. `site review-status` says when a page needs a cold review, and
+`capture --reveal` now walks pages and boxes that scroll themselves.
+
+### Added
+
+- `brand-creator cleanup` takes old round folders out of a project through git, so you no longer type a removal line yourself. It first shows a plan
+  (`qa/<date>-cleanup-plan.txt`): the rounds that stay and why (the latest of each stage, the latest pick board, any round a kept file or
+  report points at, any round a kept board's check reads, any round it cannot place, and any you add with `--keep rN`), the rounds that go
+  with their size and whether `history/` holds a frozen copy, and a code. After your yes, `--record-yes CODE --said "<your words>"` writes
+  it into `DECISIONS.md`, tied to that exact plan, and `--yes CODE` removes the round folders with `git rm` and writes
+  `qa/<date>-cleanup-removed.txt` with the line that restores them. It removes only files that are committed and unchanged, refuses
+  (naming each file) when any other file, link or nested repository is in a round to remove, removes the check reports of a removed
+  round too, stages the removal without committing it and prints a suggested commit message. A plan that changed since your yes
+  needs a new yes, and each yes is used once. `history/`, `site/` and the rest of `assets/` are never touched. It was not run against a real
+  brand project: it finds a round that something points at by reading the project's files as text, so compare its keep list with
+  your own before you say yes.
+
+- Three tools for a hand-written book, so whole-chapter work no longer needs a one-off script. `brand-creator book chapter --replace <id> --from <file>`
+  swaps one chapter for the chapter in the file (also `--add` and `--remove`), keeps the rest of the book exactly as it was,
+  needs `--new-edition` for an approved edition and logs the edition like `patch`; it refuses a generated book, an unknown
+  chapter id or a file whose chapter has another id. The chapter count in the contents is now recalculated by the tool after a
+  chapter is added or removed, and the book check fails a count that does not match. `brand-creator patch --loose-space`
+  finds the old text even where the book has a no-break space instead of a space (or a longer run of spaces), and still
+  refuses unless it occurs exactly the number of times you said. `brand-creator book nbsp --fix` lists the spaces the book
+  check warns about (after a one-letter word, as in Polish) and, with `--yes`, makes them no-break spaces.
+
+- A book chapter can now carry an open item: when you cannot fill something in yet (the Adoption and Launch chapters of a Full
+  book ask for an inventory, repository, handles and e-mail), it is written as `Open: <what it waits for>` instead of a
+  `[[fill: ...]]` marker. The book check accepts it and lists every open item, with its chapter, in a new row
+  (`book:open-items`), so none is forgotten; a bare `Open:` with nothing after it still fails. In a hand-authored book, a short nested list under `Open:` may name what the item waits for. Raising the tier (`brand-creator state --set tier=full`) now says which chapters of the new tier's book and which facts
+  (the inventory, and once the look is approved the motion decision) the project does not have yet. Setting the same tier or a lower one prints nothing new.
+
+- `brand-creator page-check` has a new row, `page:first-screen`: at each size it checks that the hero's heading and its first button or
+  link end inside the first screen, and warns (never fails) naming each size where one falls below the fold, by how many pixels, and
+  which. A page with no hero, or a size where the heading is hidden, says "not measured". It replaces checking this by hand each round.
+
+- `brand-creator page-check` has a second new row, `page:first-screen-motion`, for what moves when the page opens. At the smallest
+  and largest size it steps through that motion and warns (never fails) when the hero's heading or first button shows only after
+  half a second, when the motion runs longer than 5 seconds or never stops (WCAG 2.2.2 then asks for a way to pause it), or when, with
+  reduced motion turned on, something still moves or the heading stays hidden. A heading whose words slide up from under a mask
+  counts as shown once they are out. Motion it cannot step through (drawn frame by frame by a script) is named as not checked.
+
+- `brand-creator kit check` now names each of your own kit files (`voice.md`, `visual.md`, a recipe you wrote) that nobody
+  has touched since the last build, once your tokens, `FACTS.md` or `BRAND-STATE.md` changed after it, as a warning
+  (`kit:behind`), so you can tell which hand files may be behind the brand. It names every such file and never edits them;
+  `kit build` prints the same list before it records them. The build already never overwrites your files.
+
+- `brand-creator site review-status <page>` says whether a page needs a cold review: it finds the page's last review (this round's, else
+  the same version in an earlier round) and compares the page and the pictures it read with the files now. It prints "reuse" and the
+  review's path when nothing changed, or "review needed" and why (no earlier review, a review that recorded no checksums, or the file
+  that changed). It only reads. The cold-review rule now says to run it first, so a page that did not change is never reviewed twice.
+
+### Changed
+
+- A page card of a pages board with no Idea line, or an empty one, now fails the `board-lint` check `site:fields` (in 0.8.0 it only
+  warned). A pages board without Idea lines, such as one made before 0.8.0, fails its lint now: add the one-line idea to each page card.
+- `capture --reveal` now scrolls every big box on the page that scrolls on its own (a main area, a sidebar) as well as the page, in
+  steps of half a screen, so reveal scripts that watch with a margin see every item. Each box is shown on the screen while it is
+  walked, and a tall box is carried up until its bottom is shown. The walk waits two frames after each step, turns scroll snapping
+  and scroll anchoring off while it runs, and puts every scroller back where it found it. It says where a walk that stopped early
+  ended, and reports a page that will not scroll, will not stay at its top, or does not answer. The budget is 80 half-screen steps
+  (40 screens, as before), so a capture with `--reveal` takes about twice as long. The `reveal` part of `capture.json` drops
+  `inner_scroller` and gains `boxes`, `box_steps`, `page_unfinished`, `boxes_unfinished`, `boxes_unmeasured`, `small_boxes`, `grew`,
+  `not_returned` and `root_hidden`. A page whose own scrolling is hidden or clipped is still walked, and the run now says a
+  visitor cannot scroll it. A page that stops answering during the walk stops `capture` at once, with nothing written, instead of
+  failing later on the pictures.
+
+### Fixed
+
+- `capture --reveal` did not walk a page whose body scrolls itself, though the run said it did. It now walks that body as a box and
+  never prints a success line for a walk that took no step.
+- `capture --reveal` walked a closed drawer instead of the page's main area. A drawer that is not shown is no longer walked.
+- `capture --reveal` stepped 40 times through a page that scrolls itself back, and called it longer than 40 screens. It now
+  says the page did not scroll.
+- `capture --reveal` skipped a box built with `flex-direction: column-reverse` (a chat). It now walks such a box from its top to its end.
+
+## [0.8.1] - 2026-11-05
+
+### Fixed
+
+- A page check that failed while measuring the page now records which page and which widths it was, so `check --refresh` runs it
+  again as the same check instead of calling it a built site.
+- The page check's tilted-form warning now also reads a form under the common `perspective(1px) translateZ(0)` trick, which turns
+  nothing; before, such a form was left out.
+- `brand-creator --help` and the commands page now list the kit check among the reports `check --refresh` runs again.
+
+## [0.8.0] - 2026-11-05
+
+Fixes from a real client's site round. `check --refresh` re-runs the reports that went out of date, so the asset script no
+longer ends "not verified" on reports its own steps made stale. `capture --reveal` photographs pages that show their sections
+as you scroll, and the page check warns about a tilted form. Your answers stay internal unless you say they may be public,
+legal deadlines need an official source, and every command's `--help` works without setup.
+
+### Added
+
+- `brand-creator capture <page> --reveal` scrolls the page to the bottom and back before it takes the pictures, so a page that shows
+  its sections only as you scroll to them is photographed with those sections shown, and you no longer need a script of your own for
+  it. A page longer than 40 screens, or a walk that takes longer than `--timeout`, is cut short there, and the run and `capture.json` say so.
+- `brand-creator check --refresh` first runs again every report that went out of date and can be made again without a decision of yours (the
+  page check of each of your pages, then the contrast, the book check, the kit check and the board check, which reads the page checks), says each run and
+  how it ended, and then checks as usual. A report that writes your files or needs your yes (the adapter files, the applied skill, the kit,
+  the book, the packs) is only named, with the command to run. A run that fails is said so.
+- The page check has a new warning, `tilted-form`: a form, or a field, drop-down, text area or button of a form, drawn rotated, by
+  itself or by a tilted sheet round it. Forms are never tilted; the warning names the form and what turns it. A tilted picture with
+  no field in it is left alone.
+
+### Changed
+
+- An answer you give to a question is no longer put on a page as a fact. It becomes a fact only when you say it may be said
+  publicly (it asks when unsure); otherwise it is kept in a new "Internal context" part of `BRAND-STATE.md`, which no page,
+  board, book, brand file or kit uses.
+- A legal or statutory claim (a deadline, an obligation, a rate) is checked in the statute's own text or the authority's own page
+  before a page, board or book shows it, and its fact row names that source and the date checked; a portal or a blog is never the source.
+- A board's questions and the chat's now share one numbered list: the chat repeats the board's questions with the board's numbers and
+  numbers any other question after them, so "2a" means one thing.
+- A research helper now stops gathering when about two thirds of its turns are used and returns what it has, every unfinished claim marked
+  UNVERIFIED, instead of running out of turns and returning nothing. Its turn limit is raised from 30 to 40.
+- `tools/finish.sh` now ends on `brand-creator check --refresh`, so the chain no longer finishes on a report its own steps (or a change to `FACTS.md`
+  made just before) left out of date: in a real round it ended "not verified" in half its runs. A step that fails still ends the chain with a
+  non-zero exit code. Your project keeps its own copy of `finish.sh`: take the last step from `templates/finish.sh.tpl`.
+- A hero card of a site board with no Idea line, or an empty one, now fails the `board-lint` check `site:fields` (in 0.7.0 it only
+  warned). A site board made before 0.7.0 without Idea lines fails its lint now: add the one-line idea to each hero card.
+- The site round now carries the first screen's world into the other pages: the board writes the shapes and moves of the picked
+  first screen down as a short system, every page uses at least one for its own job, and each page card has an Idea line. The board
+  check warns when a page card has none; in the next release that becomes a failure. Forms stay straight: a tilt or a drawing goes
+  round a form, never on it.
+- A later board of the first-screen stage carries only the versions you picked or mixed, so only those are reviewed, and Claude says how many
+  reviews there are and what they cost before running them.
+- A new round is copied without the old round's pictures, cold review and `capture.json`, which pointed at the old round and failed the board check.
+  The copy uses `rsync`, which `brand-creator prereq` now lists as optional (macOS has it; on Linux, `apt install rsync`).
+- Every script that builds a page, a board or a picture now lives in the round's `_build/` folder (or `tools/`), never in the session's
+  scratch folder, which a restart wipes.
+- The website's main heading says what the brand is and for whom; the signature line or campaign headline is its own slot and stands there only when you say so.
+- The mock-up warning is about a drawn screen of a product made of boxes, not about drawing: an illustration, a drawn calendar, paper or a figure is
+  allowed and argued on the card, and graphics are no longer dropped to avoid the warning.
+- When you approve the site, Claude lists what it leaves behind (masters, voice lines, the book's site chapter, the kit) as next steps for you, and before the first push of a
+  shared project offers to clean old rounds, with the one line you run yourself.
+
+### Fixed
+
+- `brand-creator <command> --help` (or `-h`) now prints the command's help even when no data directory is set, as in a Claude Code
+  Bash tool; before, it stopped with "no data directory".
+- `brand-creator capture --help` (and `shot`, `card`, `frames`, `fonts`) now prints its options instead of failing with "Unknown option".
+- `tools/finish.sh` no longer needs `BRAND_CREATOR_DATA` typed by hand: with neither it nor `CLAUDE_PLUGIN_DATA` set, it uses the one
+  set-up folder under `~/.claude/plugins/data/` named `brand-creator-...` and says which. With none, or several, it stops (exit 2) and
+  names what it found; `BRAND_CREATOR_DATA` picks another. Your project keeps its own copy of `finish.sh`: take the change from
+  `templates/finish.sh.tpl`.
+
+## [0.7.0] - 2026-11-04
+
+The site round gets fixes from a real client round. You can try the first-screen versions live in your browser before the
+board, and share a try-out as a private page. The cold review can be given your G4 rules and the key frames of a moving page,
+and it stops after two reads. The page check warns about a box a movement leaves behind and about words your brand forbids,
+and gives fewer false warnings about error codes and mock-ups.
+
+Nothing you used is gone. A hero card with no Idea line makes `board-lint` warn in this release and fail in the next: add the
+line when you next touch the board.
+
+### Added
+
+- `brand-creator state --part g4-rules` prints the G4 rules of `BRAND-STATE.md` (the G4 record and the rules you approved) as one
+  line to give a reviewer, with the line that records them in a cold review.
+- `brand-creator inline <page> --out <file>` writes one self-contained copy of a page of your project, such as a try-out: its
+  stylesheets, scripts, images, fonts and logo go inside the file, so it loads nothing from anywhere. A page that loads from
+  another website is refused (exit 2) with its address named, and nothing is written. Only `.css` files go in as stylesheets
+  and `.js` or `.mjs` files as scripts, and nothing from a hidden file or folder, so a page cannot carry another file of your
+  project into the copy. The copy goes outside the project or
+  under `tryout/`, never over the page and never over a file already there (a try-out's own page): under `tryout/` the file must be new,
+  or the same copy again, and a stylesheet's `@import` never ends the `<style>` it lands in. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
+  apart from `review_url`, the page of your boards.
+- `brand-creator capture <page> --frames` takes three key frames of a page's first screen (1440 wide, light): at the start, the
+  middle and the end of the longest animation that runs when the page loads, as `shots/frame-1440-0.png`, `frame-1440-50.png` and
+  `frame-1440-100.png`, listed in `capture.json`. The four stills only show where a motion ends; a tear-off or a tab switch shows in
+  the frames. A page that does not animate on load, or only repeats an animation for ever, gets no frame, and the run says so. The
+  same page taken twice gives the same frames.
+- The page check warns about a box a movement leaves behind (`tell:stray-box`). It waits for your page's movements to
+  end, then looks for a box that still shows but lies completely outside the box that holds it, or off the screen, by 8
+  pixels or more: the sheets that stay on screen after their animation. It also looks at each width again in a window
+  1300 pixels high (once per width, in the first colour scheme), so a problem that only shows on a tall screen is found. Only boxes 8 pixels or more out
+  of place are collected, and a page with more of them than the check lists is "not verified" beyond the first ones, never a pass. A page with a movement that never ends, or
+  that follows the scroll position in its styles, is "not verified" for this warning, never a pass. A site card names it
+  like any other warning the check finds.
+
+### Changed
+
+- Claude now starts brand-creator for launch steps asked in plain words, such as paying the trademark fee or what to do
+  before the brand goes public (still handed to you, never done for you), and for picking references for your website;
+  Polish asks such as "przed publikacją marki" and "znak towarowy" too.
+- The cost of an agent fleet is now stated in tokens, from measured runs. Before you say yes to a workflow, the dry run
+  (`fleet-plan`) shows each agent's tokens as a range with the date it was measured, and says "not measured" for an agent
+  nobody has measured, where it used to say "about one pass per agent". Claude does the same when it states the cost.
+  The figures live in one small table, `skills/brand-creator/references/fleet-costs.json`, each row from a dated, named
+  run (the cold review of a site hero, the research fleet of a round). A row counts only for the agent and the workflow it
+  was measured for. `fleet-plan --costs <file>` reads another table; a table that is malformed is refused with exit 2,
+  and `fleet-plan --check` fails it.
+- The cold review of a site hero can now be given your approved G4 rules. It judges the first screen against them, so a dark
+  still that equals the light one is right when a rule says so, without reading the rest of the project record. The board
+  lint accepts a review made the old way (six inputs) or with the rules as a seventh, and marks the review out of date when a rule
+  or the G4 record changes after it; another line of `BRAND-STATE.md` changing does not.
+- The site round's hero stage starts from what your brand already approved. The approved templates and pictures in
+  `assets/masters/` are inputs, used as they are, and when `motion/motion.json` says your brand moves, the signature move
+  shows on the first screen of each hero, or the card says why a hero leaves it out. Before a hero is built, it states its
+  one memorable idea in one line, and the card carries it as an "Idea" line. A hero card with no Idea line, or an empty
+  one, makes `board-lint` warn (`site:fields`) in this release and fail in the next, so boards made before this release
+  still lint.
+- The page check warns about words your brand forbids. Each word listed as a bullet under "Forbidden" in `brief/BRIEF.md`
+  or `research/cliches.md` (the book check also adds the book's own `lint.forbidden`; the page check does not) is looked for in the text of the page, in any
+  letter case, as a whole word. A hit is a warning that names the word and the text around it (`page:words`), and never fails
+  the page; a word in a labelled sample is found too. A project with no list gets an info line that says nothing was
+  looked for, not a pass. Both files are inputs of the report, so a word added later makes an older report stale.
+- `FACTS.md` keeps the plain fact apart from the words that present it. Wording you approved for use as copy goes in its own
+  row, labelled `copy: <slot>` (`copy: hero headline`), and its text backs a number or status word like any fact. In the
+  site round a headline quotes such a row, or is new wording you approve on the board, and is no longer a fact copied word
+  for word.
+- The site round now lets you try the first-screen versions live before the board. Claude builds each as a plain page in
+  `tryout/<Name>/`, you open it in your own browser and say what to change, and Claude changes it while you look, with no
+  pictures, page check, cold review or board per change. When you say the versions are ready, Claude copies them into the
+  round, with their relative paths made one level deeper so the tokens and fonts still load, moves `tryout/` into a
+  `removed-<date>/` folder (so `check --cascade` does not find the old copies after you change a name or a price), and the
+  hero board runs as before. Nothing cites a try-out, and a choice you make there is not your pick: you pick on the board.
+  On the round's board, a card that points into `tryout/` still fails `board-lint` (`site:files`).
+- The docs now say three things plainly that cost owners a surprise. A page's sample content marked with `data-sample` and a
+  label passes the claims check and goes on the list of what to replace before you publish; the page needs no visible badge.
+  Adding or removing a colour role or a contrast pair changes the counts the brand book prints, so the book check
+  (`counts:data`) fails until the book is rebuilt, and an approved book then needs a new edition and a new approval. In the
+  Full tier the book also has an Adoption chapter and a Launch checklist chapter, and the book check fails without them.
+  Nothing in the checks changed.
+- A try-out can be shared. When you ask, and have said yes to private claude.ai pages (the same answer as for boards), Claude
+  publishes a self-contained copy of it as a private page and gives you its address; without your yes nothing leaves your
+  computer. The manual no longer says Claude never publishes anything: nothing is published without your yes, and then only as a
+  private page.
+- A cold review may now also be given the three key frames of a page that animates on load, so it judges the motion and not only the
+  end stills. The board lint accepts the six inputs, the six plus the rules, the six plus the three frames, or all of them (all three
+  frames or none), and marks the review out of date when a frame changes or the page is taken again without `--frames`. `site approve`
+  does not copy the frames into the approved page.
+- The finish chain (`tools/finish.sh` of a new project) now writes your brand's adapter files again after the tokens. Before, a
+  token you changed left `check` saying "not verified" about `BRAND.md`, `DESIGN.md`, the applied skill and the brand kit until
+  you ran `adapters`, `applied-skill` or `kit build` and `kit check` yourself. Now one step after the press kit and before the
+  chain records the pack does it: `adapters` with the options in the new `ADAPTERS_ARGS` line of block 2 (the options are your
+  choices and nothing records them, so a `BRAND.md` or `DESIGN.md` with that line empty is left alone and the chain says which
+  line to set), then `applied-skill --yes`, or, when the project has a kit, `kit build --yes` and `kit check`. A project with
+  none of these runs nothing and says so. A command that refuses (a file you edited by hand, a package that is not installed)
+  is a failed step, said with its message; the chain still runs `check`, then ends with a non-zero exit code. So is a project
+  state it cannot read (a slug that is not set simply means no applied skill, but any other failure of `state --get slug` is said, never
+  taken for "no skill"). A project that
+  already has `tools/finish.sh` keeps its copy: take the step from `templates/finish.sh.tpl`.
+- `fontcheck` now warns when a run leaves out a font an earlier run checked. Each run writes the one report over the last, so
+  checking a font of a master or a page by itself dropped the other fonts from the report, and the kit then left them out without
+  a word. A font the earlier report lists, that still sits in your project outside `assets/fonts/` and that this run does not name,
+  is a warning (`fonts:dropped`) that names it and says to name every font in one run. The report is not merged: it still lists
+  only the fonts of the run that wrote it. A font you took away, or one outside the project, is not counted.
+- The cold review of a site hero now stops. A version is read at most twice per board: the first time, and once after Claude fixed
+  what the first review found; a third review is not run. The review has a third verdict, `owner`, for what only you can decide:
+  its findings are written as questions to you, on the board's Questions list with the answer Claude recommends, and the board's card shows it next to `ship` and `fix`. `board-lint` accepts
+  all three (an unknown word still fails; boards made before this release lint as they did), and the lint cannot count reviews, so
+  the limit is in the round's instructions. When Claude asks you to approve reviewer agents, it now states how many calls the
+  rule allows (up to 4 for two versions, 6 for three).
+- A new project now comes with a `.gitignore` that keeps the whole-page picture of each captured site
+  (`research/site-refs/*/1440-full.png`) out of git. Those pictures are large, and the boards use the smaller stills and the
+  thumbnails. `brand-creator new` never overwrites a `.gitignore` (it still refuses a folder that holds anything). A project made
+  before this has none: add that line to its `.gitignore` yourself, as the manual's page on reference pages for your site says.
+
+### Fixed
+
+- A number in a page's title or main heading counts as an error code only with an error word right beside it ("Error
+  404", "404 Not Found", "404 Page Not Found", "Not Found (404)", "404 – Strona nie istnieje", "404 · Nie znaleziono"); only
+  spaces, separators (- – — · • | : /), brackets round the code and the words "page", "site", "strona" and "witryna"
+  may stand between them. "450 tickets, all gone" and "Ponad 400 produktów, żaden niedostępny" are
+  counts again, so the page check asks for them in `FACTS.md`.
+- The mock-up warning counts items that lie on top of each other once, so a carousel whose slides are stacked in one
+  place no longer looks as if its list filled the whole box.
+- The mock-up warning leaves a band of your page alone: a section with its own heading, such as a table of parts with
+  a legend under it, or a list of cards. A screen drawn inside such a band still warns.
+- A PDF the plugin makes (the brand book's proof, the print files) now always gets its ID zeroed. About one time in 40
+  Ghostscript writes the ID in a second form, which was left as it was and not reported, so the same PDF made twice could differ.
+- The prompt for a cold review asked whether a part reads as a tell from `page-tells.json`, a file the reviewer is not given. The
+  prompt now names the tells itself.
+
+## [0.6.0] - 2026-11-03
+
+The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four
+workflows. Nothing you could do is gone: what lost its command is something you ask for in your own words, or a flag of
+`check`.
+
+Breaking changes, each with what to do:
+
+- `/brand-creator:new` is gone. Say what you need instead, such as "a logo for my bakery" or "start a brand called
+  Acme". You get the same up to three quick questions and the same project folder, and you can name another place or
+  folder name in words ("put it in ~/brands/acme-rebrand"). If a project is already open in the folder, Claude says so and
+  asks whether to pick it up or start a separate one next to it.
+- `/brand-creator:launch` is gone. Ask for it, such as "help me launch" or "give me the launch checklist". You get the same
+  `LAUNCH.md`, handed over one step at a time with the reason and the click path, and Claude still buys, files and
+  registers nothing. Where you typed `--name <candidate>`, say the name: "the launch checklist for Loaf".
+- `/brand-creator:review` is gone. Type `/brand-creator:check --review` for the review of the latest work as one list to
+  approve (`--review board`, `book`, `pack` or `all` to name what to review), and `/brand-creator:check --review panel`,
+  or `--panel`, for the review panel. A panel with extra agents still starts only after you see the count, models, size
+  and cost and say yes. If you ask for a review in words, Claude points you to that command. The read-through Claude
+  does of each round before showing it to you, and the one reviewer call of a refinement round, are unchanged.
+- `/brand-creator:brand-naming`, `/brand-creator:brand-assets` and `/brand-creator:brand-book` are no longer in the `/`
+  menu. Ask in your own words, such as "name ideas for my bakery", "favicons from my logo.svg" or "generate the brand
+  book", and Claude starts them as before. If Claude does not pick one up, say "use the brand-naming skill", "use the
+  brand-assets skill" or "use the brand-book skill".
+
+### Added
+
+- `/brand-creator:check --review [board|book|pack|all] [panel]` and `--panel`: the review `/brand-creator:review` gave,
+  now a part of `check`. The review runs the checks first, challenges its own findings and gives you one list to approve.
+  Nothing is fixed before you approve it.
+
+### Changed
+
+- The four workflows (`directions`, `naming`, `review-panel` and `adopt`) still show in the `/` menu, because Claude Code
+  has no documented way to keep a plugin's workflow out of it. Their steps and behaviour are unchanged. The text in the
+  "Yes, run it / No" prompt is now one short sentence that says brand-creator starts them after your yes, and the
+  [agents and workflows page](docs/manual/reference/agents-and-workflows.md) says they are meant to be started that way.
+  `review-panel` now starts from `/brand-creator:check --review panel`.
+- `/brand-creator:check` reads its arguments by one set of rules. `--review` takes at most one of `board`, `book`, `pack`
+  or `all`, and then `panel` (`--panel` is the same as `--review panel`). With either, any other word, before or after, is
+  refused with a one-line usage message and is never searched for as an old value. A bare `panel`, which `check` used to
+  search for like any old value, is refused with "did you mean --review panel?"; put the word in quotes to search for it.
+  `--page` together with `--review` is refused too, and a refused command runs nothing. The description in the `/` menu
+  now mentions the review.
+- The launch checklist is not only for the Full tier: in any tier, ask for it and Claude hands it over one step at a
+  time. Full still plans it by default.
+- When no brand project is found, `/brand-creator:status` and the `brand-creator state` message no longer point to
+  `/brand-creator:new`. They say to tell Claude what the brand is for.
+- A pack recorded with `staleness --write` reads as stale after this update (the scripts it hashes changed); rebuild
+  it.
+
+### Removed
+
+- `/brand-creator:new`, `/brand-creator:launch` and `/brand-creator:review`: say what you need in words, or type
+  `/brand-creator:check --review`.
+
 ## [0.5.0] - 2026-11-03
 
 brand-creator now takes a brand onto the web. Website references come before any page; a site round builds reference

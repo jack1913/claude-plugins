@@ -8,6 +8,12 @@ Which systems brand-creator works on, and what to expect off a Mac.
 | Quick and Standard | Yes | Yes | Untested |
 | Full | Yes (Apple packs need Xcode) | Everything except the Apple packs | Untested, and no Apple packs |
 
+## Where the project's asset script finds its data
+
+`tools/finish.sh` uses `BRAND_CREATOR_DATA` (or `CLAUDE_PLUGIN_DATA`) when it is set. When neither is, it takes the one
+folder under `~/.claude/plugins/data/` named `brand-creator-...` that setup finished, and says which. With none, or with
+several, it stops and names what it found; set `BRAND_CREATOR_DATA` to pick one.
+
 ## Off macOS
 
 - **Renderer choice.** The small-size check asks you once which renderer to use (`--renderer=resvg` or
@@ -18,8 +24,8 @@ Which systems brand-creator works on, and what to expect off a Mac.
 
 ## Linux
 
-The tested setup is Debian 13 with Python 3.13, Node 24, uv, resvg, ImageMagick, Ghostscript, poppler, ripgrep and
-potrace. Other distributions may need `cargo install resvg`. On a minimal server, Chromium may need system libraries; the
+The tested setup is Debian 13 with Python 3.13, Node 24, uv, resvg, ImageMagick, Ghostscript, poppler, ripgrep,
+rsync and potrace. Other distributions may need `cargo install resvg`. On a minimal server, Chromium may need system libraries; the
 error names them.
 
 ## Windows

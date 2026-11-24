@@ -1722,3 +1722,28 @@ def test_without_resvg_the_masters_are_a_warning_not_a_pass(proj, tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     row = _masters_rows(proj)["masters"]
     assert row["status"] == "warn" and "NOT verified: resvg is not installed" in row["detail"]
+
+
+def test_first_motion_is_what_check_motion_used(proj):
+    """boardlib/rounds.first_motion (also asked by `brand-creator cleanup` of the rounds it keeps) gives the answer check_motion's inline test gave on the existing fixtures:
+    the board is the first motion board when no earlier round declares data-board="motion"; the optional `rounds` argument narrows the rounds it looks in."""
+    from _common import list_rounds
+    from boardpage import page_kind, read_page
+    from rounds import first_motion
+    make_r2_board(proj, 2)                                                   # a refine board
+    for n in (3, 4):
+        d = proj / "rounds" / f"r{n}"
+        d.mkdir()
+        (d / "board.html").write_text(f'<html><body data-round="{n}" data-board="motion"></body></html>')
+    (proj / "rounds" / "r5").mkdir()
+    (proj / "rounds" / "r5" / "board.html").write_text('<html><body data-round="5" data-board="refine"></body></html>')
+
+    def old(rnd, rounds=None):   # the expression board_lint.check_motion held inline
+        return not any(page_kind(read_page(d / "board.html")) == "motion" for n, d in (list_rounds(proj) if rounds is None else rounds) if n < rnd)
+    for rnd in (1, 2, 3, 4, 5, 6):
+        assert first_motion(proj, rnd) == old(rnd), rnd
+    assert [first_motion(proj, r) for r in (3, 4, 5)] == [True, False, False]
+    only_r4 = [(n, d) for n, d in list_rounds(proj) if n == 4]
+    assert first_motion(proj, 4, only_r4) is True and first_motion(proj, 5, only_r4) is False
+    src = (ROOT / "scripts" / "board_lint.py").read_text(encoding="utf-8")
+    assert "first = first_motion(project, rnd)" in src and "for n, d in list_rounds(project) if n < rnd)" not in src

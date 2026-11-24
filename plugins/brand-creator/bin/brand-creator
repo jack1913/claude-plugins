@@ -26,12 +26,21 @@ usage: brand-creator [--data <dir>] <subcommand> [args...]
 project
   new <slug>              scaffold a brand project (BRAND-STATE.md, FACTS.md, DECISIONS.md, brief/BRIEF.md)
   state                   print or query BRAND-STATE.md (--require G3, --record G3 "<decision>", --json)
-  freeze <round> --name N copy an approved round to history/ with a banner and update history/MANIFEST.sha256
+  freeze <round> --name N keep an approved round in history/: what its boards show, its scripts and records (--whole: all of it;
+                          --static: no browser), with a banner, and update history/MANIFEST.sha256
   motion                  the motion decision (motion/motion.json): on, off (nothing moves) or not decided; --off "<reason>" records that nothing
                           moves, once (--json for data). Standard and Full decide it before G4: the motion round, or --off
   site approve            put the approved pages of the site round (a pages board, G4p recorded, linted since its last change) into site/ with their paths
                           fixed, and write site/site.json: each page, its layout and every choice as a brand rule or an example; --round N, --replace
                           (moves an existing site/ to removed-<date>/site/)
+  masters check           render and check the ads and decks of the masters round (canvas, covered text, deck PDF, PowerPoint structure)
+  masters embed-fonts <deck.pptx> --font FILE.ttf  embed TrueType fonts in a PowerPoint deck (Regular, Bold, Italic, Bold Italic of a family)
+  pdf normalise <file.pdf> fix a PDF's dates and /ID in place (--out FILE: write a copy), so the same input gives the same bytes
+  site review-status <page>  does a page need a cold review? reuse the earlier one when its page and stills are unchanged (read-only; exit 1: review needed)
+  cleanup                 take old round folders out through git: a dry run (the default) prints the plan and writes qa/<date>-cleanup-plan.txt; after the owner's yes,
+                          --record-yes CODE --said "<their words>" records it in DECISIONS.md and --yes CODE runs git rm (staged, never committed); keeps the latest
+                          round of each stage and every round something kept refers to; --keep rN keeps one more; only committed, unchanged files go
+                          --history: the same three runs slim the frozen rounds in history/ to what their boards show (--static: no browser)
 
 checks and renders
   shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report; --out DIR keeps them outside the
@@ -39,16 +48,20 @@ checks and renders
   shot --motion <proof>   motion proof: named states against the still, a page's animations seeked through (layout shift, whole pixels, edges at
                           phone widths, rest frame compared in the page itself), reduced motion; one report per proof file
   card <card.html>        render an HTML card to a PNG (OG, repo social, README header)
+  inline <page.html>      one self-contained copy of a page of the project (a try-out), to show to someone: stylesheets, scripts, images and fonts inside it,
+                          nothing loaded from anywhere; --out FILE.html goes outside the project or under tryout/ (a page that loads from another website: exit 2)
   frames <proof.json>     stills of a page case's mark along its motion (--case, --count N or --at 0,25,50,75,100): a strip and the reduced-motion
                           still too, into motion/frames/<case>/ (a try-out proof in the latest round or removed-*/: <its folder>/frames/<case>/; a proof in
                           history/ or an earlier round is refused: read-only), each written only when its bytes change
   capture <page.html>     stills of a page of the project: the first screen at 1440 and 390, light and dark, and a full page, beside it in shots/, with
-                          capture.json (what the page loaded); --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
+                          capture.json (what the page loaded); --frames adds three key frames of the first screen (the start, middle and end of the
+                          animation that runs on load); --reveal scrolls the page down and back first, so what it shows on scroll is in the stills; --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
                           only command that reaches the network, and only after the owner answered the online-research question (site_research)
   logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
   board-lint <page.html>  required board sections (data-section attributes) for a round page; a motion round's variants too (folder, proof, stills, their reports)
-  check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers
+  check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers; --refresh first re-runs the stale
+                          reports that are a pure re-run of a check (page-check, contrast, book-lint, kit check, board-lint)
   page-check <page.html>  open a page at several widths, light and dark, and report what it loads: a page of the project, --from DIR <page> (a built
                           site anywhere, copied and read only) or --url URL (a page on this machine only); one report per page
 
@@ -70,7 +83,8 @@ brand book
   book-lint [book.html]   gate a book, generated or hand-authored: ids, anchors, network, words, status words, language parity, marks,
                           edition stamp, counts, manifest accounting; --self-consistency checks the book against its own rules
   book-pdf                book.pdf from book.html (Chromium; RGB, labelled "RGB, not print-ready" in the metadata and on the cover)
-  patch FILE              assert-counted replace in a hand-authored book (--old, --new, --count N); logs the edition in BRAND-STATE.md
+  patch FILE              assert-counted replace in a hand-authored book (--old, --new, --count N; --loose-space matches around no-break spaces); logs the edition in BRAND-STATE.md
+  book chapter|nbsp       hand-authored book: replace, add or remove a whole chapter (--from FILE; recomputes the chapter count); no-break spaces after one-letter words (--fix, --yes)
   collapse                after a decision, move the losing variants and switchers out of the book sources and tokens into removed-<date>/
 
 adoption, adapters, launch
@@ -115,7 +129,8 @@ names
 fleets (opt-in)
   fleet-plan <workflow>   dry-run an opt-in workflow (directions, review-panel, naming, adopt) with stub agents: the agent count,
                           the models that will actually run (session model as the ceiling, FORCE env), the size guideline and
-                          a rough cost, before anything is launched; --check lints every workflow and agent file
+                          a rough cost in tokens (from measured runs, or "not measured"; --costs <file> names another table), before
+                          anything is launched; --check lints every workflow, agent file and the table of measured costs
 
 environment
   setup [--yes]           show what will be downloaded, then install dependencies into the data dir
@@ -152,16 +167,28 @@ case "$sub" in
   version|--version)
     case "${1:-}" in
       "")      python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$ROOT/.claude-plugin/plugin.json"; exit 0 ;;
+      -h|--help) echo "usage: brand-creator version [--check]    (prints the plugin version; --check: is this the copy Claude Code has installed?)"; exit 0 ;;
       --check) ;;   # is this the copy Claude Code has installed? (tools/finish.sh runs it first): a bootstrap script, run below
       *)       die "version takes no argument but --check" ;;
     esac ;;
-  root)           printf '%s\n' "$ROOT"; exit 0 ;;   # the plugin root: tools/finish.sh hands it to a project's own generators as BRAND_CREATOR_ROOT
+  root)
+    case "${1:-}" in -h|--help) echo "usage: brand-creator root    (prints the plugin root folder)"; exit 0 ;; esac
+    printf '%s\n' "$ROOT"; exit 0 ;;   # the plugin root: tools/finish.sh hands it to a project's own generators as BRAND_CREATOR_ROOT
 esac
+
+# `<subcommand> --help` needs no data directory: the subcommand prints its own help (smoke has none of its own, so it is said here)
+wants_help=0
+for a in "$@"; do case "$a" in --) break ;; -h|--help) wants_help=1; break ;; esac; done
+if [ "$wants_help" = 1 ] && [ "$sub" = smoke ]; then
+  echo "usage: brand-creator smoke    (dev helper: runs the Acme end-to-end smoke test; takes no options; needs a data directory with setup done)"; exit 0
+fi
 
 if [ -n "$data" ]; then
   mkdir -p "$data" 2>/dev/null || die "cannot create the data directory: $data"
   data="$(cd -P "$data" && pwd)"
   export BRAND_CREATOR_DATA="$data"
+elif [ "$wants_help" = 1 ]; then
+  :   # help: no data directory needed, and none is created
 elif [ "$sub" != "prereq" ] && [ "$sub" != "version" ] && [ "$sub" != "--version" ]; then
   die "no data directory. Pass --data <dir> (skills pass \${CLAUDE_PLUGIN_DATA}) or set BRAND_CREATOR_DATA."
 fi
@@ -195,9 +222,12 @@ case "$sub" in
   state)      py_boot state.py "$@" ;;   # stdlib only: must work without uv (the status skill injects it)
   freeze)     py freeze.py "$@" ;;
   motion)     py motion.py "$@" ;;
-  site)       py site_pages.py "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
+  site)       py site_pages.py "$@" ;;
+  masters)    py masters.py "$@" ;;
+  pdf)        py masters.py pdf "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
+  inline)     py inline_page.py "$@" ;;
   frames)     js render.mjs frames "$@" ;;
   capture)    js render.mjs capture "$@" ;;
   logo-sheet) py logo_sheet.py "$@" ;;
@@ -210,6 +240,7 @@ case "$sub" in
   book-pdf)   py book_pdf.py "$@" ;;
   patch)      py patch.py "$@" ;;
   collapse)   py collapse.py "$@" ;;
+  cleanup)    py cleanup.py "$@" ;;
   print-check) py print_check.py "$@" ;;
   adoption)   py adoption.py "$@" ;;
   adapters)   py adapters.py "$@" ;;
@@ -229,6 +260,7 @@ case "$sub" in
   tokens)     js build_tokens.mjs "$@" ;;
   emit)
     [ $# -ge 1 ] || die "emit needs a target: web | social | apple | windows | linux | tray | tauri | wallet | developer | android | chrome-ext | msix | print | presskit | profiles"
+    case "$1" in -h|--help) echo "usage: brand-creator emit <target> [options]   (targets: web, social, apple, windows, linux, tray, tauri, wallet, developer, android, chrome-ext, msix, print, presskit, profiles; \`brand-creator emit <target> --help\` shows the options of one)"; exit 0 ;; esac
     target="$1"; shift
     case "$target" in
       web)    py emitters/web.py "$@" ;;

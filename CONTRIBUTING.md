@@ -34,6 +34,8 @@ Each plugin releases on its own, and its tag is made with `claude plugin tag plu
 - `docs.yml` checks every Markdown file against the docs standard.
 - Each plugin's workflow runs its tests on a push to `main` or a pull request that changes its folder. A push to
   another branch runs nothing: open a pull request, or start the workflow with `gh workflow run <workflow> --ref <branch>`.
+- brand-creator's workflow runs only its quick checks. Its full suite, on macOS and Linux, runs before a release, started
+  by hand (`brand-creator-release.yml`): see [Tests](docs/internals/tests.md#brand-creator).
 - `marketplace.yml` checks that `marketplace.json` and the `plugins/` folder agree, and that every workflow keeps the
   agreed shape (`.github/scripts/check-workflows.py`).
 - Every plugin's workflow, and `marketplace.yml` for the marketplace file, runs `claude plugin validate --strict` on a

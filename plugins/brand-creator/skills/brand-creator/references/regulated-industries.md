@@ -27,6 +27,9 @@ table in BRIEF.md and the Regulatory line of the strategy core's Guardrails bloc
    guidance on "informing" versus "advertising". Read it at the body's own site (primary).
 3. **Find the statute.** The act governing the profession, and the act for the entity when there is one (a medical
    entity, a law firm form, a regulated financial firm). Use the official legal-text service of the country.
+   The same holds for any statutory deadline, obligation or rate a page, board or book shows, in any trade (for example an
+   employer's tax and social-insurance deadlines): check it in the consolidated text or the authority's own page before it is
+   drawn, and write that source and the date checked in its `FACTS.md` row. A portal or blog is never that source.
 4. **Cross-check general law.** Unfair-competition and consumer-protection rules apply on top, and in the EU the
    Services Directive (2006/123/EC, art. 24) requires member states to remove total bans on commercial communication
    by regulated professions while allowing proportionate rules on independence, dignity, integrity and professional

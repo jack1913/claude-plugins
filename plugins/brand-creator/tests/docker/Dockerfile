@@ -22,13 +22,13 @@ ARG NODE_SHA256_X64=fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56c
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 # Tools the plugin documents (README, `brand-creator prereq`): Python 3.12+, resvg, ImageMagick (magick), Ghostscript, poppler,
-# ripgrep, potrace, fonts. git and curl are what a developer machine has (the adoption survey reads git heads); xz-utils unpacks Node.
+# ripgrep, rsync, potrace, fonts. git and curl are what a developer machine has (the adoption survey reads git heads); xz-utils unpacks Node.
 # The lib* packages are the shared libraries Chromium's headless shell links against (Playwright's list for Debian 13).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl xz-utils git bash coreutils findutils diffutils \
       python3 \
-      resvg imagemagick ghostscript poppler-utils ripgrep potrace \
+      resvg imagemagick ghostscript poppler-utils ripgrep rsync potrace \
       fontconfig fonts-dejavu-core fonts-liberation2 fonts-noto-core \
       libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64 \
       libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 \

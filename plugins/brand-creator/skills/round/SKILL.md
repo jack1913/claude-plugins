@@ -1,7 +1,7 @@
 ---
 name: round
 description: Builds the next round of boards for the current brand project, starting with the style board before anything is drawn, then the boards of directions and refinements, and the motion board of a brand's signature move and, when the brief lists a site, the website references board and the site round's reference pages. It checks the board, takes screenshots in four views, publishes the review page and stops for the owner's decision. Runs only when typed as /brand-creator:round.
-argument-hint: "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+argument-hint: "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
 ---
@@ -12,22 +12,24 @@ Thin wrapper over the orchestrator's "Round mechanics". Arguments: `$ARGUMENTS` 
 round answers; infer both from BRAND-STATE.md when empty). Kinds: `style` (round 0, the style research before anything
 is drawn), `pick` (round 1 and after a full rejection), `refine` and `motion` (a round after G3 that tries the signature
 move as variants; steps below, "A motion round"), and `site-refs` (the website references board: a round after G4 in
-Standard and Full, only when the brief lists a site), and `site` (the site round: the hero in two or three variants, then the
-other pages; steps below, "A site round").
+Standard and Full, only when the brief lists a site), `site` (the site round: the hero in two or three variants, then the
+other pages; steps below, "A site round"), and `masters` (the ads and decks: a round after G4, and after G4p when there is a
+site; two or three directions first, in a new, empty folder; `references/phases/07m-masters-round.md`).
 
 1. Read `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/SKILL.md` (Round mechanics, Gates, Response template) and
    `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/references/board-contract.md`. Then the phase file for where the
    project is: `references/phases/01s-style-research.md` (round 0, the style board),
    `references/phases/03-strategy-directions.md` (round 1 or a reset), `04-selection.md`, `05-refinement.md`,
-   `07-tokens.md` ("The motion round", for a motion round), `07w-website-references.md` (a website references board) or
-   `07p-site-round.md` (a site board).
+   `07-tokens.md` ("The motion round", for a motion round), `07w-website-references.md` (a website references board),
+   `07p-site-round.md` (a site board) or `07m-masters-round.md` (a masters board).
 2. Find the project: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`.
-   Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer `/brand-creator:new`.
+   Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer to start one (the owner says what the brand is for, in words).
 3. Pick the round number N. The style board is round 0 (`rounds/r0/`): it comes first, while G1s is not recorded, even in
    a project that already has rounds (the hook keeps `rounds/r0/` writable while G1s is empty). Every other round is the
-   highest `rounds/rK/` + 1. From round 2: `cp -R rounds/r<N-1> rounds/r<N>` first; never edit an earlier round. A motion
+   highest `rounds/rK/` + 1. From round 2: `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first; never edit an earlier round. A motion
    round is the exception (below). A website references board is another: a new, empty folder (`mkdir rounds/r<N>`), not a
-   copy. So is the first site board of each stage (below, "A site round").
+   copy. So is the first site board of each stage, and a later hero board is `mkdir rounds/r<N>` with a copy of each picked
+   variant only, never of the whole round (below, "A site round").
 4. Check the gate before drawing anything. Before a round 1 board, or the pick board of a reset round, run
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project <dir> --require G1s`. Exit 1 means the owner has
    not picked a style yet: build the style board instead (round 0), or after a full rejection a new style board in the next
@@ -93,7 +95,7 @@ what follows the approval are in `references/phases/07-tokens.md` ("The motion r
 `references/board-contract.md` ("Motion board"). Make the variants before the board, in this order:
 
 1. The first motion round is a new, empty folder (`mkdir rounds/r<N>`): do not copy the refine round. A later one, the
-   refine loop on the picked or combined variant, starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous motion round;
+   refine loop on the picked or combined variant, starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the previous motion round;
    then set the `page` of each `rounds/r<N>/<name>/proof.json` to `rounds/r<N>/<name>/index.html` (a proof that still
    points into the old round fails `board-lint`).
 2. One folder per variant, `rounds/r<N>/<name>/`, named by a word of 3 or more letters (letters, digits, `-` and `_`;
@@ -126,9 +128,17 @@ The site's reference pages, after G4w, in Standard and Full, when the brief list
 review and the choices are in `references/phases/07p-site-round.md`; the board's rules are in `references/board-contract.md`
 ("Site board"). Make the pages before the board, in this order:
 
+0. At the hero stage, when `site/site.json` exists, a `removed-*/site/` folder does, or the brief records an incumbent site,
+   list the earlier choices tagged `rule` (id, text, source) and the "(rule)" lines of G4 that came from the old site, and
+   ask the owner once which still stand, in their words, and wait for the answer before any variant is built. Write the
+   answer into `DECISIONS.md` (`Gate: G4p`, `Decided: ...`, each dropped rule named as dropped); a rule that stands is cited
+   by `data-source` like any rule. No new gate id. The step is "The hero first", step 0, in the phase file.
 1. The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`):
-   never a copy of an earlier round. A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the
-   previous board of that stage; then make `capture`, `page-check` and the cold review again, because each is tied to the
+   never a copy of an earlier round. A later pages board starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the
+   previous pages board and keeps every page card. A later hero board is `mkdir rounds/r<N>`, then
+   `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/<Name>/ rounds/r<N>/<Name>/` for each picked variant (a combined one starts from one of them),
+   `board.html` and `_build/` copied the same way, the other variants' cards removed from it, and it carries only those
+   variants; then make `capture`, `page-check` and the cold review again, because each is tied to the
    page's path.
 2. One folder per hero variant, `rounds/r<N>/<Name>/`, or per page, `rounds/r<N>/<id>/`. A variant is named by a word of 3 or
    more letters (letters, digits, `-` and `_`; never "Variant 2"); a page by its page id (`start`, `pricing`). The first hero
@@ -136,18 +146,42 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    mark from `assets/logo/` and the fonts in `assets/fonts/`, takes its words from `FACTS.md` only (a number or status word
    that is not there goes in a labelled `[data-sample]` element) and makes no request to another address. Its `<body>`
    declares `data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page).
+   A hero starts from what the brand approved: the approved masters and pictures in `assets/masters/` as they are, and, when
+   `motion/motion.json` says the brand moves, its signature move on the first screen, or the card says why a variant leaves
+   it out. Before building, each hero variant states its one memorable idea in one line (the card's Idea line).
+
+2a. On the first hero board, build each variant as a try-out first: a plain page, `tryout/<name>/index.html` (beside `rounds/`),
+   to the rules of step 2, that the owner opens in their own browser and changes with you live (local files: nothing is
+   published). On this board steps 1 and 2 are built in `tryout/<name>/`, not in `rounds/r<N>/<name>/`, and no `rounds/r<N>/`
+   exists until the stage gate below. Give the owner the paths and stop. No `capture`, `page-check`, cold review, board or lint
+   runs per change (a `page-check tryout/<name>/index.html --project <dir> --widths 390,1440` only when the owner asks), no
+   card, record or `DECISIONS.md` entry cites a try-out, and a choice made there is not the hero pick. When the owner says in
+   their words that the try-outs are ready for the board, make `rounds/r<N>/` (step 1; a new, empty folder, never a copy onto
+   an existing `rounds/r<N>/<name>/`) and copy each variant that stays into `rounds/r<N>/<name>/`, giving every relative path
+   that leaves its folder one more `../` (the copy is one level deeper) and checking that each path of the copy leads to a
+   file; then move the whole `tryout/` folder to `removed-<date>/tryout/` (never delete: `check --cascade` searches `tryout/`,
+   so a try-out left in place fails it after the first rename or price change); then steps 3 to 6 run as written. A try-out is
+   shared as a private Artifact page only when the owner asks and has said yes to claude.ai pages (`review_surface` `artifact`, or
+   the one upload question): `inline tryout/<name>/index.html --out <a file outside the project>` makes one self-contained copy,
+   you publish it and record its address with `state --set tryout_url=<url>` (never `review_url`), and clear it at the stage
+   gate; with no yes, nothing is published. The step is "The hero first", step 2a, in the phase file.
+
 3. For each folder, in this order: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" capture rounds/r<N>/<name>/index.html
    --project <dir>`, then `... page-check rounds/r<N>/<name>/index.html --project <dir>` (fix a failing row in the page, or let
    its card say `fail`; never `pass`), then the cold review: `rounds/r<N>/<name>/cold-review.md`, the verdict first
-   (`verdict: ship` or `verdict: fix`), `by: in-thread` by default and not blind. An agent (one
+   (`verdict: ship`, `verdict: fix` or `verdict: owner`), `by: in-thread` by default and not blind. An agent (one
    `brand-creator:brand-reviewer` call per hero variant, with the prompt fragment under **Review** in
    `references/prompt-fragments.md`) only after the fleet gate and the owner's yes. Read every still before you say what the
-   page does. A page changed after any of the three needs them again.
+   page does. A page changed after any of the three needs them again. Run `site review-status <page>` first: reuse means no review. Run at most two cold reviews per variant per board (the first, and one
+   after the fixes); a third is not run. What the second leaves that only the owner can decide is `verdict: owner`, its findings written as
+   questions to them; the card shows the last verdict, and the gate message for an agent states the calls this allows (2 variants: up to 4).
+   The prompt of an agent's second call says in one line that it is the second and last review of the variant; the first call's has no such line.
 4. Build the board from the template: one card per variant (`data-site-variant="<name>"`) or page (`data-site-page="<id>"`)
    with its four stills, the live link, its check line (`data-check="pass"` or `"fail"`, as its report says), the tells
-   found, the layout, the cold verdict and a vote; a hero card also has the reflex line and what it takes from the
-   references. The pages stage has `data-hero="<the picked variant>"` and a choices section that tags every choice `rule`
-   (it quotes where the owner decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
+   found, the layout, the cold verdict and a vote; a hero card also has its idea line (`data-field="idea"`; a card without it
+   fails `site:fields`), the reflex line and what it takes from the references. The pages stage has
+   `data-hero="<the picked variant>"` and a choices section that tags every choice `rule` (it quotes where the owner
+   decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
 5. Lint (steps 6 and 7 above), shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.
    Taking a still, a check or a cold review again after the lint makes its report stale: lint again.
    A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check`

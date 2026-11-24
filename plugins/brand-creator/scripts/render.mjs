@@ -16,7 +16,7 @@
 //   render.mjs page-measure --request FILE --out FILE  the measuring half of `brand-creator page-check`: one page opened at each width and colour scheme, the raw facts
 //                               written to --out (page_check.py judges them)
 //   render.mjs capture <page.html>  four first-screen stills (1440 and 390 wide, light and dark) and a full page of a page of the project, beside it in shots/, and capture.json
-//                               (what it loaded); a page in history/ or in a round before the latest is refused
+//                               (what it loaded); a page in history/ or in a round before the latest is refused; --frames adds three key frames of the first screen (1440, light)
 //   render.mjs capture --url URL --name NAME  stills and thumbnails of a real site into research/site-refs/NAME/: the only command that lets Chromium reach the network, and
 //                               only after the owner answered the online-research question (site_research)
 //   render.mjs wiring <url>  the wiring of a page of the owner's own local server (loopback only), read from the DOM: JSON {kind: [values]} for `brand-creator adoption wiring --page`
@@ -30,7 +30,7 @@ import {
   Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind, today,
 } from "./lib/_common.mjs";
 import { isLoopbackUrl } from "./lib/_common.mjs";
-import { collect } from "./pagelib/page_measure.mjs";
+import { collect, collectStrays } from "./pagelib/page_measure.mjs";
 import { collectWiring } from "./pagelib/wiring.mjs";
 
 const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
@@ -44,8 +44,10 @@ const USAGE = `usage:
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
   render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
-  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS]
+  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]
   render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
+  render.mjs page-requests --root DIR --page REL [--page REL ...] --out FILE.json [--timeout MS]
+  render.mjs masters-measure --request FILE.json --out FILE.json [--timeout MS]
   render.mjs wiring <url>
   render.mjs selftest
 shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
@@ -57,6 +59,10 @@ motion/frames/<case>/ (a try-out proof, one in the latest round or a removed-*/ 
 script, an image), so a change to one of them makes the report stale.
 capture writes no report: its stills and capture.json go beside the page (<page folder>/shots/), or with --url into research/site-refs/NAME/; --url is refused until
 site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.
+capture --frames also writes shots/frame-1440-0.png, frame-1440-50.png and frame-1440-100.png: the first screen at 1440, light, with every finite animation that runs on load
+paused at 0, 50 and 100 % of the longest one (a page with none writes no frame, and says so); it goes with a page of the project, not with --url.
+capture --reveal first scrolls the page and every box that scrolls inside it to the end and back, half a screen at a time, waiting at each step as it waits after load (at most 80 steps in all, and no longer
+than --timeout per load: a walk that stops early says where in capture.json and the run's line); it goes with a page of the project, not with --url.
 wiring opens one page of your own local server (http or https on localhost, 127.0.0.1 or [::1]; anything else is refused) and prints, as JSON on stdout, the links, form fields, ids, test hooks,
 scripts and inline handlers it carries as written in the DOM; a page that does not load is exit 3.`;
 
@@ -748,8 +754,12 @@ async function inPageFinish() {
  *  is what the page draws, read before anything is cancelled: the computed style of each property an animation moves, for an animation whose effect still
  *  applies (a fill holds it). One whose effect no longer applies (`animation: hide 1s 1s backwards` after its end) is only cancelled: commitStyles() would
  *  write its keyframe value (visibility: hidden) over the style the page has at rest. An animation on a pseudo-element, which has no inline style, and one
- *  with a value that reads empty stay, and are named. */
-function inPageSettle() {
+ *  with a value that reads empty stay, and are named.
+ *  `keepSeeked` (the key frames of `capture --frames`, which seek a state that is not the one the page rests in): after the values are read and before the animations are dropped, every
+ *  target gets `transition: none !important`. Written over a style that still has a `transition`, a state that differs from the rest one starts a new CSS transition from the rest value,
+ *  which has barely moved when the picture is taken (the common entrance: a class added on load that a `transition` moves). It has to be this task: turned off in an earlier one, the style
+ *  recalculation drops the page's own transition, the style without it is the rest state and nothing is written. The motion proof settles at the rest state, where nothing differs. */
+function inPageSettle(keepSeeked = false) {
   const left = [], plan = [];
   const kebab = (p) => (p.startsWith("--") ? p : p === "cssFloat" ? "float" : p === "cssOffset" ? "offset" : p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase()));
   for (const s of window.__bc.anims) {
@@ -761,9 +771,95 @@ function inPageSettle() {
     if (vals.some(([, v]) => v === "")) { left.push(name); continue; }                              // a value it cannot read is not written: it stays
     plan.push({ s, vals });
   }
+  if (keepSeeked) for (const { s, vals } of plan) if (vals.length) s.target.style.setProperty("transition", "none", "important");
   for (const { s } of plan) s.a.cancel();
   for (const { s, vals } of plan) for (const [p, v] of vals) s.target.style.setProperty(p, v);
   return left;
+}
+/** page:first-screen-motion, in the page, after startPass adopted (paused) the animations that run on load. `sels` are the hero's heading and first action as the
+ *  settled view found them (null for none). Every animation that ran on load is seeked as the key frames seek it (one that repeats forever over its first iteration);
+ *  first to the end of the longest finite one, where the ones in the first screen are named (their target's box meets the window), then from 0 in `samples` even steps,
+ *  until the heading and the action are both shown. Shown: what is left of the element's box inside the window and inside every ancestor that clips its overflow, times
+ *  the opacity of the element and its ancestors, is at least half (an element under display:none or not visibility:visible is not shown). A clip-path on the way is
+ *  not read: `clip` says one was there. reduced: no seeking from 0, only the end state, and the animations that move something (a transform, a position, a margin,
+ *  a size or a background position; a fade or a colour change does not move).
+ *  -> {found: {heading, action}, length, first: [{name, end, infinite, moves}], unseekable, rest: {heading, action}, shown_at: {heading, action} (ms or null), at_start, clip}. */
+async function inPageHeroMotion({ sels, samples, reduced }) {
+  const bc = window.__bc, W = innerWidth, H = innerHeight;
+  const MOVES = /^(transform|translate|rotate|scale|left|top|right|bottom|inset|offset|margin|width|height|backgroundPosition)/;
+  const pick = (sel) => { if (!sel) return null; try { return document.querySelector(sel); } catch { return null; } };
+  const els = { heading: pick(sels.heading), action: pick(sels.action) };
+  const clip = { heading: false, action: false };
+  // how shown one painted box is: [area, shown area times opacity]; `from` is the element whose ancestors clip and fade it, itself included when `own` (its own
+  // overflow clips the text inside it, not its own border box)
+  const part = (k, r, from, own) => {
+    const area = r.width * r.height;
+    if (!(area > 0)) return [0, 0];
+    const box = { l: Math.max(0, r.left), t: Math.max(0, r.top), r: Math.min(W, r.right), b: Math.min(H, r.bottom) };
+    let op = 1;
+    for (let e = from; e && e.nodeType === 1; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.display === "none") return [area, 0];
+      op *= parseFloat(cs.opacity);
+      if (cs.clipPath && cs.clipPath !== "none") clip[k] = true;
+      if ((own || e !== from) && e !== document.documentElement && e !== document.body) {
+        const c = e.getBoundingClientRect();
+        if (cs.overflowX !== "visible") { box.l = Math.max(box.l, c.left); box.r = Math.min(box.r, c.right); }
+        if (cs.overflowY !== "visible") { box.t = Math.max(box.t, c.top); box.b = Math.min(box.b, c.bottom); }
+      }
+    }
+    if (getComputedStyle(from).visibility !== "visible") return [area, 0];
+    return [area, Math.min(1, op) * Math.max(0, box.r - box.l) * Math.max(0, box.b - box.t)];
+  };
+  // shown: where its text is painted (a heading whose words slide up from under a mask keeps its own box still), each text box weighed by its area; an element with no text
+  // (an icon button) by its own box
+  const shown = (k) => {
+    const el = els[k];
+    if (!el || !el.isConnected) return 0;
+    let area = 0, seen = 0;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim() || !n.parentElement) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) { const [a, s] = part(k, r, n.parentElement, true); area += a; seen += s; }
+    }
+    if (!area) [area, seen] = part(k, el.getBoundingClientRect(), el, false);
+    return area > 0 ? Math.round((100 * seen) / area) / 100 : 0;
+  };
+  const run = bc.anims.filter((s) => s.wasRunning);
+  const finite = run.filter((s) => s.seekable && !s.infinite && s.end > 0);
+  const length = finite.length ? Math.max(...finite.map((s) => s.end)) : 0;
+  const at = async (t) => {
+    for (const s of run) if (s.seekable) s.a.currentTime = s.infinite ? Math.min(t, s.delay + s.duration) : t;
+    await bc.frame(); await bc.frame();
+  };
+  await at(length);
+  const inScreen = (s) => {
+    const e = s.target;
+    if (!e || typeof e.getBoundingClientRect !== "function") return false;
+    const r = e.getBoundingClientRect();
+    return r.bottom > 0 && r.top < H && r.right > 0 && r.left < W && (r.width > 0 || r.height > 0);
+  };
+  const first = run.filter(inScreen).filter((s) => s.infinite || s.duration > 0).slice(0, 40)
+    .map((s) => ({ name: s.name + (s.pseudo ? " on " + s.pseudo : ""), end: s.end, infinite: s.infinite, moves: s.props.some((p) => MOVES.test(p)) }));
+  const rest = { heading: shown("heading"), action: shown("action") };
+  const shownAt = { heading: null, action: null }, atStart = { heading: null, action: null };
+  if (!reduced) {
+    const steps = length > 0 ? samples : 0;
+    for (let i = 0; i <= steps; i++) {
+      const t = steps ? (length * i) / steps : 0;
+      await at(t);
+      for (const k of ["heading", "action"]) {
+        if (!els[k] || shownAt[k] !== null) continue;
+        const v = shown(k);
+        if (i === 0) atStart[k] = v;
+        if (v >= 0.5) shownAt[k] = Math.round(t);
+      }
+      if ((!els.heading || shownAt.heading !== null) && (!els.action || shownAt.action !== null)) break;
+    }
+  }
+  return { found: { heading: !!els.heading, action: !!els.action }, length, first, unseekable: run.filter((s) => !s.seekable).length, rest, shown_at: shownAt, at_start: atStart, clip };
 }
 /** The animations that are running right now: after every one of the page's has been finished, a started one is a motion that did not end. */
 function inPageRunning() {
@@ -2072,6 +2168,7 @@ async function cmdPdf(argv) {
 const PAGE_VIEWPORT_HEIGHT = { 360: 800, 390: 844, 768: 1024, 1024: 768, 1440: 900, 1920: 1080 };   // css px; any other width gets 900
 const PAGE_TIMEOUT_MS = 60000;
 const PAGE_SETTLE_MS = 100;
+const PAGE_TALL_HEIGHT = 1300;   // css px: each view is measured once more at this height for the `stray-box` tell alone (`tell_facts.strays_tall`), a bug that shows only on a tall screen
 const PAGE_MAX_REDIRECTS = 10;   // a chain longer than this is stopped (Chromium itself allows 20)
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
@@ -2129,6 +2226,7 @@ function readPageRequest(project, file) {
   if (!Array.isArray(req.colours) || req.colours.length > 500 || req.colours.some((c) => typeof c !== "string" || !c || c.length > 200)) bad("colours must be a list of up to 500 CSS colours");
   req.dsf = req.dsf ?? 1;
   if (![1, 2, 3].includes(req.dsf)) bad("dsf must be 1, 2 or 3");
+  if (req.stray_min_px !== undefined && (typeof req.stray_min_px !== "number" || !(req.stray_min_px >= 0) || req.stray_min_px > 1000)) bad("stray_min_px must be a number from 0 to 1000");   // the stray-box tell's own threshold: the least distance outside that makes a candidate
   if (req.url) {
     if (typeof req.url !== "string" || !isLoopbackUrl(req.url)) die(EXIT.USAGE, `page-measure opens only a page on this machine (http or https on localhost, 127.0.0.1 or [::1]), not ${JSON.stringify(req.url)}`);
     req.openUrl = new URL(req.url).href;
@@ -2150,7 +2248,21 @@ function readPageRequest(project, file) {
   return req;
 }
 
-async function measureView(browser, req, width, scheme) {
+/** The stray-box candidates of the page in a window PAGE_TALL_HEIGHT high: the viewport is resized, the page settles and its animations are waited for again, and only that tell's facts are collected. -> {viewport,
+ *  animations, strays, truncated}, or {viewport, error} when the page could not be measured so (the view keeps its other facts). */
+async function measureTall(page, width, minPx) {
+  const viewport = { width, height: PAGE_TALL_HEIGHT };
+  try {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(PAGE_SETTLE_MS);
+    const animations = await waitAnimations(page);
+    return { viewport, animations, ...(await collectStrays(page, minPx)) };
+  } catch (e) {
+    return { viewport, error: String(e.message).split("\n")[0] };
+  }
+}
+
+async function measureView(browser, req, width, scheme, tallDone = new Set()) {
   const viewport = { width, height: PAGE_VIEWPORT_HEIGHT[width] ?? 900 };
   const server = req.rootReal ? await startServer(req.rootReal) : null;
   const origin = server ? server.origin : new URL(req.openUrl).origin;
@@ -2186,16 +2298,70 @@ async function measureView(browser, req, width, scheme) {
     if (!page.url().startsWith(origin + "/")) throw new Error(`the page ended on ${page.url().slice(0, 160)}, not on ${origin}`);
     const base = await page.evaluate(() => ({ lang: document.documentElement.lang || "", height: document.documentElement.scrollHeight }));
     const collected = await collect(page, req);
+    // what the view itself logged, kept before the tall window: an error or a request the resize brings is the stray-box tell's alone, never page:load's
+    const load = { errors: [...seen.errors], nonLocal: [...seen.nonLocal], failedLocal: [...seen.failedLocal] };
+    const kept = { resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))), served: server ? server.served().sort() : [] };
+    if (!tallDone.has(width)) {   // the stray boxes of a tall window depend on the width and the height alone, so a width is measured once, in the first scheme that measures: the other scheme's view has no `strays_tall`
+      tallDone.add(width);
+      const tall = await measureTall(page, width, req.stray_min_px);
+      const added = [...seen.errors.slice(load.errors.length), ...seen.nonLocal.slice(load.nonLocal.length).map((u) => `non-local request: ${u}`),
+                     ...seen.failedLocal.slice(load.failedLocal.length).map((u) => `failed local request: ${u}`)];
+      if (added.length) tall.load = added;
+      collected.tell_facts.strays_tall = tall;
+    }
     return {
-      width, scheme, viewport, ...base, errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal,
-      resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))),
-      served: server ? server.served().sort() : [], animations, ...collected,
+      width, scheme, viewport, ...base, errors: load.errors, non_local: load.nonLocal, failed_local: load.failedLocal,
+      resources: kept.resources, served: kept.served, animations, ...collected,
     };
   } catch (e) {
     const stopped = seen?.nonLocal.length ? ` (a request to another origin was stopped: ${seen.nonLocal[0]})` : "";
     return { width, scheme, viewport, error: String(e.message).split("\n")[0] + stopped };
   } finally {
     if (ctx) await ctx.close();
+    if (server) await server.close();
+  }
+}
+
+const MOTION_VIEW_SAMPLES = 40;   // page:first-screen-motion: the even steps from the start to the end of the motion on load at which the heading and the action are looked for
+
+/** page:first-screen-motion: the views it is measured in: the narrowest and the widest width that measured, in the light scheme (else the first scheme that measured). */
+function motionViews(views) {
+  const ok = views.filter((v) => !v.error);
+  if (!ok.length) return [];
+  const scheme = ok.some((v) => v.scheme === "light") ? "light" : ok[0].scheme;
+  const ws = ok.filter((v) => v.scheme === scheme).map((v) => v.width);
+  return [...new Set([Math.min(...ws), Math.max(...ws)])].map((w) => ok.find((v) => v.width === w && v.scheme === scheme));
+}
+
+/** page:first-screen-motion: the motion of the first screen in one measured view, from two more loads of the page in its window: as a visitor sees it (the animations that
+ *  run on load paused by startPass and seeked, inPageHeroMotion), and with prefers-reduced-motion: reduce (what still moves on load, what a script still draws after
+ *  settling, and the hero at the end). The hero's heading and first action are the ones the settled view found. -> {width, scheme, viewport, normal, reduced} or {…, error}. */
+async function measureFirstScreenMotion(browser, req, view) {
+  const { width, scheme, viewport } = view, hero = (view.tell_facts && view.tell_facts.hero) || {};
+  const sels = { heading: hero.found ? hero.h1_sel || null : null, action: hero.found && hero.first_action ? hero.first_action.sel || null : null };
+  const server = req.rootReal ? await startServer(req.rootReal) : null;
+  const origin = server ? server.origin : new URL(req.openUrl).origin;
+  const url = server ? origin + "/" + req.pageRel.split("/").map(encodeURIComponent).join("/") : req.openUrl;
+  const one = async (reduced) => {
+    const ctx = await browser.newContext({ viewport, colorScheme: scheme, deviceScaleFactor: 1, serviceWorkers: "block", reducedMotion: reduced ? "reduce" : "no-preference" });
+    try {
+      await instrument(ctx, origin, { ownRedirects: true });
+      await ctx.addInitScript(INIT_SCRIPT);
+      const page = await ctx.newPage();
+      await withTimeout(page.goto(url, { waitUntil: "load", timeout: PAGE_TIMEOUT_MS }), PAGE_TIMEOUT_MS + 5000, `loading ${url}`);
+      await withTimeout(page.evaluate(() => document.fonts.ready), PAGE_TIMEOUT_MS, "fonts.ready");
+      const sp = await startPass(page, CAPTURE_FRAMES_SETTLE_MS, reduced ? "reduced" : "normal");
+      const got = await withTimeout(page.evaluate(inPageHeroMotion, { sels, samples: MOTION_VIEW_SAMPLES, reduced }), PAGE_TIMEOUT_MS, "the first screen's motion");
+      return { ...got, real_time: sp.realTime, late: sp.late, alive: sp.alive };
+    } finally {
+      await ctx.close();
+    }
+  };
+  try {
+    return { width, scheme, viewport, normal: await one(false), reduced: await one(true) };
+  } catch (e) {
+    return { width, scheme, viewport, error: firstLine(e) };
+  } finally {
     if (server) await server.close();
   }
 }
@@ -2210,10 +2376,13 @@ async function cmdPageMeasure(argv) {
   const browser = await launch();   // a missing setup fails before anything is opened
   const views = [];
   try {
-    for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme));
+    const tallDone = new Set();   // the widths whose tall window has been measured
+    for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme, tallDone));
+    const motion = [];
+    for (const v of motionViews(views)) motion.push(await measureFirstScreenMotion(browser, req, v));
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, JSON.stringify({
-      schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views,
+      schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views, first_screen_motion: motion,
     }, null, 1) + "\n");
   } finally {
     await browser.close();
@@ -2230,6 +2399,10 @@ async function cmdPageMeasure(argv) {
 //   capture --url URL --name NAME     a real site, into research/site-refs/NAME/: the first screen at 1440 and at 390, a full page, two small JPEG thumbnails the references board inlines,
 //                                     and capture.json (the address, where it ended, its status and title). The only place where Chromium may reach the network, and only after the owner's
 //                                     answer to the online-research question (site_research is online or links-only). It never writes assets/_checks/.
+//   capture <page.html> --reveal      before each still, the page and every box that scrolls inside it are scrolled to their end in steps of half a screen (waiting at each as after load)
+//                                     and back, so that what they reveal on scroll is shown; at most CAPTURE_REVEAL_MAX_STEPS steps in all, and capture.json records the walk (revealWalk).
+//   capture <page.html> --frames      also the key frames of the first screen (1440 x 900, light): the animations that run on load, paused and seeked to 0, 50 and 100 % of the longest finite one, as
+//                                     the motion proof seeks a page (shot --motion); capture.json lists them. A page with no finite animation on load gets none, and the run says so.
 // Every refusal comes before the browser starts; every picture is taken before the first file is written, so a page or a site that does not load leaves nothing behind.
 const CAPTURE_VIEWS = [[1440, 900, "light"], [1440, 900, "dark"], [390, 844, "light"], [390, 844, "dark"]];   // a project page: width, height, colour scheme
 const CAPTURE_SITE_VIEWS = [[1440, 900], [390, 844]];                                                         // a real site: light only
@@ -2242,6 +2415,15 @@ const CAPTURE_LAZY_CAP_MS = 10000;            // a real site's lazy images are g
 const CAPTURE_NAME = /^[a-z0-9][a-z0-9-]{1,40}$/;
 const CAPTURE_RESERVED_NAME = "owner";        // research/site-refs/owner/ holds the screenshots the owner sent: capture never writes there
 const CAPTURE_MAX_PROBLEMS = 40;
+const CAPTURE_FRAME_PERCENTS = [0, 50, 100];  // key frames (--frames): where in the longest finite animation that runs on load the first screen is taken
+const CAPTURE_FRAMES_SETTLE_MS = 1000;        // a page with no animation at load is looked at this long, for a script that starts one a moment later (startPass)
+const CAPTURE_REVEAL_MAX_STEPS = 80;          // --reveal: the steps one load may take, down the page and inside its boxes together (80 half screens: 40 screens); a walk that needs more stops there and capture.json says where
+const CAPTURE_REVEAL_STEP = 0.5;              // --reveal: a step moves a scroller by this part of the height the screen shows of it, so an item a reveal script sees only inside a margin (rootMargin down to -50 %, threshold up to 0.5) is seen at some step
+const CAPTURE_REVEAL_BOX_MIN = 0.5;           // --reveal: a box that scrolls is walked when it is at least this part of the screen's height; a smaller one (a code block) is counted, not walked
+const CAPTURE_REVEAL_ANSWER_MS = 1000;        // --reveal: the longest the walk waits for the page's IntersectionObserver or its next frames before it goes on without them
+const CAPTURE_REVEAL_GUARD_MS = ANIMATION_CAP_MS + 5000;   // --reveal: once --timeout has passed, a call into the page that has not answered after this long is given up (a page whose script never ends)
+const CAPTURE_REVEAL_KEY = "brand-creator.reveal";   // the walk's state in the page, under Symbol.for(this), deleted at the end
+const captureFrameFile = (percent) => `frame-1440-${percent}.png`;
 const CAPTURE_READ_ONLY = { tail: "(capture writes its stills beside the page)", how: "copy the page into the latest round and capture it there" };
 
 const firstLine = (e) => String(e && e.message ? e.message : e).split("\n")[0].replace(/^page\.\w+: /, "");
@@ -2266,6 +2448,299 @@ async function settleForStill(page, { timeout, waitMs, lazyCap = null }) {
   await page.waitForTimeout(waitMs);
   await waitAnimations(page);
   return lazy;
+}
+
+// ---- in the page (each is passed to page.evaluate whole: no closure over this module)
+
+/** The walk starts: its state on window (where each scroller was found, the inline styles it changes, the helpers below), and the root pinned for the walk. */
+function inPageRevealBegin(key) {
+  const S = { found: new Map(), pinned: new Map(), boxes: [], walked: 0, seen: new Set(), small: [], neg: new Set(), win: { top: scrollY, left: scrollX } };
+  window[Symbol.for(key)] = S;
+  // a scroller pinned for the walk: no scroll snapping (a step lands where it was sent) and no scroll anchoring (content that shrinks above the screen does not pull it back)
+  S.pin = (el) => {
+    if (S.pinned.has(el)) return;
+    const cs = getComputedStyle(el), was = { attr: el.getAttribute("style"), css: el.style.cssText, props: [] };
+    for (const prop of ["scroll-snap-type", "overflow-anchor"]) {
+      if (cs.getPropertyValue(prop) === "none") continue;
+      was.props.push([prop, el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)]);
+      el.style.setProperty(prop, "none", "important");
+    }
+    S.pinned.set(el, was);
+  };
+  S.keep = (el) => { if (!S.found.has(el)) S.found.set(el, { top: el.scrollTop, left: el.scrollLeft }); };
+  // the element around `a` in the flat tree: a slotted element's slot, a shadow root's host
+  S.up = (a) => a.assignedSlot ?? a.parentElement ?? (a.parentNode instanceof ShadowRoot ? a.parentNode.host : null);
+  // every element around `el` that may scroll (its overflow is not visible) is kept, to be put back, and pinned
+  S.hold = (el) => {
+    for (let a = S.up(el); a && a !== document.documentElement; a = S.up(a)) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowY !== "visible" || cs.overflowX !== "visible") { S.keep(a); S.pin(a); }
+    }
+  };
+  // what a viewport IntersectionObserver sees of `el` -> {width, height, bottom: its bottom edge is on the screen}, or null when the page's observer does not answer within `ms`
+  S.see = (el, ms) => new Promise((resolve) => {
+    let io = null;
+    const t = setTimeout(() => { io?.disconnect(); resolve(null); }, ms);
+    try {
+      io = new IntersectionObserver((es) => {
+        clearTimeout(t); io.disconnect();
+        const e = es[es.length - 1], r = e.intersectionRect;
+        resolve({ width: r.width, height: r.height, bottom: r.height > 0 && r.bottom >= e.boundingClientRect.bottom - 1 });
+      });
+      io.observe(el);
+    } catch { clearTimeout(t); resolve(null); }
+  });
+  S.pin(document.documentElement);
+  if (document.scrollingElement) S.pin(document.scrollingElement);
+  // the viewport's overflow is the root's, or the body's when the root's is visible (propagation); hidden and clip are scrolled by a script, never by a visitor's wheel
+  const html = getComputedStyle(document.documentElement), ownY = html.overflowX === "visible" && html.overflowY === "visible" && document.body ? getComputedStyle(document.body).overflowY : html.overflowY;
+  return ["hidden", "clip"].includes(ownY);
+}
+
+/** Two animation frames and a task (the page's scroll events, IntersectionObserver callbacks and what they append have run), or `ms` when the page's frames do not come. */
+function inPageRevealFrames(ms) {
+  return new Promise((done) => {
+    const t = setTimeout(done, ms);
+    try { requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { clearTimeout(t); done(); }, 0))); } catch { /* the timer ends it */ }
+  });
+}
+
+/** Where scroller `i` is (-1: the window, else the i-th box): its position, the height it shows, and its scroll height. A box that scrolls into negative
+ *  positions (flex-direction: column-reverse) has its range from -(scroll height - shown) to 0: its position is counted from the start of that range. */
+function inPageRevealAt({ key, i }) {
+  const S = window[Symbol.for(key)], doc = document.scrollingElement || document.documentElement, el = i < 0 ? null : S.boxes[i];
+  return el ? { y: Math.round(el.scrollTop - (S.neg.has(el) ? -(el.scrollHeight - el.clientHeight) : 0)), vh: el.clientHeight, total: el.scrollHeight } : { y: Math.round(scrollY), vh: doc.clientHeight, total: doc.scrollHeight };
+}
+
+/** Scroller `i` to `top`, at once (behavior "instant" overrides the page's scroll-behavior: smooth). -> where it is now. */
+function inPageRevealScroll({ key, i, top }) {
+  const S = window[Symbol.for(key)], el = i < 0 ? null : S.boxes[i], min = el && S.neg.has(el) ? -(el.scrollHeight - el.clientHeight) : 0, o = { top: top + min, behavior: "instant" };
+  if (el) el.scrollTo(o); else scrollTo(o);
+  return Math.round(el ? el.scrollTop - min : scrollY);
+}
+
+/** The boxes that scroll, found again (after the page's walk and after each box): every element shown whose content is taller than it and that
+ *  moves when scrolled (overflow-y auto, scroll or overlay; a body only when its overflow is its own, not the window's). A box new to the walk
+ *  joins the boxes still to walk, in document order; one under `min` of the screen's height is a small box, put aside. -> {boxes, small}. */
+function inPageRevealFind({ key, min }) {
+  const S = window[Symbol.for(key)], doc = document.scrollingElement || document.documentElement, html = getComputedStyle(document.documentElement);
+  const rootOwnsOverflow = html.overflowX === "visible" && html.overflowY === "visible";   // then the body's overflow is the window's (CSS Overflow 3, propagation)
+  const fresh = [];
+  for (const el of document.querySelectorAll("body, body *")) {
+    if (S.seen.has(el) || el.scrollHeight - el.clientHeight <= 1 || !el.clientHeight) continue;
+    if (!["auto", "scroll", "overlay"].includes(getComputedStyle(el).overflowY) || (el === document.body && rootOwnsOverflow)) continue;
+    if (!el.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true })) continue;   // not seen yet: found again later
+    S.seen.add(el);
+    S.keep(el); S.pin(el);
+    const was = el.scrollTop, to = (top) => { el.scrollTo({ top, behavior: "instant" }); return el.scrollTop !== was; };
+    let moves = to(el.scrollHeight) || to(0);   // an instant test to its end (or its top), put back at once
+    to(-el.scrollHeight); if (el.scrollTop < 0) { moves = true; S.neg.add(el); }   // a column-reverse box: its scroll range is negative, whatever place the page left it at
+    el.scrollTo({ top: was, behavior: "instant" });
+    if (!moves) continue;
+    if (el.clientHeight < min * doc.clientHeight) S.small.push(el); else fresh.push(el);
+  }
+  const rest = S.boxes.splice(S.walked).concat(fresh).sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  S.boxes.push(...rest);
+  return { boxes: S.boxes.length, small: S.small.length };
+}
+
+/** Box `i` put on the screen: first at its own top, then the window and every scroller around it (in the flat tree: also the shadow scroller a slotted box
+ *  sits in) scrolled at once so that its top is at the top of the screen, or as near as they go. Every scroller moved is kept, to be put back.
+ *  -> {shown: the height of it a viewport IntersectionObserver sees (0: off the screen, a box that only touches its edge), measured: false when the observer did not answer} */
+async function inPageRevealPlace({ key, i, ms }) {
+  const S = window[Symbol.for(key)], el = S.boxes[i];
+  S.walked = i + 1;
+  S.hold(el);
+  el.scrollTo({ top: S.neg.has(el) ? -el.scrollHeight : 0, behavior: "instant" });   // a box the page had scrolled (a chat at its end) is walked from its top
+  el.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+  const seen = await S.see(el, ms);
+  return { shown: seen && seen.width >= 1 ? Math.floor(Math.min(seen.height, el.clientHeight)) : 0, measured: seen !== null };
+}
+
+/** Box `i` is at its end: is its bottom on the screen? If not (a box taller than the screen), and `move`, the nearest scroller around it that still
+ *  carries it up (the window last) is scrolled down by `step`. -> "shown" (its bottom is on the screen, or nothing around it carries it up), "moved",
+ *  "more" (not shown, and not to move), or "unmeasured" (the page's observer did not answer). */
+async function inPageRevealOver({ key, i, step, move, ms }) {
+  const S = window[Symbol.for(key)], el = S.boxes[i];
+  if (!el.isConnected) return "shown";
+  const seen = await S.see(el, ms);
+  if (!seen) return "unmeasured";
+  if (seen.bottom) return "shown";
+  if (!move) return "more";
+  const top = el.getBoundingClientRect().top;
+  for (let a = S.up(el); a; a = S.up(a)) {
+    if (a === document.documentElement) scrollBy({ top: step, behavior: "instant" });   // the window
+    else if (getComputedStyle(a).overflowY === "visible" || a.scrollHeight - a.clientHeight <= 1) continue;
+    else { S.keep(a); S.pin(a); a.scrollBy({ top: step, behavior: "instant" }); }
+    if (el.getBoundingClientRect().top < top - 0.5) return "moved";
+  }
+  return "shown";
+}
+
+/** Small box `j`: put on the screen as a box is, to tell whether it is ever on it (one in a closed drawer is not). -> true: on the screen, or the observer did not answer. */
+async function inPageRevealSmall({ key, j, ms }) {
+  const S = window[Symbol.for(key)], el = S.small[j];
+  S.hold(el);
+  el.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+  const seen = await S.see(el, ms);
+  return !seen || (seen.width >= 1 && seen.height >= 1);
+}
+
+/** The end: every box and the window back where the walk found them (their top, on a page that does not scroll itself on load), the pinned styles as they were. */
+function inPageRevealEnd(key) {
+  const S = window[Symbol.for(key)];
+  for (const [el, at] of S.found) el.scrollTo({ top: at.top, left: at.left, behavior: "instant" });
+  scrollTo({ top: S.win.top, left: S.win.left, behavior: "instant" });
+  for (const [el, was] of S.pinned) {
+    for (const [prop, value, priority] of was.props) if (value) el.style.setProperty(prop, value, priority); else el.style.removeProperty(prop);
+    // the page did not change this inline style meanwhile: the attribute goes back letter for letter. The inline style reaches the attribute lazily
+    // and re-serialized: it is read first, or a removed attribute comes back as style="".
+    const now = el.getAttribute("style");
+    if (el.style.cssText === was.css && now !== was.attr) { if (was.attr === null) el.removeAttribute("style"); else el.setAttribute("style", was.attr); }
+  }
+}
+
+/** After the return has settled: is every scroller the walk moved still where it was found? (A page may scroll itself back.) Deletes the state. */
+function inPageRevealReturned(key) {
+  const S = window[Symbol.for(key)];
+  delete window[Symbol.for(key)];
+  const off = (a, b) => Math.abs(a - b) > 1;
+  return !(off(scrollY, S.win.top) || off(scrollX, S.win.left) || [...S.found].some(([el, at]) => off(el.scrollTop, at.top) || off(el.scrollLeft, at.left)));
+}
+
+// ---- in node
+
+/** --reveal: before the stills of one load, scroll the page and every box that scrolls inside it to the end and back, in steps of half of what the screen shows of each,
+ *  waiting after each step as after load.
+ *  1. The window, put at its top, then walked down (a page that grows is followed: its height is read again at every step).
+ *  2. Then the boxes (found after 1, so a box the page's walk revealed is among them), in document order. Each is put at its own top and on the screen (the window and
+ *     the scrollers around it scrolled to show its top), walked down, and then, while its bottom is not on the screen (a box taller than the screen), carried up by
+ *     the nearest scroller around it. The boxes are found again after each box. A small box is only counted, when it is ever on the screen.
+ *  3. Every scroller back where it was found, the pinned styles put back, waited for, and checked.
+ *  One budget: CAPTURE_REVEAL_MAX_STEPS steps for the window and the boxes together, and `timeout` ms for the whole walk, checked before every step and every placement.
+ *  Every call into the page is given up CAPTURE_REVEAL_GUARD_MS after the timeout: the walk then throws "the page stopped answering during the --reveal walk" and capture stops (exit 1, nothing written).
+ *  -> {steps, boxSteps, boxes, boxesUnfinished, unmeasured, small, capped, timedOut, pageUnfinished, grew, notScrolled, notReturned, rootHidden} */
+async function revealWalk(page, waitMs, timeout) {
+  const key = CAPTURE_REVEAL_KEY, started = Date.now(), ms = CAPTURE_REVEAL_ANSWER_MS;
+  const out = { steps: 0, boxSteps: 0, boxes: 0, boxesUnfinished: 0, unmeasured: 0, small: 0, capped: false, timedOut: false, pageUnfinished: false, grew: false, notScrolled: false, notReturned: false, rootHidden: false };
+  const guard = (p) => withTimeout(p, Math.max(timeout - (Date.now() - started), 0) + CAPTURE_REVEAL_GUARD_MS, "the --reveal walk");
+  const ev = (fn, arg) => guard(page.evaluate(fn, arg));
+  const settle = async () => { await ev(inPageRevealFrames, ms); await page.waitForTimeout(waitMs); await guard(waitAnimations(page)); };
+  const spent = () => (Date.now() - started >= timeout ? "time" : out.steps >= CAPTURE_REVEAL_MAX_STEPS ? "steps" : null);
+  const stop = (why) => { out.capped = true; if (why === "time") out.timedOut = true; };
+  const took = (i) => { out.steps += 1; if (i >= 0) out.boxSteps += 1; };
+  // one scroller from its top to its end, by CAPTURE_REVEAL_STEP of `shown` px (null: of its own height, read again at each step) -> "end" | "spent" | "stuck"
+  const walkOne = async (i, shown) => {
+    let first = null;
+    for (;;) {
+      const at = await ev(inPageRevealAt, { key, i });
+      first ??= at.total;
+      if (at.total > first) out.grew = true;
+      if (at.y + at.vh >= at.total - 1) return "end";
+      const why = spent();
+      if (why) { stop(why); return "spent"; }
+      const y = await ev(inPageRevealScroll, { key, i, top: Math.min(at.y + Math.max(1, Math.floor(CAPTURE_REVEAL_STEP * (shown ?? at.vh))), at.total - at.vh) });
+      if (y <= at.y) return "stuck";   // it does not move when scrolled
+      took(i);
+      await settle();
+      if ((await ev(inPageRevealAt, { key, i })).y <= at.y) return "stuck";   // the page moved it back
+    }
+  };
+  let found = { boxes: 0, small: 0 };
+  try {
+    const locked = await ev(inPageRevealBegin, key);
+    if ((await ev(inPageRevealAt, { key, i: -1 })).y > 0) { await ev(inPageRevealScroll, { key, i: -1, top: 0 }); await settle(); }   // a page loaded scrolled (an anchor) is walked from its top
+    const page1 = await walkOne(-1, null);
+    if (page1 === "spent") out.pageUnfinished = true;
+    if (page1 === "stuck") out.notScrolled = true;
+    if (locked && out.steps > 0) out.rootHidden = true;   // walked by script, but a visitor cannot scroll it
+    found = await ev(inPageRevealFind, { key, min: CAPTURE_REVEAL_BOX_MIN });
+    for (let i = 0; i < found.boxes; i++) {
+      const why = spent();
+      if (why) { stop(why); out.boxesUnfinished = found.boxes - i; break; }
+      const { shown, measured } = await ev(inPageRevealPlace, { key, i, ms });
+      if (!measured) { out.unmeasured += 1; continue; }   // the page's IntersectionObserver did not answer: not walked, and said so
+      if (shown < 1) continue;   // off the screen however the page is scrolled (a closed drawer): not walked, not counted
+      await settle();
+      const before = out.boxSteps;
+      let r = await walkOne(i, shown);
+      // at its end, but its bottom may be below the screen (a box taller than the screen): the scrollers around it carry it up, step by step, until its bottom is shown
+      for (const step = Math.max(1, Math.floor(CAPTURE_REVEAL_STEP * shown)); r === "end";) {
+        const why = spent();
+        const o = await ev(inPageRevealOver, { key, i, step, move: !why, ms });
+        if (o === "more") { stop(why); r = "spent"; break; }
+        if (o === "unmeasured") out.unmeasured += 1;
+        if (o !== "moved") break;
+        took(i);
+        await settle();
+      }
+      if (out.boxSteps > before) out.boxes += 1;   // a box counts as walked once it took a step
+      if (r === "stuck") out.notScrolled = true;
+      if (r === "spent") { out.boxesUnfinished = found.boxes - i; break; }
+      found = await ev(inPageRevealFind, { key, min: CAPTURE_REVEAL_BOX_MIN });
+    }
+    for (let j = 0; j < found.small; j++) if (spent() || await ev(inPageRevealSmall, { key, j, ms })) out.small += 1;   // past the budget, every small box is counted
+    await ev(inPageRevealEnd, key);
+    await settle();
+    out.notReturned = !(await ev(inPageRevealReturned, key));
+  } catch (e) {
+    // the page stopped answering (a script that never ends): the run stops here, and capture writes nothing
+    if (/the --reveal walk timed out/.test(String(e?.message))) throw new Error("the page stopped answering during the --reveal walk");
+    throw e;
+  }
+  return out;
+}
+
+// ---- the record and the line (captureProjectPage)
+
+/** The four loads' walks, merged: the most of each count, any of each flag. */
+function mergeReveal(a, w) {
+  if (!a) return { ...w };
+  const m = {};
+  for (const k of Object.keys(w)) m[k] = typeof w[k] === "number" ? Math.max(a[k], w[k]) : a[k] || w[k];
+  return m;
+}
+
+/** capture.json's `reveal`, keys in a fixed order, the optional ones only when they say something. */
+function revealRecord(r) {
+  return {
+    steps: r.steps, capped: r.capped,
+    ...(r.timedOut ? { timed_out: true } : {}),
+    ...(r.pageUnfinished ? { page_unfinished: true } : {}),
+    ...(r.boxes ? { boxes: r.boxes, box_steps: r.boxSteps } : {}),
+    ...(r.boxesUnfinished ? { boxes_unfinished: r.boxesUnfinished } : {}),
+    ...(r.unmeasured ? { boxes_unmeasured: r.unmeasured } : {}),
+    ...(r.small ? { small_boxes: r.small } : {}),
+    ...(r.grew ? { grew: true } : {}),
+    ...(r.notScrolled ? { not_scrolled: true } : {}),
+    ...(r.notReturned ? { not_returned: true } : {}),
+    ...(r.rootHidden ? { root_hidden: true } : {}),
+  };
+}
+
+const revealCount = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+
+/** The one line the run prints for the walk. Every clause is true of the merged record: a count is the most any load had. */
+function revealLine(r) {
+  const max = CAPTURE_REVEAL_MAX_STEPS, screens = Math.round(max * CAPTURE_REVEAL_STEP), boxes = (k) => revealCount(k, "box that scrolls", "boxes that scroll");
+  const done = !r.capped && !r.notScrolled && !r.unmeasured;
+  const head = r.steps === 0 && done
+    ? `reveal: nothing to scroll: in every load the page fits its screen and holds no box that scrolls${r.small ? " and is at least half a screen tall" : ""}`
+    : r.steps === 0 ? "reveal: no step was taken"
+    : `reveal: before the stills, each load was scrolled ${done ? "to the end" : "down"}${r.notReturned ? "" : " and back"} in steps of at most half a screen (${revealCount(r.steps, "step", "steps")} at most, of ${max} allowed`
+      + (r.boxes ? `; up to ${r.boxSteps} of them inside ${boxes(r.boxes)}, each with the page scrolled to show it` : "") + ")";
+  const parts = [head];
+  if (r.grew) parts.push("the page or a box grew as it was scrolled (content added at its end), and the walk followed it");
+  const left = [r.pageUnfinished ? "the page" : null, r.boxesUnfinished ? boxes(r.boxesUnfinished) : null].filter(Boolean).join(" and ");
+  if (r.timedOut) parts.push(`CAPPED: a walk took longer than --timeout and stopped before the end of ${left || "a scroller"}, so what lies past where it stopped was not revealed`);
+  else if (r.pageUnfinished) parts.push(`CAPPED: the page is longer than ${screens} screens, so what lies below the walk was not revealed` + (r.boxesUnfinished ? `, nor what lies further down in ${boxes(r.boxesUnfinished)}` : ""));
+  else if (r.capped) parts.push(`CAPPED: the page and its boxes needed more than ${max} steps, so what lies further down in ${boxes(r.boxesUnfinished)} was not revealed`);
+  if (r.unmeasured) parts.push(`NOT MEASURED: the page's IntersectionObserver did not answer for ${boxes(r.unmeasured)}, so what lies further down in ${r.unmeasured === 1 ? "it" : "them"} may not be revealed`);
+  if (r.small) parts.push(`${revealCount(r.small, "box", "boxes")} under half a screen tall that ${r.small === 1 ? "scrolls" : "scroll"} (a code block, a short list) ${r.small === 1 ? "was" : "were"} not walked, so what ${r.small === 1 ? "it reveals" : "they reveal"} on scroll is not shown`);
+  if (r.notScrolled) parts.push("NOT SCROLLED: a scroller did not stay where it was scrolled to (it does not move, or the page moved it back), so what lies below where it stopped was not revealed");
+  if (r.notReturned) parts.push("NOT RETURNED: after the walk a scroller was not back where the walk found it (a script moved it), so a first screen may not show the top");
+  if (r.rootHidden) parts.push("NOTE: the page's own scrolling is hidden or clipped (overflow: hidden or clip on the root, or on the body when the root's is visible), so the walk scrolled it by script but a visitor cannot scroll it with the wheel, and the stills may show what no visitor reaches");
+  return "  " + parts.join("; ");
 }
 
 /** A picture shrunk to `width` px in a blank page (a canvas, as pngDiff decodes pictures), as a JPEG on white. */
@@ -2296,17 +2771,86 @@ function writeCaptureRecord(file, doc) {
 
 async function cmdCapture(argv) {
   const { values, positionals } = parse(argv, {
-    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" },
+    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" }, frames: { type: "boolean", default: false }, reveal: { type: "boolean", default: false },
   });
   const project = findProject(values.project);
   if (values.url !== undefined) {
     if (positionals.length) die(EXIT.USAGE, `capture --url takes no page: ${positionals[0]}\n${USAGE}`);
     if (values.wait !== undefined) die(EXIT.USAGE, `--wait goes with a page of the project, not with --url\n${USAGE}`);
+    if (values.frames) die(EXIT.USAGE, `--frames goes with a page of the project, not with --url\n${USAGE}`);
+    if (values.reveal) die(EXIT.USAGE, `--reveal goes with a page of the project, not with --url\n${USAGE}`);
     return captureSite(project, values);
   }
   if (values.name !== undefined) die(EXIT.USAGE, `--name goes with --url\n${USAGE}`);
   if (positionals.length !== 1) die(EXIT.USAGE, `capture needs exactly one page, or --url and --name\n${USAGE}`);
   return captureProjectPage(project, positionals[0], values);
+}
+
+/** In the page: every animation that was running on load, to the time `t` (ms): a finite one to t, one that repeats forever only over its first iteration (as `__bc.seek`); an animation the page
+ *  held paused is not moved. Two frames are rendered after it, so that the style of the new time is the one the page draws. */
+async function inPageSeekRunning(t) {
+  const bc = window.__bc;
+  for (const s of bc.anims) if (s.seekable && s.wasRunning) s.a.currentTime = s.infinite ? Math.min(t, s.delay + s.duration) : t;
+  await bc.frame(); await bc.frame();
+  bc.drain();
+}
+
+/** One load of the page for the key frames (1440 x 900, light, device scale 1), as the motion proof loads a page: every Web Animation it has running on load is paused where it is found.
+ *  -> {ctx, page, snap: what the page's animations are, running: the seekable ones that ran on load, finite: those that end, sp: what startPass saw}. */
+async function openForFrames(browser, server, url, timeout) {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light", deviceScaleFactor: 1 });
+  const seen = await instrument(ctx, server.origin);
+  await ctx.addInitScript(INIT_SCRIPT);
+  const page = await ctx.newPage();
+  watch(page, seen, server.origin);
+  try {
+    await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
+    await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+    const sp = await startPass(page, CAPTURE_FRAMES_SETTLE_MS);
+    const snap = await page.evaluate(inPageDescribe);
+    const running = snap.filter((a) => a.seekable && a.wasRunning);
+    return { ctx, page, snap, running, finite: running.filter((a) => !a.infinite && a.end > 0), sp };
+  } catch (e) {
+    await ctx.close();
+    throw e;
+  }
+}
+
+/** The key frames of the first screen (1440 x 900, light): the first screen with every finite animation that runs on load seeked to 0, 50 and 100 % of the longest one (its delay and iterations included).
+ *  Each frame has a load of its own: what an animation draws is composited in layers of its own, which are not drawn to the same pixel twice, so the state it is seeked to is written into the style and the
+ *  animations are dropped before the picture is taken (as the motion proof does for its rest frame), and a second capture of the same page gives the same bytes. A page with no finite animation running on load
+ *  (none at all, only ones that repeat forever, only ones on a scroll or view timeline) takes none and says why.
+ *  -> {frames: [{percent, ms, file, png}], length, why (when there is no frame), realTime (the page also moves by requestAnimationFrame, which cannot be seeked)}. */
+async function captureFrames(browser, server, url, timeout) {
+  let length = 0, realTime = false;
+  const frames = [];
+  for (const percent of CAPTURE_FRAME_PERCENTS) {
+    const N = await openForFrames(browser, server, url, timeout);
+    try {
+      if (!frames.length) {
+        if (!N.finite.length) {
+          const why = N.running.length ? "every animation that runs on load repeats forever or has no length, so there is no end to take frames up to"
+            : N.snap.some((a) => !a.seekable && a.wasRunning) ? "its animations run on a scroll or view timeline, which cannot be seeked"
+            : N.sp.realTime ? "the page moves by requestAnimationFrame only, which cannot be seeked" : "no animation runs on load";
+          return { frames: [], length: 0, why, realTime: N.sp.realTime };
+        }
+        length = Math.max(...N.finite.map((a) => a.end));
+      } else {   // each frame has a load of its own: a page whose animation on load is not the same every time cannot give frames of one motion
+        const again = N.finite.length ? Math.max(...N.finite.map((a) => a.end)) : 0;
+        if (again !== length) throw new Error(`the animation that runs on load was not the same in every load of the page (${length} ms, then ${again} ms)`);
+      }
+      const raf0 = await N.page.evaluate(() => window.__bc.raf);
+      const ms = Math.round(length * percent) / 100;
+      await N.page.evaluate(inPageSeekRunning, ms);
+      await N.page.evaluate(inPageSettle, true);   // true: no CSS transition may start from the rest value under the state seeked to
+      await N.page.evaluate(async () => { await window.__bc.frame(); await window.__bc.frame(); });
+      frames.push({ percent, ms, file: captureFrameFile(percent), png: await N.page.screenshot() });
+      realTime ||= N.sp.realTime || (await N.page.evaluate(() => window.__bc.raf)) - raf0 > 0;
+    } finally {
+      await N.ctx.close();
+    }
+  }
+  return { frames, length, why: null, realTime };
 }
 
 async function captureProjectPage(project, pageFile, values) {
@@ -2321,7 +2865,7 @@ async function captureProjectPage(project, pageFile, values) {
   const browser = await launch();   // a missing setup fails before anything is opened
   const server = await startServer(project);
   const stills = [], problems = new Set();
-  let full = null;
+  let full = null, reveal = null, taken = { frames: [], length: 0, why: null, realTime: false };
   try {
     const { url } = pageUrl(project, server.origin, pageFile);
     for (const [width, height, scheme] of CAPTURE_VIEWS) {
@@ -2332,6 +2876,9 @@ async function captureProjectPage(project, pageFile, values) {
       try {
         await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
         await settleForStill(page, { timeout, waitMs });
+        if (values.reveal) {
+          reveal = mergeReveal(reveal, await revealWalk(page, waitMs, timeout));
+        }
         stills.push({ view: `${width}-${scheme}`, width, height, scheme, file: `${width}-${scheme}.png`, png: await page.screenshot() });
         if (width === 1440 && scheme === "light") {
           const total = await page.evaluate(() => document.documentElement.scrollHeight);
@@ -2348,6 +2895,9 @@ async function captureProjectPage(project, pageFile, values) {
       for (const m of seen.errors) problems.add(m);
       for (const f of seen.failedLocal) problems.add(`failed local request: ${f}`);
     }
+    if (values.frames) {
+      try { taken = await captureFrames(browser, server, url, timeout); } catch (e) { die(EXIT.FAIL, `capture could not take the key frames of ${pageRel}: ${firstLine(e)}; nothing was written`); }
+    }
   } finally {
     await browser.close();
     await server.close();
@@ -2362,14 +2912,26 @@ async function captureProjectPage(project, pageFile, values) {
     schema: 1, tool: "capture", source: { page: pageRel }, date: today(),
     views: stills.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
     full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+    ...(reveal ? { reveal: revealRecord(reveal) } : {}),
+    ...(taken.frames.length ? { frames: taken.frames.map((f) => ({ percent: f.percent, ms: f.ms, file: f.file, sha256: sha256(f.png) })) } : {}),
     inputs, problems: kept.slice(0, CAPTURE_MAX_PROBLEMS).concat(kept.length > CAPTURE_MAX_PROBLEMS ? [`${kept.length - CAPTURE_MAX_PROBLEMS} more`] : []),
   };
-  const files = [...stills, full].map((s) => ({ file: s.file, buf: s.png }));
+  const files = [...stills, full, ...taken.frames].map((s) => ({ file: s.file, buf: s.png }));
   const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
     + (writeCaptureRecord(confine(project, `${dir}/capture.json`, "capture file"), doc) ? 1 : 0);
   console.log(`capture ${pageRel}: ${files.length} stills and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
     + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : ""));
   for (const p of doc.problems) console.log(`  problem while loading: ${p}`);
+  if (reveal) console.log(revealLine(reveal));
+  if (taken.frames.length) {
+    console.log(`  key frames: ${taken.frames.length} of the first screen (1440, light) at ${CAPTURE_FRAME_PERCENTS.join(", ")} % of ${taken.length} ms`
+      + (taken.realTime ? "; the page also moves by requestAnimationFrame, which cannot be seeked, so the frames may differ from run to run" : ""));
+  } else if (values.frames) {
+    console.log(`  key frames: none written: ${taken.why}`);
+  }
+  // frames of an earlier run are left where they are (nothing is deleted), and capture.json does not list them: say so
+  const left = CAPTURE_FRAME_PERCENTS.map(captureFrameFile).filter((n) => !taken.frames.some((f) => f.file === n) && fs.existsSync(path.join(shots, n)));
+  if (left.length) console.log(`  ${left.join(", ")} in ${dir}/ are from an earlier run and not part of this one (capture.json does not list them): move them to removed-<date>/, or run capture --frames again`);
   return EXIT.PASS;
 }
 
@@ -2500,9 +3062,176 @@ async function cmdSelftest() {
   return EXIT.PASS;
 }
 
+// `render.mjs <command> --help` (or -h): that command's usage lines, then the notes (they are shared by the commands); exit 0
+// ---------------------------------------------------------------- page-requests (what a frozen round must keep: freeze, cleanup --history)
+// Serves --root on 127.0.0.1, loads each --page at 1440 px, settles it as a still is settled, walks it down and back (--reveal's walk,
+// so what a page shows on scroll is requested too) and writes {"pages": {page: {"requested": [path...], "missing": [path...]}}}: every
+// path under --root the page asked for and got, and every one that found no file. A request to another origin is aborted and never listed.
+async function cmdPageRequests(argv) {
+  const { values } = parse(argv, { root: { type: "string" }, page: { type: "string", multiple: true }, out: { type: "string" }, timeout: { type: "string" } }, false);
+  if (!values.root || !values.out || !values.page?.length) die(EXIT.USAGE, `page-requests needs --root, at least one --page and --out\n${USAGE}`);
+  const timeout = wholeMs(values.timeout ?? "60000", "--timeout", 1000);
+  let root;
+  try { root = fs.realpathSync.native(values.root); } catch { die(EXIT.USAGE, `--root ${values.root} does not exist`); }
+  if (!fs.statSync(root).isDirectory()) die(EXIT.USAGE, `--root ${values.root} is not a folder`);
+  for (const p of values.page) {
+    const abs = path.resolve(root, p), r = path.relative(root, abs);
+    if (r.startsWith("..") || path.isAbsolute(r) || !fs.existsSync(abs)) die(EXIT.USAGE, `--page ${p} is not a file under --root`);
+  }
+  const browser = await launch();
+  const server = await startServer(root);
+  const pages = {};
+  try {
+    for (const p of values.page) {
+      const requested = new Set(), missing = new Set();
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light", deviceScaleFactor: 1 });
+      await instrument(ctx, server.origin);
+      const page = await ctx.newPage();
+      const relOf = (u) => decodeURIComponent(new URL(u).pathname).replace(/^\/+/, "");
+      page.on("response", (r) => {
+        if (!r.url().startsWith(server.origin + "/")) return;
+        (r.status() >= 400 ? missing : requested).add(relOf(r.url()));
+      });
+      try {
+        const url = server.origin + "/" + p.split("/").map(encodeURIComponent).join("/");
+        await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${p}`);
+        await settleForStill(page, { timeout, waitMs: 300 });
+        await revealWalk(page, 300, timeout);
+        await page.waitForTimeout(CAPTURE_FRAMES_SETTLE_MS);
+      } catch (e) {
+        die(EXIT.CANNOT, `page-requests could not load ${p}: ${firstLine(e)}`);
+      } finally {
+        await ctx.close();
+      }
+      pages[p] = { requested: [...requested].sort(), missing: [...missing].sort() };
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  fs.writeFileSync(values.out, JSON.stringify({ schema: 1, tool: "page-requests", pages }, null, 2) + "\n");
+  return EXIT.PASS;
+}
+
+// ---------------------------------------------------------------- masters-measure (masters check)
+// The request: {"root": DIR, "png_dir": DIR, "masters": [{"file": REL, "width": W, "height": H}, ...]}. Each HTML master is opened at its canvas
+// (viewport W x H, device scale 1, served from root, every request to another origin aborted), its fonts and its animations that end are waited for
+// (the logo reveal settles), then measured: the elements whose box leaves the canvas, the text boxes that run into another text, the text an element
+// is painted over (sampled every 4 px; an element inside data-masters-overlay is drawn over text on purpose), and the overlays. A PNG of the canvas is
+// written to png_dir/<the file's name>.png. The result: {"masters": {file: {...}}}.
+function inPageMasters([W, H]) {
+  const desc = (e) => (e.id ? `#${e.id}` : e.tagName.toLowerCase() + (e.classList.length ? "." + [...e.classList].join(".") : ""));
+  const shown = (e) => { const s = getComputedStyle(e); return s.display !== "none" && s.visibility !== "hidden" && parseFloat(s.opacity) > 0; };
+  const skip = new Set(["SCRIPT", "STYLE", "META", "LINK", "TITLE", "HEAD", "BR", "NOSCRIPT", "TEMPLATE"]);
+  const outside = [], bleeds = [];   // an element inside data-masters-bleed runs past the edge on purpose (a shape cut by the canvas): listed, not failed
+  for (const e of document.body.querySelectorAll("*")) {
+    if (skip.has(e.tagName) || !shown(e)) continue;
+    const r = e.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) {
+      const bleed = e.closest("[data-masters-bleed]");
+      if (!bleed) outside.push(desc(e));
+      else if (!bleeds.includes(desc(bleed))) bleeds.push(desc(bleed));
+    }
+  }
+  // a turned, scaled or moved group (transform, rotate, scale, translate): the browser reports the text inside it as straight boxes around the turned
+  // glyphs, larger than the text; two lines of one group are compared with the group's own transform switched off, which keeps whether they overlap
+  const turned = (e) => { const s = getComputedStyle(e); return s.transform !== "none" || s.rotate !== "none" || s.scale !== "none" || s.translate !== "none"; };
+  const groupOf = (e) => { for (let p = e; p && p !== document.body; p = p.parentElement) if (turned(p)) return p; return null; };
+  const textNodes = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const owner = n.parentElement;
+    if (!n.data.trim() || !owner || skip.has(owner.tagName) || !shown(owner)) continue;
+    textNodes.push({ n, owner, group: groupOf(owner) });
+  }
+  const rectsOf = (n) => { const range = document.createRange(); range.selectNodeContents(n); return [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1); };
+  const texts = textNodes.flatMap(({ n, owner, group }) => rectsOf(n).map((r) => ({ owner, group, r })));
+  const flat = new Map();   // group -> the rects of its texts with the group's transform off
+  for (const g of new Set(textNodes.map((t) => t.group).filter(Boolean))) {
+    const saved = ["transform", "rotate", "scale", "translate"].map((k) => [k, g.style.getPropertyValue(k), g.style.getPropertyPriority(k)]);
+    for (const [k] of saved) g.style.setProperty(k, "none", "important");
+    flat.set(g, textNodes.filter((t) => t.group === g).flatMap(({ n, owner }) => rectsOf(n).map((r) => ({ owner, r }))));
+    for (const [k, v, pr] of saved) { if (v) g.style.setProperty(k, v, pr); else g.style.removeProperty(k); }
+  }
+  const related = (a, b) => a === b || a.contains(b) || b.contains(a);
+  const overlap = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+  const pairs = new Map(), covered = new Map();
+  for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
+    const a = texts[i], b = texts[j];
+    if (related(a.owner, b.owner) || (a.group && a.group === b.group) || !overlap(a.r, b.r)) continue;   // one turned group: judged below
+    pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
+  }
+  for (const list of flat.values()) for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const a = list[i], b = list[j];
+    if (!related(a.owner, b.owner) && overlap(a.r, b.r)) pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
+  }
+  const textOwners = [...new Set(texts.map((t) => t.owner))];   // built once: the loop below asks at every 4 px
+  const ownsText = new Map();   // element at a point -> whether it is or holds another text's owner (cached per element)
+  for (const { owner, r } of texts) {
+    for (let y = r.top + 1; y < r.bottom - 1; y += 4) for (let x = r.left + 1; x < r.right - 1; x += 4) {
+      const top = document.elementFromPoint(x, y);
+      if (!top || related(top, owner) || top.closest("[data-masters-overlay]")) continue;
+      if (!ownsText.has(top)) ownsText.set(top, textOwners.filter((o) => related(o, top)));
+      if (ownsText.get(top).some((o) => o !== owner)) continue;   // another text: a run-in, counted above
+      covered.set(`${desc(owner)}|${desc(top)}`, [desc(owner), desc(top)]);
+    }
+  }
+  return { outside, bleeds, collide: [...pairs.values()], covered: [...covered.values()], overlays: [...document.querySelectorAll("[data-masters-overlay]")].map(desc) };
+}
+
+async function cmdMastersMeasure(argv) {
+  const { values } = parse(argv, { request: { type: "string" }, out: { type: "string" }, timeout: { type: "string" } }, false);
+  if (!values.request || !values.out) die(EXIT.USAGE, `masters-measure needs --request and --out\n${USAGE}`);
+  const timeout = wholeMs(values.timeout ?? "60000", "--timeout", 1000);
+  const req = JSON.parse(fs.readFileSync(values.request, "utf8"));
+  const root = fs.realpathSync.native(req.root);
+  fs.mkdirSync(req.png_dir, { recursive: true });
+  const browser = await launch();
+  const server = await startServer(root);
+  const out = {};
+  try {
+    for (const m of req.masters) {
+      const ctx = await browser.newContext({ viewport: { width: m.width, height: m.height }, deviceScaleFactor: 1, colorScheme: "light" });
+      const seen = await instrument(ctx, server.origin);
+      const page = await ctx.newPage();
+      watch(page, seen, server.origin);
+      try {
+        const url = server.origin + "/" + m.file.split("/").map(encodeURIComponent).join("/");
+        await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${m.file}`);
+        await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+        await withTimeout(waitAnimations(page), timeout, "the animations");
+        await page.waitForTimeout(200);
+        const png = path.join(req.png_dir, path.posix.basename(m.file).replace(/\.html?$/i, "") + ".png");
+        fs.writeFileSync(png, await page.screenshot({ clip: { x: 0, y: 0, width: m.width, height: m.height } }));   // before measuring: the measure switches transforms off and on
+        const got = await page.evaluate(inPageMasters, [m.width, m.height]);
+        out[m.file] = { ...got, png: path.basename(png), errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal };
+      } catch (e) {
+        die(EXIT.CANNOT, `masters-measure could not open ${m.file}: ${firstLine(e)}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  fs.writeFileSync(values.out, JSON.stringify({ schema: 1, tool: "masters-measure", masters: out }, null, 2) + "\n");
+  return EXIT.PASS;
+}
+
+function helpOf(cmd) {
+  const lines = USAGE.split("\n"), own = lines.filter((l) => l.startsWith(`  render.mjs ${cmd} `) || l === `  render.mjs ${cmd}`);
+  if (!own.length) return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
+  const notes = lines.filter((l) => !l.startsWith("  render.mjs ") && l !== "usage:");   // the notes are shared, so a command sees them all
+  console.log(["usage:", ...own.map((l) => l.replace("  render.mjs ", "  brand-creator ")), ...notes].join("\n"));   // run as brand-creator <command>
+  return EXIT.PASS;
+}
+
 mainGuard(async () => {
-  dataDir(); // fail early with the standard message when --data is missing
   const [cmd, ...rest] = process.argv.slice(2);
+  if (cmd && !cmd.startsWith("-") && rest.some((a) => a === "-h" || a === "--help")) return helpOf(cmd);   // before the data directory: help needs none
+  dataDir(); // fail early with the standard message when --data is missing
   switch (cmd) {
     case "shot": return cmdShot(rest);
     case "card": return cmdCard(rest);
@@ -2512,6 +3241,8 @@ mainGuard(async () => {
     case "frames": return cmdFrames(rest);
     case "page-measure": return cmdPageMeasure(rest);
     case "capture": return cmdCapture(rest);
+    case "page-requests": return cmdPageRequests(rest);
+    case "masters-measure": return cmdMastersMeasure(rest);
     case "wiring": return cmdWiring(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);

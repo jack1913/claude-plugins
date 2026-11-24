@@ -40,7 +40,10 @@ already says.
 1. After G3: `brand-creator freeze r<N> --name approved-board --project <dir>`. It copies the round, adds the banner and
    updates the manifest. Freeze the round behind each later approval too (a system-rules board at G4, a recovery round,
    the approved motion round: `freeze r<N> --name approved-motion`, with its variants, proofs and stills kept as written)
-   with a name that says what was approved. `freeze` copies a round folder only. Take every still before a freeze: `frames`
+   with a name that says what was approved. `freeze` keeps what the round's boards show: its board pages, every file they
+   load (read from the files and in the browser), the scripts that built it and its text records (`*.json`, `*.md`, `*.txt`);
+   `FROZEN.md` says how much it left out. `--whole` copies the whole round; without a set-up data directory it stops and names
+   `--static` (files only). Take every still before a freeze: `frames`
    refuses a proof inside `history/` and one in a round before the latest (both are read-only), so a frozen round keeps the
    stills it was frozen with.
 2. Rejected directions stay in their rounds and in the Directions table, each with the owner's reason in one line. The
@@ -49,6 +52,22 @@ already says.
    so its freeze keeps them and the book's history can show what changed. A history chapter that refers to an inventory
    keeps its own copy of it, never a link into a product repository that will change.
 4. Nothing under `history/` is edited, moved or removed. A correction is a new round and a new freeze.
+
+## Method: cleaning old rounds
+
+Before the first push of a project that is mirrored or shared, offer to clean the old rounds. Run `brand-creator cleanup --project
+<dir>`. It removes whole round folders only, and keeps the latest round of each stage, the latest pick board, every round something
+kept refers to, every earlier round the lint of a kept board reads, and every round it cannot place; `history/`, `site/` and
+`assets/` are never touched (only the `assets/_checks` reports of a removed round go with it). It refuses while any file of a round
+to remove is not committed as it is. Show the owner the plan: the rounds it keeps and why, the rounds it removes with their size
+and whether `history/` holds a frozen copy, and the code. Ask. On a yes, run `brand-creator cleanup --record-yes <code> --said
+"<the owner's words, one line, with no path of a round>"`, then `brand-creator cleanup --yes <code>`. Tell the owner the removal is
+staged, not committed, and give them the suggested commit message and the restore line from `qa/<date>-cleanup-removed.txt` as a
+`!` line they can type if they want a round back. Then run `brand-creator check --refresh` (recording the yes touched
+`DECISIONS.md`, which a site board's lint reads). A refusal names what to fix (commit the files, keep a round, say the words
+without a path); never work around it by removing files another way. A round the owner wants kept is `--keep r<N>`, on all three
+runs, which makes a new plan and needs a new yes. A second removal of the same plan after a restore needs a second
+`--record-yes`.
 
 ## Method: decision records
 

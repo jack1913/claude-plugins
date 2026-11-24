@@ -21,9 +21,15 @@ import sitedata
 import svgtools
 from _color import wcag_ratio
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, rasterise_svg, sha256_file, stale_inputs
+from _common import rel as project_path   # `rel` is a parameter name in this module
 from mark_lint import lint_svg_text
 
 esc = bookmd.esc
+
+
+def code_spans(escaped: str) -> str:
+    """`text` in an escaped line as <code>text</code>: a rule line names tokens and files in backticks."""
+    return re.sub(r"`([^`\n]+)`", r"<code>\1</code>", escaped)
 FONT_MIME = {".woff2": ("font/woff2", "woff2"), ".woff": ("font/woff", "woff"), ".ttf": ("font/ttf", "truetype"), ".otf": ("font/otf", "opentype")}
 IMG_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
 PROOF_TOOLS = ["tokens", "contrast", "logo-sheet", "states", "family", "fontcheck", "motion", "idempotence", "staleness"]
@@ -55,6 +61,7 @@ p{margin:0 0 12px;max-width:72ch}
 a{color:var(--text);text-underline-offset:3px}
 a:focus-visible{outline:2px solid var(--text);outline-offset:3px}
 code,pre{font-family:@@MONO@@;font-size:14px;overflow-wrap:anywhere}
+code.hex{white-space:nowrap;overflow-wrap:normal}
 pre{overflow-x:auto;border:1px solid var(--line);padding:12px;margin:0 0 16px}
 ul,ol{margin:0 0 16px;padding-left:24px;max-width:72ch}li{margin:4px 0}li::marker{color:var(--accent)}
 li.task{list-style:none;margin-left:-24px;padding-left:28px;position:relative}
@@ -158,7 +165,7 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"    # the first eight bytes of every PNG: a 
 
 class BookBuild:
     BLOCK = {"marks", "mark-sizes", "colours", "contrast", "type", "motion", "tokens", "files", "checks", "decided", "history",
-             "edition-log", "donts", "facts", "site"}
+             "edition-log", "donts", "facts", "site", "masters"}
     INLINE = {"count", "fact", "edition", "name", "approved"}
 
     def __init__(self, project: Path, *, renderer: str = "resvg", allow_variants: bool = False):
@@ -181,6 +188,7 @@ class BookBuild:
         self.missing_labels: dict[str, set[str]] = {}
         self._raster_cache: dict = {}
         self._demos: list[dict] | None = None   # the replays of the motion chapter, found once
+        self._font_rows: dict | None = None     # the rows of the current fontcheck report by id, read once ({} when there is none)
         self.demo_css: list[str] = []           # the rules of each replay built, in the order built
         self.light, self.dark = self._roles("light"), self._roles("dark")
         self.counts = bookdata.counts(project, self.cfg, self.doc, len(self.chapter_ids))
@@ -389,6 +397,9 @@ class BookBuild:
                 fail(EXIT_FAIL, f"{{{{marks:{stem}}}}}: assets/logo/{stem}.svg does not exist (write {stem}? to make it optional)")
             lt = self.mark_svg(light)
             cells = [f'<div class="ground g-light">{self.img_tag(lt, stem, f"{self.view["name"]} {stem} on a light ground")}</div>']
+            own = (stem in rules["marks"] or (stem == "mark" and not rules["marks"])) and qa_rules.ground_for(rules, stem if rules["marks"] else None) == "drawing"
+            if not dark.is_file() and own:   # the mark carries its own ground (icons.ground drawing) and serves both grounds
+                dark = light
             if dark.is_file():
                 cells.append(f'<div class="ground g-dark">{self.img_tag(self.mark_svg(dark), stem + "-dark", f"{self.view["name"]} {stem} on a dark ground")}</div>')
             else:
@@ -410,13 +421,16 @@ class BookBuild:
         if rules["marks"]:   # several marks: one table per mark, each from its own bands
             out = []
             for m in rules["marks"].values():
-                out += [f"<h4>{esc(m['name'])}</h4>", self.size_table(m["bands"], qa_rules.master_of(m), m["name"], lang)]
+                out += [f"<h4>{esc(m['name'])}</h4>", self.size_table(m["bands"], qa_rules.master_of(m), m["name"], lang,
+                                                                   own_ground=qa_rules.ground_for(rules, m["id"]) == "drawing")]
         else:
-            out = [self.size_table(rules["bands"], "assets/logo/mark.svg", None, lang)]
+            out = [self.size_table(rules["bands"], "assets/logo/mark.svg", None, lang, own_ground=qa_rules.ground_for(rules, None) == "drawing")]
         return self.size_notes(out, lang)
 
-    def size_table(self, bands: list, master: str, who: str | None, lang: str) -> str:
-        """The size proof of one mark: at each size the drawing its band rule picks, at exactly those pixels, on both grounds."""
+    def size_table(self, bands: list, master: str, who: str | None, lang: str, *, own_ground: bool = False) -> str:
+        """The size proof of one mark: at each size the drawing its band rule picks, at exactly those pixels, on both grounds. With `own_ground`
+        (qa/rules.json icons.ground, or the mark's ground, is drawing) a drawing carries its own ground and serves both: with no -dark sibling it
+        is shown on the dark ground too."""
         rows = []
         for s in self.cfg["sizes"]:
             band = qa_rules.pick_band(bands, s) if bands else None
@@ -424,6 +438,8 @@ class BookBuild:
             if not draw.is_file():
                 fail(EXIT_FAIL, f"the drawing for {s} px, {draw.relative_to(self.project)}, does not exist")
             dark = confine(self.project, draw.with_name(draw.stem + "-dark.svg"), what="dark size drawing")
+            if own_ground and not dark.is_file():
+                dark = draw
             zoom = max(1, min(8, 128 // s))
             cells = [f"{s} px", f"{esc(draw.relative_to(self.project).as_posix())}" + (f" ({esc(band['name'])})" if band else "")]
             for mode, f, bg in (("light", draw, self.light["bg"]), ("dark", dark, self.dark["bg"])):
@@ -474,7 +490,7 @@ class BookBuild:
             hx = prim[name]["hex"].lower()
             lr = sorted(r for r, v in self.doc["modes"]["light"].items() if v.get("ref") == name)
             dr = sorted(r for r, v in self.doc["modes"]["dark"].items() if v.get("ref") == name)
-            rows.append([f'<span class="sw" style="background:{hx}"></span>{esc(name)}', f"<code>{hx}</code>",
+            rows.append([f'<span class="sw" style="background:{hx}"></span>{esc(name)}', f'<code class="hex">{hx}</code>',
                          esc(", ".join(lr) or "-"), esc(", ".join(dr) or "-")])
         return self.table([self.T(lang, "Colour"), self.T(lang, "Hex"), self.T(lang, "Light roles"), self.T(lang, "Dark roles")], rows)
 
@@ -510,7 +526,7 @@ class BookBuild:
                 if letters:
                     out.append(f'<p class="cap">{esc(f.get("name", code))}: {esc(letters)}</p>')
         if declared:
-            frows = [[esc(f["family"]), esc(str(f.get("weight", 400))), esc(f.get("style", "normal")), esc(f["file"])] for f in self.cfg["fonts"]]
+            frows = [[esc(f["family"]), esc(self.font_weight(f)[1]), esc(f.get("style", "normal")), esc(f["file"])] for f in self.cfg["fonts"]]
             out.append(self.table([self.T(lang, "Family"), self.T(lang, "Weight"), self.T(lang, "Style"), self.T(lang, "File")], frows))
         doc, stale = self.load_report("assets/_checks/fontcheck.json")
         if doc:
@@ -901,7 +917,9 @@ class BookBuild:
             rows = [[esc(r.get("name", "")), esc(r.get("register", "")), esc(r.get("liked", "")), esc(r.get("decided", ""))] for r in dec]
             out.append(self.table([self.T(lang, "Direction"), self.T(lang, "Register"), self.T(lang, "What holds"), self.T(lang, "Decided")], rows))
         if self.view["rules"]:
-            out.append("<ul>" + "".join(f"<li>{esc(re.sub(r'^\(rule\)\s*', '', x, flags=re.I))}</li>" for x in self.view["rules"]) + "</ul>")
+            out.append("<ul>" + "".join(f"<li>{code_spans(esc(bookdata.rule_text(x)))}</li>" for x in self.view["rules"]) + "</ul>")
+        for x in self.view.get("rules_skipped", []):
+            self.warn("decided", f"a line of Rules (G4) in BRAND-STATE.md is left out: it does not start with \"(rule)\" or \"(rule, ...)\": {x[:80]}")
         if not out:
             self.warn("decided", "BRAND-STATE.md has no DECIDED direction and no (rule) lines; the decided block is empty")
             return f"<p>{esc(self.T(lang, 'Nothing has been decided yet.'))}</p>"
@@ -994,6 +1012,43 @@ class BookBuild:
             out.append(self.table(head, rows))
         return "\n".join(out)
 
+    def b_masters(self, arg: str, lang: str) -> str:
+        """The approved masters of assets/masters/masters.json (from `masters approve`): for each direction its ads and slides, each as the PNG `masters check` took, with
+        its size; then the copy rules. A missing record, or a master with no PNG, stops the book (exit 1), as the site block does."""
+        what, way_out = ("the masters chapter", "drop masters from book_chapters") if "masters" in self.chapter_ids else ("{{masters}}", "take {{masters}} out of the chapter that holds it")
+        rec = self.project / "assets" / "masters" / "masters.json"
+        try:
+            doc = json.loads(confine(self.project, "assets/masters/masters.json", what="masters record", read=True).read_text(encoding="utf-8"))
+            entries = [e for e in doc["entries"] if isinstance(e, dict)]
+        except (OSError, ValueError, KeyError, TypeError):
+            fail(EXIT_FAIL, f"{what} needs the approved masters (assets/masters/masters.json, from masters approve): run the masters round, or {way_out}")
+        shown = [e for e in entries if e.get("kind") in ("ad", "slide")]
+        previews = {e["file"]: confine(self.project, f"assets/masters/png/{Path(e['file']).stem}.png", what="master preview", read=True) for e in shown}
+        gone = [f for f, p in previews.items() if not p.is_file()]
+        if gone:
+            fail(EXIT_FAIL, f"{what} needs a picture of each ad and slide: assets/masters/png/ has none for {', '.join(gone[:5])}. Run `brand-creator masters check` on the round, "
+                            "then `brand-creator masters approve --replace`, then build the book again")
+        for f, p in previews.items():
+            with p.open("rb") as fh:
+                if fh.read(len(PNG_SIGNATURE)) != PNG_SIGNATURE:
+                    fail(EXIT_FAIL, f"{what}: assets/masters/png/{Path(f).stem}.png is not a PNG picture")
+        self.add_input(rec)
+        out = []
+        directions = sorted({e.get("direction") or "" for e in shown})
+        for d in directions:
+            if d:
+                out.append(f'<h3 data-masters-direction="{esc(d)}">{esc(d)}</h3>')
+            for e in (x for x in shown if (x.get("direction") or "") == d):
+                p = previews[e["file"]]
+                self.add_input(p)
+                size = f"{e['canvas'][0]} × {e['canvas'][1]}" if e.get("canvas") else ""
+                out.append(f'<figure class="pic" data-master="{esc(e["file"])}"><img src="{self.data_uri(p, "image/png")}" alt="{esc(e["file"])}">'
+                           f"<figcaption>{esc(size)}</figcaption></figure>")
+        rules = [r for r in doc.get("copy_rules", []) if isinstance(r, str)]
+        if rules:
+            out.append(f"<h4>{esc(self.T(lang, 'Copy rules'))}</h4><ul>" + "".join(f"<li>{esc(r)}</li>" for r in rules) + "</ul>")
+        return "\n".join(out)
+
     def b_donts(self, arg: str, lang: str) -> str:
         rules = self.marks_rules()
         if rules["marks"]:   # several marks: one set of figures, drawn from the first mark (or the one {{donts:<id>}} names)
@@ -1062,6 +1117,22 @@ class BookBuild:
             divs.append(f'<div class="lang" lang="{esc(lang)}" data-key="{esc(cid)}">\n<h2>{bookmd.inline(title, self, lang, 1)}</h2>\n{body}\n</div>')
         return first_title, f'<section class="ch" id="{esc(cid)}" data-chapter="{esc(cid)}">\n' + "\n".join(divs) + "\n</section>"
 
+    def font_weight(self, ft: dict) -> tuple[str, str]:
+        """-> (the `font-weight` of one embedded font, the same for the type table): `<lowest> <highest>` and `<lowest>–<highest>` for a variable font, from the
+        `weight_range` the current fontcheck report reads for the file (with one weight the browser holds the font at it and fakes the bolder headings); else the
+        weight book.json gives, 400 when it gives none. Without a current report that reads the file the book cannot tell which it is: the one weight, and a warning."""
+        declared = str(ft.get("weight", 400))
+        if self._font_rows is None:
+            doc, stale = self.load_report("assets/_checks/fontcheck.json")
+            self._font_rows = {r["id"]: r for r in doc.get("results", []) if isinstance(r, dict) and isinstance(r.get("id"), str)} if doc and not stale else {}
+        row = self._font_rows.get(f"licence:{project_path(self.project, self.read(ft['file'], 'font file'))}")   # the id fontcheck gives the file's row
+        rng = row.get("weight_range") if row else None
+        if not row or "weight_range" not in row or (rng is not None and not (isinstance(rng, list) and len(rng) == 2 and all(type(v) is int and 1 <= v <= 1000 for v in rng) and rng[0] < rng[1])):
+            self.warn("type", f"the weight range of {ft['file']} is not known (no current fontcheck report reads it), so it is embedded at the one weight {declared}: "
+                              "a variable font is then held at that weight and the browser fakes the bolder ones; run `brand-creator fontcheck`, then build the book again")
+            return declared, declared
+        return (f"{rng[0]} {rng[1]}", f"{rng[0]}–{rng[1]}") if rng else (declared, declared)
+
     def fonts_css(self) -> str:
         faces = []
         for ft in self.cfg["fonts"]:
@@ -1069,7 +1140,7 @@ class BookBuild:
             mime, fmt = FONT_MIME.get(p.suffix.lower(), (None, None))
             if not mime:
                 fail(EXIT_USAGE, f"font {ft['file']}: only {', '.join(FONT_MIME)} are embedded")
-            faces.append(f'@font-face{{font-family:"{ft["family"]}";font-weight:{ft.get("weight", 400)};font-style:{ft.get("style", "normal")};'
+            faces.append(f'@font-face{{font-family:"{ft["family"]}";font-weight:{self.font_weight(ft)[0]};font-style:{ft.get("style", "normal")};'
                          f'font-display:block;src:url({self.data_uri(p, mime)}) format("{fmt}")}}')
             if not any(ft["family"] in str(v) for k, v in self.doc.get("other", {}).items() if k.startswith("font.")):
                 self.warn("type", f"the embedded font {ft['family']!r} is not named in any font.* token; the book will not use it")

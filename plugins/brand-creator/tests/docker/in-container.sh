@@ -2,7 +2,7 @@
 # Runs INSIDE the Linux image (tests/docker/Dockerfile), started by tests/docker/run.sh. Not meant to be run on a developer machine.
 #
 # 1. copies the plugin from the read-only mount /src to /work/repo/plugins/brand-creator (no .git, no caches: the copy is what a user would install)
-#    and the CI workflow and the root marketplace.json from /src-ci (the monorepo layout the tests expect)
+#    and the two workflows and the root marketplace.json from /src-ci (the monorepo layout the tests expect)
 # 2. brand-creator prereq --for full, then `brand-creator setup --yes` into a data directory inside the container (npm ci, Chromium)
 # 3. tests/run-all.sh --smoke WITHOUT BRAND_CREATOR_REQUIRE_ALL (pytest, node:test, the Acme smoke on the paths that apply off macOS),
 #    only the parts BRAND_CREATOR_TEST_PARTS names, within BRAND_CREATOR_SUITE_MINUTES (past it the suite is stopped, and step 4 still runs)
@@ -33,7 +33,7 @@ printf 'fonts      %s families\n' "$(fc-list : family | sort -u | wc -l | tr -d 
 step "copy the plugin"
 rm -rf "$REPO"
 mkdir -p "$PLUGIN" "$REPO/.github/workflows" "$REPO/.claude-plugin"
-cp /src-ci/brand-creator.yml "$REPO/.github/workflows/brand-creator.yml"
+cp /src-ci/brand-creator.yml /src-ci/brand-creator-release.yml "$REPO/.github/workflows/"
 cp /src-ci/marketplace.json "$REPO/.claude-plugin/marketplace.json"
 tar -C "$SRC" --exclude=./.git --exclude=node_modules --exclude=__pycache__ --exclude=.pytest_cache --exclude=./evals/results -cf - . | tar -C "$PLUGIN" -xf -
 cd "$PLUGIN"
@@ -45,13 +45,16 @@ rc=$?
 set -e
 [ "$rc" = 0 ] || [ "$rc" = 3 ] || { echo "prereq exited $rc" >&2; exit 1; }
 python3 - "$PLUGIN" "$DATA" <<'PY'
-import json, subprocess, sys
+import json, os, subprocess, sys
 r = subprocess.run([sys.argv[1] + "/bin/brand-creator", "--data", sys.argv[2], "prereq", "--for", "full", "--json"], capture_output=True, text=True)
 d = json.loads(r.stdout)
 missing = sorted(i["id"] for i in d["items"] if i["status"] == "MISSING")
 assert d["os"] == "linux", d["os"]
-assert missing == ["chromium", "xcode"], f"only chromium (before setup) and xcode may be MISSING on Linux, got {missing}"
-print("   ok: MISSING before setup =", missing)
+# a data directory kept from an earlier run (BRAND_CREATOR_DOCKER_DATA) is set up already, so Chromium is there: only xcode may be missing then
+kept = os.path.isfile(os.path.join(sys.argv[2], "setup.json"))
+want = ["xcode"] if kept else ["chromium", "xcode"]
+assert missing == want, f"only {' and '.join(want)} may be MISSING on Linux{' (data directory set up by an earlier run)' if kept else ' before setup'}, got {missing}"
+print("   ok: MISSING", "with the kept data directory =" if kept else "before setup =", missing)
 PY
 
 step "setup --yes (npm ci, Chromium headless shell into the data directory, uv environments, browser self-test)"
@@ -66,7 +69,8 @@ PY
 
 step "tests/run-all.sh --smoke (parts: ${BRAND_CREATOR_TEST_PARTS:-all}; no BRAND_CREATOR_REQUIRE_ALL: macOS-only tests must report NOT VERIFIED)"
 export BRAND_CREATOR_DATA="$DATA"
-export BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-4}"
+# unset or empty: tests/run-all.sh runs one worker per CPU of the container (test_page_check.py on 12 CPUs: 237 s on the old 4 workers, 121 s on 12)
+export BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-}"
 export ACME_SMOKE_DIR=/work/acme-smoke
 export PYTEST_ADDOPTS="-rs --durations=25 ${PYTEST_ADDOPTS:-}"   # the 25 slowest tests are printed in every run: where the time goes
 if [ -d /out ]; then

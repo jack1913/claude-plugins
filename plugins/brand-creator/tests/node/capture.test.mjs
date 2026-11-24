@@ -4,58 +4,14 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import crypto from "node:crypto";
+import zlib from "node:zlib";
 import { spawn } from "node:child_process";
 import { needSetup, bc, makeProject, BIN, DATA } from "./_helpers.mjs";
+import { sha, png, jpeg, record, bcAsync, listen, TALL, CSS, MARK, writePage, MOVING, MOVING_CSS, FRAME_FILES, writeMoving, redPixels, REVEAL_HTML, REVEAL_CSS, LAYOUT, ITEMS, SEEN_HEADER, SEEN_SCRIPT, RED_BAND, revealLayout } from "./_capture.mjs";
+
 
 // `capture` stills of a project page and of a real site (scripts/CONTRACT.md "capture"). The real site is a server of this process on 127.0.0.1: nothing here
 // reaches another machine. Such a test runs the command asynchronously (a synchronous child would block the server that must answer it).
-
-const sha = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
-const png = (file) => { const d = fs.readFileSync(file); return { width: d.readUInt32BE(16), height: d.readUInt32BE(20) }; };
-/** Width and height of a baseline or progressive JPEG, read from its start-of-frame marker. */
-function jpeg(file) {
-  const d = fs.readFileSync(file);
-  assert.ok(d[0] === 0xff && d[1] === 0xd8 && d[2] === 0xff, `${file} is not a JPEG`);
-  for (let i = 2; i + 9 < d.length;) {
-    assert.equal(d[i], 0xff, "marker");
-    const m = d[i + 1];
-    if (m === 0xc0 || m === 0xc2) return { width: d.readUInt16BE(i + 7), height: d.readUInt16BE(i + 5) };
-    i += 2 + d.readUInt16BE(i + 2);
-  }
-  throw new Error(`${file} has no start-of-frame marker`);
-}
-const record = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "capture.json"), "utf8"));
-
-function bcAsync(args, env = {}) {
-  return new Promise((resolve, reject) => {
-    const c = spawn(BIN, ["--data", DATA, ...args], { env: { ...process.env, BRAND_CREATOR_TODAY: "2026-10-17", ...env } });
-    let stdout = "", stderr = "";
-    c.stdout.on("data", (d) => { stdout += d; });
-    c.stderr.on("data", (d) => { stderr += d; });
-    c.on("error", reject);
-    c.on("close", (status) => resolve({ status, stdout, stderr }));
-  });
-}
-
-function listen(handler) {
-  const hits = [];
-  const srv = http.createServer((req, res) => { hits.push(req.url); handler(req, res); });
-  return new Promise((ok) => srv.listen(0, "127.0.0.1", () => ok({ hits, port: srv.address().port, close: () => new Promise((done) => srv.close(done)) })));
-}
-
-const TALL = "<!doctype html><html><head><meta charset=utf-8><title>Ledger, a demo page</title><link rel=stylesheet href=style.css></head>"
-  + "<body><h1>Ledger</h1><img src=mark.svg width=40 height=40 alt=''><div class=tall></div><p>The bottom.</p></body></html>";
-const CSS = "body{font:18px/1.4 sans-serif;margin:2rem;background:#fff;color:#111}@media (prefers-color-scheme:dark){body{background:#111;color:#eee}}.tall{height:2600px;background:#ccc}";
-const MARK = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><rect width='10' height='10' fill='#c03'/></svg>";
-
-function writePage(p, dir = "rounds/r1/Ledger", html = TALL) {
-  fs.mkdirSync(path.join(p, dir), { recursive: true });
-  fs.writeFileSync(path.join(p, dir, "index.html"), html);
-  fs.writeFileSync(path.join(p, dir, "style.css"), CSS);
-  fs.writeFileSync(path.join(p, dir, "mark.svg"), MARK);
-  return `${dir}/index.html`;
-}
-
 test("capture: a project page gets four first-screen stills, a full page and a record of what it loaded", (t) => {
   if (needSetup(t)) return;
   const p = makeProject();

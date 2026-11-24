@@ -60,7 +60,9 @@ Copy a template into the project, then fill it; never edit the plugin's copy. Se
 1. **List what could block the brand**: the gating goal from BRIEF, the platforms it ships on (store review, an
    organisation verification), mandatory legal content (imprint, footer, disclosures), a regulated profession.
 2. **Tag every claim** primary, secondary or UNVERIFIED, with its URL and the date read, in
-   `research/YYYY-MM-DD-constraints.md`. Primary means the rule-maker's own page, read today.
+   `research/YYYY-MM-DD-constraints.md`. Primary means the rule-maker's own page, read today. A statutory deadline,
+   obligation or rate (in any trade, for example an employer's tax and social-insurance dates) is drawn on a page, board or
+   book only once it is read in the statute's consolidated text or the authority's own page; a portal or blog is never that source.
 3. **Re-fetch and try to refute the load-bearing claims.** A claim is load-bearing when it changes a board, a gate,
    copy or a size. Open its primary source again, look for the version, date or exception that would make it wrong,
    and keep it only if it survives; correct or drop it otherwise, and say which. In a single thread do this as a

@@ -100,6 +100,9 @@ A claim is something the page states as true: a number, such as a price, an open
 such as "coming soon". Each needs a fact, so the page promises nothing you haven't confirmed. To fix one, give Claude
 the fact and its source for `FACTS.md`, mark a placeholder as a [sample](#samples), or remove it.
 
+Wording you approved for use on the page, such as a headline, goes in its own row of `FACTS.md`, labelled `copy:` and
+its place (`copy: hero headline`), apart from the plain fact. Its text backs a number or status word like any fact.
+
 The check only looks for the same number anywhere in your facts. Easiest: write the fact as the page does; "open
 7:00–18:00" backs those hours.
 
@@ -134,7 +137,9 @@ In Polish or English text, "21 października 2026", "w październiku 2026" and "
 - **A copyright year:** 19xx or 20xx right after `©`, `(c)` or "copyright", and the end of a range ("© 2024–2026").
 - **An error page's code,** 400 to 599, standing alone, anywhere on that page. A page is an error page when its file
   is named after the code (`404.html`), or its title or main heading holds the code as its only number, with no "+",
-  plus an error word in its language:
+  and an error word in its language right beside it, as in "Error 404", "404 Page Not Found", "Not Found (404)" or "404 · Nie znaleziono" ("Gone in 450
+  seconds" is a count). Only spaces, dashes and similar separators (- – — · • | : /), brackets round the code and the
+  words "page", "site", "strona" and "witryna" may stand between them:
   - English: error, not found, forbidden, unauthorized, unavailable, gone, bad request, server error;
   - Polish: błąd, nie znaleziono, nie istnieje, brak dostępu, odmowa dostępu, niedostępna, niedostępny.
 
@@ -163,8 +168,25 @@ A sample is a placeholder, such as a made-up price; its text is not a claim. Ask
 `data-sample="<what it stands for>"` on that part of the page's code.
 
 - A sample with no label fails, and its text is checked.
+- A labelled sample passes the claims check. The page needs no visible badge or note; the label in the code is enough.
 - The result lists your samples: what to replace before you publish.
 - A box marked as a sample sets off no mock-up warning.
+
+## Forbidden words
+
+The words listed as bullets under a "Forbidden" heading in your brief (`brief/BRIEF.md`) and in `research/cliches.md`
+are the ones your brand never uses. The brand book's check uses this list too.
+
+- The check looks for each as a whole word, in any letter case, in the text the page displays. "revolutionary" is found
+  in "A Revolutionary tool", not in "revolutionaryx".
+- A word found warns and names where, with the text around it. It never fails the page. A word inside a sample is found
+  too, and the line says so.
+- With a list and no word found, the line passes. With no list, the line is INFO and says nothing was looked for. It is
+  never a pass.
+- The list is part of what makes a report go out of date: add a word to your brief, or to `research/cliches.md` if it
+  was there when you checked, and the old report reads as stale until you check again.
+- The page check uses the words under "Forbidden" in the brief and in `research/cliches.md`. The brand book check adds the
+  forbidden words set in the book's own settings; the page check does not.
 
 ## Template warnings
 
@@ -183,9 +205,69 @@ Patterns that make a page look like any template. Each warns and says where; it 
 - **A hero that carries too much text:** over 45 words before you scroll, the menu not counted.
 - **A product mock-up made of styled boxes:** a screen drawn instead of shown: a box of 240 by 160 pixels or more
   holding 8 or more boxes with a background or border, and no video, drawing area or picture over 48 pixels. Tables,
-  checklists, timelines and boxes holding the main heading or several headings don't count.
+  checklists, timelines and boxes holding the main heading or several headings don't count, and neither does a band of
+  the page, a section with its own heading: the boxes inside it are still checked.
 - **Three equal tiles in a row:** at 1024 pixels wide or more, exactly three blocks side by side, of equal width and
   similar height, each with a heading.
+- **A form drawn rotated:** a form, or a field, drop-down, text area or button of a form, turned by 0.1 degrees or more
+  either way, by its own turn or by one of the boxes round it, such as a form on a tilted paper sheet. Forms are never
+  tilted: a tilted field is harder to read and to use. A form on a tilted sheet is one warning, naming the form and the
+  box that turns it. A tilted picture or card with no field in it doesn't count, and neither does a button outside a
+  form. A skew, a 3D turn or a mirrored form isn't measured. If the page has more than 100 turned forms or fields, the line says "not
+  verified" beyond the first ones.
+
+## Heading and button in the first screen
+
+The first screen is what a visitor sees before scrolling. For each size and theme, the check finds the hero (the block
+around the page's first heading) and looks at where the heading and the hero's first button or link end. The first
+screen is the window height the check opens the page with for that width (800 at 360, 844 at 390, 1024 at 768, 768 at
+1024, 900 at 1440, 1080 at 1920, 900 at any other width). If the bottom edge of either is lower, one warning
+(`page:first-screen`) names each such size, what fell below the fold and by how many pixels. A tall hero may be what you
+want, so it never fails a page. A page with no hero says "not measured" and why, and a hero with no button or link is
+measured on its heading alone and says so. If the heading is missing at some sizes but not others (hidden on a phone, say), those sizes are named
+as not measured and the row is a warning, never a pass. The first link or button in the hero counts, a logo link included, and on a page with no
+section around its heading the hero is taken to be the heading's parent block.
+
+## What moves when the page opens
+
+Many heroes move when the page opens. The check opens the page again at the smallest and the largest size (light
+theme), pauses everything that moves, and steps through it from start to end. One warning (`page:first-screen-motion`)
+says what it found. Like the row above it, it never fails a page. It warns when:
+
+- the hero's heading or its first button or link shows only after half a second, or never: say what the page is about
+  first, then move. Shown means at least half of it is on screen and not faded below half. Words that slide up from
+  under a mask count once they are out.
+- something in the first screen moves for longer than 5 seconds, or never stops. Accessibility rules (WCAG 2.2.2) then
+  ask for a way to pause, stop or hide it. The check doesn't look for that control, so check it yourself.
+- with reduced motion turned on (a setting on the visitor's device), something still moves when the page opens, a script
+  keeps drawing frames, or the heading stays hidden. A fade isn't counted as movement.
+
+What it can't step through, it names: motion a script draws frame by frame, and motion tied to scrolling. A page where
+nothing moves when it opens passes.
+
+## Boxes left behind by a movement
+
+A movement can carry a box away and never hide it, so a sheet or a card stays on screen where it does not belong. No
+other check looks for a box left outside its place, and none looks at a tall window. This one waits for the movements
+that end, then looks at where everything stopped. It warns when a box that still shows lies:
+
+- completely outside the box that holds it, by 8 pixels or more, or
+- completely off the screen, past its left, top or right edge, by 8 pixels or more. The edges are those of the page, so
+  a page that is already scrolled when it is checked is judged as it is at the top.
+
+It leaves alone a box its holder cuts off completely, a box that stays put on the screen as you scroll, and a
+see-through or hidden box. A "skip to content" link parked off the screen until a key brings it back doesn't count
+either.
+
+It also looks at each width again in a window 1300 pixels high, so a problem that only shows on a tall screen is found (once for each width, in the first colour scheme you check).
+The open page is made taller, not loaded again: a page whose script reads the window height only once, as it loads, is
+not seen as it would be on a tall screen.
+
+If a page has more boxes out of place than the check lists (100), the line says "not verified" beyond the first ones.
+
+If something still moves when the check looks, such as a movement that never ends or one that follows the scroll
+position in the page's styles, the line says "not verified": the check can't tell where that box comes to rest. Like
+the template warnings, this one never fails a page unless you make it [a page rule](#your-page-rules).
 
 ## Your page rules
 
@@ -222,7 +304,8 @@ your site and reports are not there.
 ## What it cannot see
 
 What is inside a frame (a page within the page), colours in gradients and shadows, movement a script starts when the
-visitor clicks or types, or draws frame by frame, and how colour-blind visitors see the page.
+visitor clicks, types or scrolls (a box that shows only once you scroll to it is not judged until it shows, and the
+check never scrolls), or draws frame by frame, and how colour-blind visitors see the page.
 
 ## Related
 

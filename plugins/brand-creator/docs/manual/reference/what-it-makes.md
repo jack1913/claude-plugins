@@ -3,13 +3,15 @@
 What each step of a brand project produces, in more detail. For a short list by task, see the
 [how-to pages](../README.md#do-something).
 
-Every step is a `brand-creator` command that the skills run for you. `brand-creator --help` lists them all.
+Every step is a `brand-creator` command that the skills run for you. `brand-creator --help` lists them all, and
+`brand-creator <command> --help` shows one command's options.
 A synthetic worked brand, Acme, shows a finished project: `skills/brand-creator/references/examples/acme/` in the plugin.
 
 ## Boards and rounds
 
 Round pages are built from a template, checked by `board-lint` and photographed by `shot` at 1440 and 390 pixels wide, in
-light and dark. Approved rounds are frozen with `freeze` into `history/`, with a checksum manifest that `check` verifies.
+light and dark. Approved rounds are frozen with `freeze` into `history/`: what their boards show, the scripts that built them and their notes,
+with a checksum manifest that `check` verifies.
 
 In Standard and Full, a motion round adds one more kind of board after you approve the design: three variants of your
 logo's move, each with its own folder (a page, a proof and its stills) next to the board. `board-lint` checks that each
@@ -67,7 +69,13 @@ not count.
   visitor sees before scrolling) 1440 pixels wide, like a desktop, and 390, like a phone, in light and dark, and the
   whole page at 1440. The pictures go in a `shots/` folder beside the page, with `capture.json`: a list of the files the
   page loaded and of anything that went wrong. A page in an earlier round, or in `history/` where approved rounds are
-  kept, is refused, because those are locked.
+  kept, is refused, because those are locked. A page that shows content only as you scroll to it is photographed with
+  `capture --reveal`. Claude first scrolls the page to the bottom and back to the top, half a screen at a time, and does the
+  same inside any big box on the page that scrolls on its own, such as a main area or a sidebar. The pictures then show
+  what a visitor sees after scrolling. If the walk stops early (more than 40 screens in all, or it took too long), the run
+  and `capture.json` say where. Each box is photographed where the page shows it, so what a box shows further down is not
+  in the pictures. A page that scrolls only by script (its own scrolling is hidden) is walked too, and the run says a
+  visitor cannot scroll it. A page that stops answering while it is walked stops the capture, and nothing is written.
 - **Pictures of real sites** (`capture --url`). For the references, Claude photographs each site into
   `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. It is the
   only tool here that goes online, and only when your answer to the online question allows it: research online, or
@@ -85,11 +93,14 @@ not count.
   board's check makes sure that the pictures show each page as it is now, that the cold review was made from those very
   pictures, that every version was checked against your brand's rules, and that the pages board comes after a first
   screen you picked.
-- **The cold review** gives its verdict, "ship" or "fix", first, before any reason. It reads only the version's four
+- **The cold review** gives its verdict, "ship", "fix" or "owner" (what is left is your call), first, before any reason. It reads only the version's four
   pictures, your brief and `FACTS.md` (your list of facts): never the board, the references or Claude's reasons. By
   default Claude writes it in the same conversation, so it is not blind, and the board says "by in-thread". A separate
   helper agent writes it only after you agree to how many, which model and the cost, and the board then says "by
-  agent". Each review is kept in `cold-review.md` beside its version.
+  agent". Each review is kept in `cold-review.md` beside its
+  version. A version is reviewed at most twice (the second review replaces the first). A page that did not change since
+  its last review is not reviewed again: Claude runs `brand-creator site review-status <page>` first, which only reads,
+  and when it says "reuse" the board shows the earlier review.
 - **Layout references.** A layout reference is a short recipe for how a page is organised for one visitor job, such as
   "understand how a service will run for them before handing it something important". It is a starting point, never a
   template. The plugin keeps them in `skills/brand-creator/references/page-layouts.json`, keyed to what the visitor
@@ -164,9 +175,11 @@ yes. The steps are in [Use your brand kit](../use/use-your-brand-kit.md).
   without contact details;
   ready-made bits of code for your fonts, your logo in light and dark, and text on each background colour you named;
   and your approved reference pages, each with a note on its layout and its choices. A reference page goes in only when
-  it passes its page check and its pictures are up to date.
+  it passes its page check and its pictures are up to date. Also `brand.md` (your colours, type, logo sizes, motion and
+  claims on one page), `checklist.md` (a checklist from your rules) and `install.py` (the kit's installer).
 - **Yours:** `voice.md`, `visual.md` and `golden-rules.md` (how your brand sounds, how it looks beyond the colours, and
-  the few rules every piece keeps), `recipes/web-page.md` (the steps for building a web page in your brand), and
+  what every piece keeps and what it may change), `recipes/web-page.md` (what a page keeps and the steps you usually build one by), once you
+  approved ads or a deck `recipes/ad.md` and `recipes/presentation.md`, and
   `EXTENDING.md` (how to add to the kit). Claude writes each once, never over it, and drafts the first three with you.
   A recipe or file you add yourself is yours too and travels with the kit.
 - **Its version,** such as 1.3: your brand book's edition, then a build number that goes up by one when a made-for-you
@@ -182,6 +195,8 @@ yes. The steps are in [Use your brand kit](../use/use-your-brand-kit.md).
   your computer that holds your website's or app's code) is `current`, `not installed` or `not current`.
 - **In your product:** `/brand-creator:brand-adopt` puts the kit into a product repository, on the Full tier: one
   repository at a time, never into a folder all your projects share. A review checks that the copy is exactly your kit.
+  It runs the kit's own `install.py`, which a developer with a copy of your brand project can run too, without Claude. A
+  file of yours that the product never changed is updated when you change it; one the product changed stays its own.
 
 ## Print, press kit and posts (Standard and Full)
 
@@ -198,7 +213,9 @@ only, npm, GitHub, Docker Hub, PyPI, crates.io and Homebrew. It lists the servic
 offices are never queried: the memo carries search links you run yourself. The `brand-naming` skill grows and filters
 candidates, checks meaning in each audience language and writes a go, go-with-conditions or no verdict.
 
-## Adoption and launch (Full tier)
+## Adoption and launch
+
+Adoption is for the Full tier. The launch checklist is for any tier when you ask, and Full plans it by default.
 
 - `adoption survey` reads your product repositories read only for every place the old brand shows, and writes
   `ADOPTION.md` as numbered rows.

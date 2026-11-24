@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="[[fill: language code of the owner, e.g. en]]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>[[fill: Brand]]: round [[fill: N]], ads and decks</title>
+<!--
+  brand-creator masters board template. Copy to <project>/rounds/rN/board.html (a round after G4, after G4p when the brief lists a site) and fill every
+  [[fill: ...]] marker; `brand-creator board-lint` fails while any marker is left in text or attributes (HTML comments are ignored).
+  The round holds masters.json (every master: file, kind, canvas, direction; the copy rules; the builder) and the masters themselves; each HTML ad or slide
+  declares <meta name="masters-canvas" content="WxH">. board-lint reads them (masters:gate, masters:manifest, masters:files, masters:canvas-size,
+  masters:directions: two or three directions on the first masters board). `brand-creator masters check` writes png/ and the masters report.
+  Self-contained: no network, no web fonts unless inlined; system font stack for the page chrome. Query parameters: ?t=light|dark, ?v=<direction>.
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px;counter-reset:sec}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.n>h2 .num::before{counter-increment:sec;content:counter(sec)}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.variant{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.variant[hidden]{display:none}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.strip,.still{margin:0}
+.strip-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--sunk)}
+.strip-scroll img{display:block;height:var(--still-h,96px);width:auto;max-width:none}
+.still img{display:block;height:var(--still-h,96px);width:auto;max-width:100%;border:1px solid var(--line);border-radius:4px}
+figcaption{font-size:13px;color:var(--muted);margin-top:4px}
+.live{margin:0}
+.proof{margin:0;font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;border-left:4px solid var(--muted)}
+.proof[data-proof="pass"]{border-left-color:var(--good)}
+.proof[data-proof="fail"]{border-left-color:var(--warn)}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.masters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.masters figure{margin:0;display:flex;flex-direction:column;gap:4px}
+.masters img{display:block;max-width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:var(--sunk)}
+.masters figcaption{font:12px/1.4 var(--mono);color:var(--muted)}
+</style>
+</head>
+<body data-round="[[fill: N]]" data-board="masters">
+
+<main>
+  <header>
+    <p class="eyebrow">Round [[fill: N]] · masters board · [[fill: YYYY-MM-DD]]</p>
+    <h1>[[fill: Brand]]: round [[fill: N]], ads and decks</h1>
+    <p class="lede">[[fill: one sentence: what this page asks the owner to decide, for example which direction of the ads and the deck goes forward]]</p>
+    <ul class="toc">
+      <li><a href="#changed">What changed</a></li><!-- OPTIONAL: delete with its section below (the first masters board) -->
+      <li><a href="#directions">Directions</a></li><li><a href="#hardest">Hardest surface</a></li>
+      <li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <!-- OPTIONAL (a later masters board: what changed since the owner's review; delete in the first one) -->
+  <section class="block" id="changed" data-section="what-changed">
+    <h2><span class="num">00</span>What changed since the review</h2>
+    <ol><li>[[fill: owner's numbered item → what changed in the masters]]</li></ol>
+  </section>
+
+  <section class="block n" id="directions">
+    <h2><span class="num"></span>[[fill: Two or three directions / the direction after the review]]</h2>
+    <p class="muted">Built from what the brand approved: [[fill: the approved pages in site/, assets/masters/, the motion tokens and FACTS.md this round started from]].
+      Every master is listed in masters.json; <code>brand-creator masters check</code> renders each one and checks it (nothing outside the canvas, no covered text, the PDF, the PowerPoint file).</p>
+    <!-- Repeat this article for every direction (two or three on the first masters board). data-masters-direction: the direction's name as masters.json writes it. -->
+    <article class="variant" data-masters-direction="[[fill: direction one]]">
+      <div class="dhead"><h3>[[fill: Direction one]]</h3></div>
+      <p data-field="idea">[[fill: the idea of this direction in one sentence, and which approved element it takes from the brand]]</p>
+      <div class="masters">
+        <!-- One figure per master of this direction: its PNG from masters check (png/<name>.png), with its size. -->
+        <figure><img src="png/[[fill: file name]].png" alt="[[fill: the ad in a sentence]]" width="270"><figcaption>[[fill: 1080 × 1350]]</figcaption></figure>
+      </div>
+      <p class="proof" data-proof="[[fill: pass or fail]]">[[fill: the masters check line, for example "masters check: pass (canvas, covered text, PDF 13 pages; PowerPoint: not verified until you open it)"]]</p>
+      <fieldset class="vote" data-vote="[[fill: direction one]]"><legend>Your vote</legend>
+        <label><input type="radio" name="vote-[[fill: direction one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: direction one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: direction one]]" value="unsure">unsure</label></fieldset>
+    </article>
+    <!-- [[fill: articles for directions two and three, same structure]] -->
+  </section>
+
+  <section class="block n" id="hardest" data-section="hardest-surface">
+    <h2><span class="num"></span>Hardest surface: [[fill: where these masters are hardest to get right, e.g. the 728 × 90 banner]]</h2>
+    <p>[[fill: what holds there and what does not]]</p>
+  </section>
+
+  <section class="block n" id="call" data-section="my-call">
+    <h2><span class="num"></span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> [[fill: the direction you would take forward, and why in one sentence]]</p>
+    <p data-field="critique"><b>Honest critique:</b> [[fill: the weakest part of your own pick]]</p>
+  </section>
+
+  <section class="block n" id="questions" data-section="questions">
+    <h2><span class="num"></span>Questions</h2>
+    <ol class="questions">
+      <li data-section="question" data-n="1" data-lists="directions"><p class="q">Which direction goes forward?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">[[fill: Direction one]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">[[fill: Direction two]]</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">None of these (say what was missing)</label></li>
+        </ol></li>
+      <!-- When the deck has a PowerPoint file, ask the owner to open it in PowerPoint and say whether it renders: their answer goes into G4m. -->
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with a direction name, or question number plus option (1a). Add one sentence on anything you want changed. Batched answers work: "1a, 2b".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · masters round [[fill: N]] · checked with board-lint and masters check</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-masters-direction]").forEach(function (el) { el.hidden = el.getAttribute("data-masters-direction") !== v; });
+  var out = document.getElementById("reply-out");
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var c = qq.querySelector("input:checked");
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out && parts.length) out.textContent = parts.join(", ");
+  }
+  document.addEventListener("change", compose);
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

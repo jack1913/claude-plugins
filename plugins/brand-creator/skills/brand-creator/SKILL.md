@@ -1,7 +1,7 @@
 ---
 name: brand-creator
-description: Starts or continues a brand-identity project for a company, product or person and runs it step by step, with the owner deciding each step. Identity creation, plus the brand's own website references and reference pages; not for building production websites, UI components, slide themes, chart colours or colour conversions.
-when_to_use: Use whenever someone wants a logo, a look, a visual identity, a rebrand, brand guidelines or a brand book, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), for a business, product, shop, podcast or person. Also to go on with a brand project (a folder holding BRAND-STATE.md) and any work on its files (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), and for launch steps ("buy the domain", "file the trademark"), which are handed to the owner, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
+description: Starts or continues a brand-identity project step by step, the owner deciding each step. Identity work, plus its website references and reference pages; not for building production websites, UI components, slide themes, chart colours or colour conversions.
+when_to_use: Use when someone wants a logo, visual identity, a rebrand, brand guidelines or a brand book ("a look for my Etsy shop", "start a brand called Acme"), for a business, shop, podcast or person. Also to continue a brand project (a BRAND-STATE.md folder) and its files (edit or lint a round board, fold in a judge report, change a rule like an accent minimum, pick site references), and launch steps before the brand goes public, trademark fees too ("buy the domain", "file the trademark", "help me launch", "the launch checklist"), handed over, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy", "pomóż mi z premierą marki", "przed publikacją marki", "znak towarowy".
 compatibility: Claude Code only (uses the plugin's bin/ entry point and hooks). Needs Python 3.10+ with uv, Node 22+, resvg and a Playwright Chromium installed by /brand-creator:setup; macOS with Xcode only for Apple emitters.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -17,16 +17,15 @@ show options with a stated pick. **Re-invoke this skill after compaction** (only
 1. Run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`. It walks up from
    the current folder to the first `BRAND-STATE.md`. Found → read `BRAND-STATE.md` fully (tier, phase, gates,
    Collaboration, Directions, `fixes_per_area`, `review_url`) and resume at the recorded phase. Say in one line where
-   the project stands and what comes next.
+   the project stands and what comes next. Asked to start a new brand meanwhile: ask whether to resume it or start a
+   separate one next to it.
 2. Not found → look under the projects folder setting (`${user_config.projects_root}`; empty or left as a literal
    placeholder means unset) for `*/BRAND-STATE.md` of the brand being discussed. One match → resume it. Several →
    ask which.
-3. Nothing → run G0 (below), then scaffold with
+3. Nothing → read [00-intake](references/phases/00-intake.md) ("Starting from the owner's words"), run G0 (below), then scaffold with
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
-   When the projects folder is unset, the folder is not an AskUserQuestion item: the plain-text facts message after G0
-   says "I'll create ./<slug>/ in the current folder unless you name another place". An open name gets the working slug
-   `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
-   Then comes P1s style research and its board (G1s); no board of directions is built before G1s is recorded (see G1s).
+   An open name gets the working slug `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
+   Then comes P1s style research and its board (G1s); no board of directions before G1s is recorded.
 
 Work inside the brand project from the first minute. Only page shots go to scratch (the tools put them under the data
 folder). Never build a brand in `/tmp`.
@@ -64,7 +63,7 @@ These rules ship with the plugin and hold whatever the user's own configuration 
 |---|---|---|---|
 | Quick | P0 → style research (P1s) → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
 | Standard | + P1 research (feeds P1s), P2 naming if the name is open, a motion round after G3 (or nothing moves), full book, web/social/profile/print packs | + book.html, names memo, print PDFs (opt-in) | + book lint, print check, font check, motion proof |
-| Full | + P1c inventory, platform emitters, adoption, launch | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
+| Full | + P1c inventory, platform emitters, adoption, launch (by default; any tier on ask) | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
 
 Rough length to state at G0: Quick 2-3 board rounds in one sitting; Standard 4-6 rounds over a day or two, and 2-3 more
 for motion; Full several sessions. Folders appear when their phase starts. Existing mark (Quick): audit the supplied SVG/PNG/PDF
@@ -84,8 +83,8 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
   vector and its curves are fixed by hand (`authored-vector`). Never ship a raster or an untouched trace as the logo.
 - **Drawing engine** (where marks are drawn): the use-llm design canvas, else Claude Code's /design (the owner types it),
   else Claude-drawn SVG, only on the owner's yes. Never switch silently. [drawing-engines.md](references/drawing-engines.md)
-- **Architecture** (inferred, default `standalone`): `standalone` | `family-member` | `product-in-family`. Ask only
-  when the brief or the repo shows a parent brand or siblings; ask for `FAMILY.md` only after family-member is picked.
+- **Architecture** (inferred, default `standalone`; else `family-member` | `product-in-family` | `family-parent`).
+  Ask only when the brief or repo shows a parent, siblings or products; `FAMILY.md` only after family-member is picked.
 
 ## Phase map
 
@@ -106,7 +105,7 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 | P10 | brand book or short guide: [the brand-book skill](../brand-book/SKILL.md) | G5 | [10-book](references/phases/10-book.md) | all (short in Quick) |
 | P11 | adoption into products: `/brand-creator:brand-adopt` | G6 | [11-adoption](references/phases/11-adoption.md) | F |
 | P12 | history, ADR, governance | freeze only | [12-history](references/phases/12-history.md) | all |
-| P13 | launch hand-offs (owner acts): `/brand-creator:launch` | G7 | [13-launch](references/phases/13-launch.md) | F |
+| P13 | launch hand-offs (owner acts), when asked in words ("help me launch", "buy the domain"): "Handing it over" | G7 | [13-launch](references/phases/13-launch.md) | any on ask; F by default |
 
 Read the phase file fully when entering a phase. Record every gate decision with
 `... state --project <dir> --record G<n> "<decision>"`; `freeze` and the emitters refuse to run without G3.
@@ -218,10 +217,10 @@ Every board round, in this order (the `/brand-creator:round` skill wraps it). Ro
 (`templates/style-board.html`, P1s) and round 1 does not start until G1s is recorded (a pick, "skipped by owner" or "n/a");
 after a full rejection the next pick board also waits for a new style board and a new pick (G2b-a):
 
-1. New folder `rounds/r<N>/`; from round 2 copy the previous round first (`cp -R rounds/r<N-1> rounds/r<N>`).
+1. New folder `rounds/r<N>/`; from round 2 copy the previous round first (`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/`: the per-round shots, `cold-review.md` and `capture.json` stay behind, they point at the old round).
    Earlier rounds are never edited; the hook blocks it. Marks that need drawing are drawn first, on the session's drawing
    engine, and come in as SVG masters with a `SOURCE.md` ([drawing-engines.md](references/drawing-engines.md)). A motion
-   round is the exception: the first starts as an empty folder, a later one copies the previous motion round (the round skill).
+   round and a site board are the exceptions (the round skill: a later hero board copies only the picked variants).
 2. Build the round page at `rounds/r<N>/board.html` from `${CLAUDE_PLUGIN_ROOT}/templates/round-page.html`
    (per-direction deep boards from `templates/board.html` go in `rounds/r<N>/<direction>/board.html`; a motion round from
    `templates/motion-board.html`). Fill every
@@ -254,16 +253,21 @@ a naming fan-out, an adoption across repositories), propose it and wait:
    (nothing is launched; exit 1 = refused or above your model).
 2. State the agent count, the models that will actually run (your session model is the ceiling; `args.ceiling` caps
    every agent to it; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` overrides the agent files), the size guideline and a rough
-   cost (about one single-thread pass per agent), and that you will do it here if they prefer.
+   cost in tokens (the plan prints each agent's range from measured runs, or "not measured"; never a guess), and that you
+   will do it here if they prefer.
 3. Only after an explicit yes, run the workflow `/brand-creator:<workflow>` with those arguments as its `args` and
    `approved_agents` set to the approved number. Read the result, then carry on at the gate the workflow stops before.
 
 | Workflow | When | Default agents |
 |---|---|---|
 | `directions` | round 1 or a reset round (`inventory: true` adds the P1c survey) | 3 designers + judge = 4 |
-| `review-panel` | `/brand-creator:review panel` | 3 lenses + judge = 4 |
+| `review-panel` | `/brand-creator:check --review panel` | 3 lenses + judge = 4 |
 | `naming` | P2 with an open name | 2 hunters + screener + judge = 4 |
 | `adopt` | P11 after G6 | implementer + reviewer per repository |
+
+A review of the latest work as one list, or a panel, asked in words is not run from here: offer
+`/brand-creator:check --review [panel]`, which only the owner can type. The self-review of a round before you show it (Round
+mechanics, step 4, and the refine loop in the next paragraph) stays yours and runs here.
 
 Refinement is a main-thread loop with at most one `brand-creator:brand-reviewer` call per round. Agents, models,
 arguments, resume and the refine loop: [fleet.md](references/fleet.md).
@@ -324,7 +328,9 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | a page built anywhere, against the brand | `page-check <page>`, `page-check --from <dir> <page>`, `page-check --url http://localhost:<port>/<path>` |
 | website references and the site round (S, F; only when BRIEF lists a site) | `capture --url <url> --name <name>`, `capture <page>`, `site approve` ([07w](references/phases/07w-website-references.md), [07p](references/phases/07p-site-round.md)) |
 | name screening (P2, after the owner's privacy OK) | `names <name>... --project <dir> --profile <p> --region <CC> --plan`, then `--yes` |
-| freeze an approved round | `freeze r<N> --name approved-board --project <dir>` |
+| ads and decks (S, F) | `masters check`, `masters embed-fonts <deck.pptx> --font <ttf>`, `pdf normalise <file.pdf>`, `masters approve` ([07m](references/phases/07m-masters-round.md)) |
+| freeze an approved round | `freeze r<N> --name approved-board --project <dir>` (`--whole` keeps every file; by default what its boards show) |
+| slim old frozen rounds | `cleanup --history` (plan), `--record-yes`, `--yes` ([12-history](references/phases/12-history.md)) |
 
 ## References (load when the phase needs them)
 
@@ -335,6 +341,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   [06-mark](references/phases/06-mark.md), [07-tokens](references/phases/07-tokens.md),
   [07w-website-references](references/phases/07w-website-references.md),
   [07p-site-round](references/phases/07p-site-round.md),
+  [07m-masters-round](references/phases/07m-masters-round.md),
   [08-assets](references/phases/08-assets.md), [09-qa](references/phases/09-qa.md),
   [10-book](references/phases/10-book.md), [11-adoption](references/phases/11-adoption.md),
   [12-history](references/phases/12-history.md), [13-launch](references/phases/13-launch.md).
@@ -342,8 +349,8 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 - [drawing-engines.md](references/drawing-engines.md): where marks are drawn (the use-llm design canvas, Claude Code's /design, or Claude-drawn SVG on the owner's yes), the drawing brief, what lands in the round, the canvas's known quirks.
 - [The brand-naming skill](../brand-naming/SKILL.md): P2 naming, prior art, screening and the verdict memo.
 - [The brand-book skill](../brand-book/SKILL.md): P10 book, self-review checklist, collapse, G5 opt-ins, the RGB proof PDF.
-- User-invoked: [brand-adopt](../brand-adopt/SKILL.md) (P11 apply), [check](../check/SKILL.md) (gates and cascade),
-  [review](../review/SKILL.md) (self-review, optional lens panel), [launch](../launch/SKILL.md) (P13 hand-off).
+- User-invoked: [brand-adopt](../brand-adopt/SKILL.md) (P11 apply), [check](../check/SKILL.md) (gates, cascade, and
+  `--review` with its optional lens panel).
 - [CONNECTORS.md](../../CONNECTORS.md): optional design-tool connectors (never required, never the source of truth).
 - [The brand-assets skill](../brand-assets/SKILL.md): P8 asset packs from INVENTORY.md slots, size bands, downscale proof; also runs
   standalone on a mark file.
@@ -352,11 +359,12 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   Guardrails block.
 - [working-style.md](references/working-style.md): collaboration defaults and the per-project Collaboration block.
 - [anti-patterns.md](references/anti-patterns.md): case cards of costly mistakes and the check that catches each.
-- [architecture.md](references/architecture.md): standalone, family-member, product-in-family; layers; never-borrow.
+- [architecture.md](references/architecture.md): standalone, family-member, product-in-family, family-parent; layers; never-borrow.
 - [cascade.md](references/cascade.md): what to update when a rule, token or lockup changes.
 - [regulated-industries.md](references/regulated-industries.md): professions with promotion or naming rules.
 - [prompt-fragments.md](references/prompt-fragments.md): the prompt skeleton for designer, judge and reviewer passes.
 - [fleet.md](references/fleet.md): the opt-in workflows and agents, the fleet gate in full, model ceiling, the refine loop, resume.
+- [fleet-costs.json](references/fleet-costs.json): the measured token costs of agent runs, each dated with its run; `fleet-plan` prints them and the fleet gate quotes them.
 - [ai-defaults.json](references/ai-defaults.json): the reflex list every direction is tested against.
 - [page-tells.json](references/page-tells.json): the generic page tells the page check warns about (English and Polish).
 - [page-layouts.json](references/page-layouts.json): layout references for the site round, keyed to the visitor's job (structure only).

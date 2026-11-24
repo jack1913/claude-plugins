@@ -561,7 +561,7 @@ def test_finish_chain_template_lists_every_emit_target_and_the_chain_guard():
     targets = [t for t in ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer")]
     for t in targets:
         assert t in dispatch and (f" {t} " in tpl or f"{t})" in tpl or f"({t} " in tpl or f" {t})" in tpl), t
-    assert "BRAND_CREATOR_CHAIN=1" in tpl and "verify-idempotent" in tpl and "staleness --write" in tpl and tpl.rstrip().endswith('"${BC[@]}" check')
+    assert "BRAND_CREATOR_CHAIN=1" in tpl and "verify-idempotent" in tpl and "staleness --write" in tpl and tpl.rstrip().endswith('"${BC[@]}" check --refresh')
     assert subprocess.run(["bash", "-n", str(ROOT / "templates/finish.sh.tpl")]).returncode == 0
     r = bc("root")
     assert r.returncode == 0 and r.stdout.strip() == str(ROOT) and '"${BC[@]}" root' in tpl

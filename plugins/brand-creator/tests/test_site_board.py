@@ -137,7 +137,7 @@ def test_the_template_as_it_is_fails_until_filled(proj):
     for needle in ('data-board="site"', 'data-site-stage="hero"', 'data-section="what-changed"', 'data-section="hardest-surface"', 'data-section="weak-points"', 'data-section="my-call"',
                    'data-section="questions"', 'data-section="reply"', "data-site-variant=", 'data-field="still"', 'data-view="1440-light"', 'data-view="1440-dark"', 'data-view="390-light"',
                    'data-view="390-dark"', 'data-field="live"', "data-check=", 'data-field="tells"', 'data-field="reflex"', 'data-field="layout"', "data-layout=", 'data-field="from-refs"',
-                   "data-cold=", 'data-field="what-it-is"', 'data-field="cost"', "data-vote=", 'name="vote-[[fill: Name one]]"', 'data-section="choices"', "data-choice=", 'data-tag="rule"',
+                   "data-cold=", 'data-field="idea"', 'data-field="what-it-is"', 'data-field="cost"', "data-vote=", 'name="vote-[[fill: Name one]]"', 'data-section="choices"', "data-choice=", 'data-tag="rule"',
                    'data-tag="example"', "@media (prefers-reduced-motion:reduce)", ".variant[hidden]{display:none}", "articles for variants two and three"):
         assert needle in src, needle
     board_of(proj).write_text(src, encoding="utf-8")
@@ -338,6 +338,52 @@ def test_a_variant_needs_its_folder_and_its_page(tmp_path):
     assert r.returncode == 1 and "Atlas: rounds/r2/Atlas/ does not exist" in detail(p, "site:files"), r.stdout
 
 
+def test_a_card_pointing_into_a_tryout_fails_the_files_row_and_the_gates_are_the_same_as_before(tmp_path):
+    """G4-08: the owner tries a variant live as `tryout/<Name>/index.html`, and at the stage gate it is copied into `rounds/rN/<Name>/` with its relative paths made one level deeper. The try-out is no
+    variant of the board: a `tryout/` folder beside the round changes no row, a card that points into it fails `site:files` (the live link, and the folder when the variant was not copied), and the board
+    passes again once the variant is in its round, as for any hero."""
+    p = build(tmp_path)
+    assert lint(p).returncode == 0
+    before = {rid: row["status"] for rid, row in rows(p).items()}                             # the board's rows as they are with no try-out
+    tryout = p / "tryout" / "Atlas" / "index.html"
+    tryout.parent.mkdir(parents=True)
+    tryout.write_text(page_text("Atlas").replace("../../../assets/", "../../assets/"), encoding="utf-8")
+    sheet = "assets/tokens/tokens.css"
+    assert (tryout.parent / "../../" / sheet).resolve().is_file() and (p / "rounds" / "r2" / "Atlas" / "../../../" / sheet).resolve().is_file(), "one more ../ from the round leads to the same file"
+    assert lint(p).returncode == 0 and {rid: row["status"] for rid, row in rows(p).items()} == before, "a try-out beside the round is read by no row: the same rows, the same statuses"
+    mutate(board_of(p), '<a data-field="live" href="Atlas/index.html">', '<a data-field="live" href="../../tryout/Atlas/index.html">')
+    r = lint(p)
+    assert r.returncode == 1 and "site:files" in failed(p), r.stdout
+    assert "Atlas: the live link '../../tryout/Atlas/index.html' does not lead to rounds/r2/Atlas/index.html" in detail(p, "site:files")
+    assert [rid for rid in failed(p) if rid != "site:files"] == [], "only the files row fails: the try-out is not a variant, and no other row reads it"
+    shutil.rmtree(p / "rounds" / "r2" / "Atlas")                                              # the variant was never copied into the round: only its try-out exists
+    r = lint(p)
+    assert r.returncode == 1 and "Atlas: rounds/r2/Atlas/ does not exist" in detail(p, "site:files"), r.stdout
+    make_variant(p, 2, "Atlas")                                                               # copied into the round, its stills and checks made there
+    mutate(board_of(p), '<a data-field="live" href="../../tryout/Atlas/index.html">', '<a data-field="live" href="Atlas/index.html">')
+    assert lint(p).returncode == 0 and {rid: row["status"] for rid, row in rows(p).items()} == before, "the board is the same board as without a try-out"
+    assert tryout.is_file(), "the try-out stays where it was"
+
+
+def test_a_tryout_left_in_place_fails_the_cascade_and_moved_to_removed_it_does_not(tmp_path):
+    """G4-08: `check --cascade` searches every folder but history/, decisions/, earlier rounds and removed-*/, so a try-out that stays in `tryout/` holds the old name or price and fails the cascade after
+    the first change, while the page in the round (and the same try-out moved into `removed-<date>/tryout/` at the stage gate) does not."""
+    p = build(tmp_path)
+    old = "Every tool has a published spare-parts list"
+    tryout = p / "tryout" / "Atlas" / "index.html"
+    tryout.parent.mkdir(parents=True)
+    tryout.write_text(page_text("Atlas").replace("<h1>", f"<p>{old}</p><h1>").replace("../../../assets/", "../../assets/"), encoding="utf-8")
+    r = bc("check", "--cascade", old, project=p)
+    cas = next(x for x in report(p, "check")["results"] if x["id"].startswith("cascade:") and x["id"] != "cascade:scope")
+    assert r.returncode == 1 and cas["status"] == "fail" and any(h.startswith("tryout/Atlas/index.html:") for h in cas["hits"]), "a try-out left in place is found by the cascade"
+    (p / "removed-2026-11-03").mkdir()
+    shutil.move(str(p / "tryout"), str(p / "removed-2026-11-03" / "tryout"))                  # the move of the stage gate
+    bc("check", "--cascade", old, project=p)                                                   # other gates may fail here: only the cascade row is the point
+    cas = next(x for x in report(p, "check")["results"] if x["id"].startswith("cascade:") and x["id"] != "cascade:scope")
+    assert cas["status"] == "pass" and cas["hits"] == [], "moved to removed-<date>/tryout/, the old copy is skipped like any removed-*/ folder"
+    assert (p / "removed-2026-11-03" / "tryout" / "Atlas" / "index.html").is_file() and not (p / "tryout").exists(), "moved, never deleted, and no tryout/ is left"
+
+
 def test_a_variant_page_must_declare_its_layout_and_page(proj):
     page = proj / "rounds" / "r2" / "Atlas" / "index.html"
     mutate(page, 'data-layout="walkthrough" data-page="start"', 'data-page="start"')
@@ -455,6 +501,120 @@ def test_a_field_belongs_to_its_own_card(proj):
     board.write_text(board.read_text(encoding="utf-8").replace(cards[1], stripped), encoding="utf-8")
     r = lint(proj)
     assert r.returncode == 1 and "site:fields" in failed(proj) and "Atlas: Cost is missing or empty" in detail(proj, "site:fields") and "Ledger" not in detail(proj, "site:fields")
+
+
+IDEA_LINE = '<dd data-field="idea">Filled in for the test fixture.</dd>'    # the Idea line of a card of the filled template
+
+
+def test_a_hero_card_with_its_idea_line_is_clean(proj):
+    """Present: pass. The idea line is a line of each hero card (the filled template carries it), and the row says every card has it."""
+    assert 'data-field="idea"' in board_of(proj).read_text(encoding="utf-8") and board_of(proj).read_text(encoding="utf-8").count(IDEA_LINE) == 2
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:fields"]["status"] == "pass" and detail(proj, "site:fields") == "What it is, Takes from and Cost are filled in on every card, and every card has its Idea line"
+    assert not [x for x in rows(proj).values() if x["status"] == "warn"], "a hero board with its idea lines has no warning at all"
+
+
+def test_a_hero_card_without_an_idea_line_fails_site_fields_and_names_the_card(proj):
+    """Missing: site:fields fails (it was a warning in 0.7.0) and names the card; nothing else on the board fails."""
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')   # the first card only: Ledger
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:fields"], r.stdout
+    row = rows(proj)["site:fields"]
+    assert row["status"] == "fail" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
+    assert "a warning in this release" not in row["detail"], row
+
+
+def test_a_hero_card_with_an_empty_idea_line_fails_site_fields(proj):
+    mutate(board_of(proj), IDEA_LINE, '<dd data-field="idea"></dd>')
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:fields"], r.stdout
+    row = rows(proj)["site:fields"]
+    assert row["status"] == "fail" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
+    mutate(board_of(proj), '<dd data-field="idea"></dd>', '<dd data-field="idea">   </dd>')   # a line of spaces is empty too
+    assert lint(proj).returncode == 1 and rows(proj)["site:fields"]["status"] == "fail"
+
+
+def test_every_hero_card_without_the_idea_line_is_named(proj):
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"', count=2)
+    r = lint(proj)
+    assert r.returncode == 1, r.stdout
+    row = rows(proj)["site:fields"]
+    assert row["status"] == "fail" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas: Idea is missing or empty" in row["detail"], row
+
+
+def test_an_idea_line_belongs_to_its_own_card(proj):
+    """Ledger's idea is not Atlas's: the line is read inside its card only."""
+    board = board_of(proj)
+    cards = CARD.findall(board.read_text(encoding="utf-8"))
+    assert len(cards) == 2
+    board.write_text(board.read_text(encoding="utf-8").replace(cards[1], cards[1].replace('data-field="idea"', 'data-removed="idea"')), encoding="utf-8")
+    r = lint(proj)
+    row = rows(proj)["site:fields"]
+    assert r.returncode == 1 and row["status"] == "fail" and "Atlas: Idea is missing or empty" in row["detail"] and "Ledger" not in row["detail"], row
+
+
+def test_a_failing_field_still_fails_the_row_when_the_idea_line_is_missing_too(proj):
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')
+    mutate(board_of(proj), 'data-field="cost"', 'data-removed="cost"')
+    r = lint(proj)
+    assert r.returncode == 1 and "site:fields" in failed(proj), r.stdout
+    assert "Ledger: Cost is missing or empty" in detail(proj, "site:fields") and "Ledger: Idea is missing or empty" in detail(proj, "site:fields")
+
+
+def test_a_page_card_with_its_idea_line_passes_site_fields(tmp_path):
+    """The pages stage asks for an Idea line on each card (the page's one idea in the brand's world): present, the row passes."""
+    p = pages_project(tmp_path)
+    assert board_of(p, 3).read_text(encoding="utf-8").count(IDEA_LINE) == 2
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:fields"]["status"] == "pass"
+
+
+def test_a_page_card_without_an_idea_line_fails_site_fields(tmp_path):
+    """Missing: site:fields fails and names the page, as for a hero card (in 0.8.0 it only warned)."""
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')   # the first page card only
+    r = lint3(p)
+    row = rows(p)["site:fields"]
+    assert r.returncode == 1, r.stdout
+    assert row["status"] == "fail" and "start: Idea is missing or empty" in row["detail"] and "pricing" not in row["detail"], row
+
+
+def test_a_page_card_with_an_empty_idea_line_fails_site_fields(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), IDEA_LINE, '<dd data-field="idea">  </dd>')   # the first page card only
+    assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail" and "start: Idea is missing or empty" in rows(p)["site:fields"]["detail"]
+
+
+def test_a_failing_field_still_fails_a_page_card_row_whatever_its_idea(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')
+    mutate(board_of(p, 3), 'data-field="cost"', 'data-removed="cost"')
+    assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail"
+
+
+
+def test_a_page_card_without_an_idea_line_only_warns_on_a_board_of_an_earlier_round(tmp_path):
+    """A board in an earlier round is read only (the guard keeps it as the owner approved it), so the Idea line, which some boards
+    predate, cannot be added there: it warns and names the card, and the row does not fail. Every other field still fails."""
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')
+    (p / "rounds" / "r4").mkdir()                                                         # a later round: r3 is read only now
+    r = lint3(p)
+    row = rows(p)["site:fields"]
+    assert r.returncode == 0 and "site:fields" not in failed(p), r.stdout
+    assert row["status"] == "warn" and "start: Idea is missing or empty" in row["detail"] and "read only" in row["detail"], row
+    mutate(board_of(p, 3), 'data-field="cost"', 'data-removed="cost"')
+    assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail" and "start: Cost is missing or empty" in rows(p)["site:fields"]["detail"]
+
+
+def test_a_hero_card_without_an_idea_line_only_warns_on_a_board_of_an_earlier_round(proj):
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')
+    (proj / "rounds" / "r3").mkdir()
+    r = lint(proj)
+    row = rows(proj)["site:fields"]
+    assert r.returncode == 0 and row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"], r.stdout
 
 
 # ---------------------------------------------------------------- page:data-board, page:site-stage
@@ -865,12 +1025,12 @@ def test_a_cold_review_must_start_with_its_verdict(proj):
     review.write_text("", encoding="utf-8")
     r = lint(proj)
     assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
-    assert "Atlas: rounds/r2/Atlas/cold-review.md must start with its verdict, `verdict: ship` or `verdict: fix` (the file is empty)" in detail(proj, "site:cold")
+    assert "Atlas: rounds/r2/Atlas/cold-review.md must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner` (the file is empty)" in detail(proj, "site:cold")
     cold_review_record(proj, page_of("Atlas"))
     mutate(review, "verdict: ship", "Verdict was ship")
     r = lint(proj)
     assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
-    assert "must start with its verdict, `verdict: ship` or `verdict: fix` (its first line is 'Verdict was ship')" in detail(proj, "site:cold")
+    assert "must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner` (its first line is 'Verdict was ship')" in detail(proj, "site:cold")
     mutate(review, "Verdict was ship", "verdict: maybe")
     assert lint(proj).returncode == 1 and "(its first line is 'verdict: maybe')" in detail(proj, "site:cold")
     mutate(review, "verdict: maybe", "# Cold review\n\nverdict: ship")                         # a heading above the verdict: the verdict is not first
@@ -942,6 +1102,209 @@ def test_a_cold_review_with_another_input_fails(proj):
     assert r.returncode == 1 and "has no `inputs:` list: the four stills, brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>`" in detail(proj, "site:cold"), r.stdout
 
 
+def held_rules(p: Path) -> list[dict]:
+    """The inputs of the board-lint report that stand for the G4 rules of BRAND-STATE.md (an input with part g4-rules)."""
+    return [i for i in report(p, "board-lint")["inputs"] if i["path"] == "BRAND-STATE.md" and i.get("part") == "g4-rules"]
+
+
+def test_a_cold_review_may_list_the_g4_rules_as_a_seventh_input(proj):
+    """G4-03: the six inputs alone (a review made before this release) or the six plus `- BRAND-STATE.md#g4-rules sha256:<hex>` pass; the lint report then holds the rules, and only then."""
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+    assert held_rules(proj) == [], "no review lists the rules: the lint report does not stand on them"
+    cold_review_record(proj, page_of("Atlas"), rules=True)                                     # one review with the seventh input, one without
+    assert "- BRAND-STATE.md#g4-rules sha256:" in cold_of(proj, "Atlas").read_text(encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+    assert len(held_rules(proj)) == 1
+    cold_review_record(proj, page_of("Ledger"), rules=True)                                    # all of them
+    assert lint(proj).returncode == 0 and len(held_rules(proj)) == 1, "one input for the whole board, however many reviews list it"
+    cold_review_record(proj, page_of("Ledger"), rules=True, leave_out=("FACTS.md",))           # the seventh input does not stand in for one of the six
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"] and "Ledger: the inputs of rounds/r2/Ledger/cold-review.md" in detail(proj, "site:cold") and "(it does not list FACTS.md)" in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_cold_review_never_lists_the_whole_brand_state_and_knows_no_other_part(proj):
+    cold_review_record(proj, page_of("Atlas"), rules=True, add=("BRAND-STATE.md",))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert ("Atlas: the inputs of rounds/r2/Atlas/cold-review.md must be exactly the four stills of the variant, brief/BRIEF.md and FACTS.md "
+            "(it lists BRAND-STATE.md, which a cold review does not read (of BRAND-STATE.md it takes the G4 rules alone: list BRAND-STATE.md#g4-rules))") in why and "Ledger" not in why, why
+    assert "a seventh input may be the G4 rules, `- BRAND-STATE.md#g4-rules sha256:<hex>`" in why, why
+    cold_review_record(proj, page_of("Atlas"), add=("BRAND-STATE.md",))                       # the whole file alone, with no part, fails too
+    r = lint(proj)
+    assert r.returncode == 1 and "it lists BRAND-STATE.md, which a cold review does not read" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), rules=True)
+    review = cold_of(proj, "Atlas")
+    mutate(review, "BRAND-STATE.md#g4-rules", "BRAND-STATE.md#phase")                          # a part nothing can read
+    r = lint(proj)
+    assert r.returncode == 1 and "(it lists BRAND-STATE.md#phase, which a cold review does not read)" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), rules=True)
+    line = next(ln for ln in review.read_text(encoding="utf-8").splitlines() if "#g4-rules" in ln)
+    mutate(review, line, f"{line}\n{line}")
+    r = lint(proj)
+    assert r.returncode == 1 and "(a file is listed twice)" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), rules=True)
+    mutate(review, "- BRAND-STATE.md#g4-rules sha256:", "- BRAND-STATE.md#g4-rules sha:")    # a list line that is not "- <path> sha256:<hex>"
+    r = lint(proj)
+    assert r.returncode == 1 and "1 line(s) are not `- <path> sha256:<hex>` (- BRAND-STATE.md#g4-rules sha:" in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_cold_review_goes_stale_when_the_g4_rules_change_but_not_when_another_part_of_brand_state_does(proj):
+    from _common import stale_inputs
+    for name in NAMES:
+        cold_review_record(proj, page_of(name), rules=True)
+    assert lint(proj).returncode == 0
+    assert bc("state", "--bump", "fixes_per_area.logo", project=proj).returncode == 0         # a line of BRAND-STATE.md the rules do not hold
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert stale_inputs(proj, report(proj, "board-lint")) == [], "the report of that lint stands on the rules, and they have not changed"
+    mutate(proj / "BRAND-STATE.md", "- (rule) (...)", "- (rule) one mark per screen")          # a new rule, once G4 is recorded, is a change of the part
+    assert stale_inputs(proj, report(proj, "board-lint")) == ["BRAND-STATE.md (the G4 rules) changed"], "the lint report goes stale with the rules, before any new lint"
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    for name in NAMES:
+        assert (f"{name}: the G4 rules of BRAND-STATE.md changed after the cold review: review again "
+                f"(rounds/r2/{name}/cold-review.md lists another sha256 for BRAND-STATE.md#g4-rules)") in why, why
+    cold_review_record(proj, page_of("Atlas"), rules=True)                                     # a new review of the new rules, for one of the two
+    r = lint(proj)
+    assert r.returncode == 1 and "Atlas" not in detail(proj, "site:cold") and "Ledger: the G4 rules of BRAND-STATE.md changed" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Ledger"), rules=True)
+    assert lint(proj).returncode == 0
+    assert bc("state", "--record", "G4", "approved system rules (reworded)", project=proj).returncode == 0   # the G4 record is the other half of the part
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"] and "the G4 rules of BRAND-STATE.md changed after the cold review" in detail(proj, "site:cold"), r.stdout
+    for name in NAMES:                                                                         # a review without the rules does not care what the rules say
+        cold_review_record(proj, page_of(name))
+    assert lint(proj).returncode == 0 and held_rules(proj) == []
+
+
+def test_a_review_that_lists_rules_nobody_can_read_fails_and_says_why(proj):
+    cold_review_record(proj, page_of("Ledger"), rules=True)
+    card = siteboard.cards(parse_dom(board_of(proj).read_text(encoding="utf-8")))[0]
+    v = siteboard.SiteVariant(proj, 2, "Ledger", card)
+    assert siteboard.cold_problems(proj, v) == ([], "ship")
+    (proj / "BRAND-STATE.md").write_text("no frontmatter here\n", encoding="utf-8")
+    problems, verdict = siteboard.cold_problems(proj, v)
+    assert verdict == "ship" and len(problems) == 1, problems
+    assert "Ledger: rounds/r2/Ledger/cold-review.md lists BRAND-STATE.md#g4-rules, which cannot be checked: BRAND-STATE.md (the G4 rules) cannot be read: " in problems[0], problems
+    (proj / "BRAND-STATE.md").unlink()
+    problems, _ = siteboard.cold_problems(proj, v)
+    assert problems == ["Ledger: rounds/r2/Ledger/cold-review.md lists BRAND-STATE.md#g4-rules, which cannot be checked: BRAND-STATE.md is gone"], problems
+
+
+FRAMES = [f"frame-1440-{n}.png" for n in (0, 50, 100)]
+
+
+def frames_of(name: str) -> list[str]:
+    return [f"rounds/r2/{name}/shots/{f}" for f in FRAMES]
+
+
+def test_a_cold_review_may_list_the_three_key_frames_of_the_first_screen(proj):
+    """G4-04: six inputs, six plus the rules, six plus the three frames `capture --frames` took, or all of them pass; the lint report stands on the frames a review lists, and only on those."""
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+    held = lambda: [i["path"] for i in report(proj, "board-lint")["inputs"] if "/frame-1440-" in i["path"]]
+    assert held() == [], "no review lists a frame: the lint report stands on none"
+    capture_record(proj, page_of("Atlas"), frames=True)                                        # the page was captured with --frames: three frames and a `frames` list
+    cold_review_record(proj, page_of("Atlas"), frames=True)
+    listed = cold_of(proj, "Atlas").read_text(encoding="utf-8")
+    assert all(f"- {path} sha256:" in listed for path in frames_of("Atlas")), listed
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"                            # one review with the frames, one without
+    assert sorted(held()) == sorted(frames_of("Atlas")), held()
+    cold_review_record(proj, page_of("Atlas"), frames=True, rules=True)                        # all of them
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert len(held_rules(proj)) == 1 and sorted(held()) == sorted(frames_of("Atlas"))
+    cold_review_record(proj, page_of("Atlas"), frames=True, leave_out=("FACTS.md",))           # the frames do not stand in for one of the six
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"] and "(it does not list FACTS.md)" in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_cold_review_lists_all_three_key_frames_or_none(proj):
+    capture_record(proj, page_of("Atlas"), frames=True)
+    for some in (frames_of("Atlas")[:1], frames_of("Atlas")[1:]):
+        cold_review_record(proj, page_of("Atlas"), add=tuple(some))
+        r = lint(proj)
+        assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+        why = detail(proj, "site:cold")
+        assert f"it lists {len(some)} of the 3 key frames ({', '.join(some)}): list all three, or none" in why and "Ledger" not in why, why
+        assert "the three key frames of `brand-creator capture rounds/r2/Atlas/index.html --frames` may be added" in why, why
+    cold_review_record(proj, page_of("Atlas"), frames=True, add=(frames_of("Atlas")[0],))      # a frame twice
+    r = lint(proj)
+    assert r.returncode == 1 and "(a file is listed twice)" in detail(proj, "site:cold"), r.stdout
+    (proj / "rounds/r2/Atlas/shots/frame-1440-25.png").write_bytes(b"not a frame capture takes")
+    cold_review_record(proj, page_of("Atlas"), add=("rounds/r2/Atlas/shots/frame-1440-25.png",))   # a frame the command does not take is no input
+    r = lint(proj)
+    assert r.returncode == 1 and "it lists rounds/r2/Atlas/shots/frame-1440-25.png, which a cold review does not read" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), frames=True)
+    assert lint(proj).returncode == 0
+
+
+def test_a_cold_review_with_key_frames_goes_stale_when_a_frame_changes_or_the_page_is_captured_again_without_them(proj):
+    from _common import stale_inputs
+    capture_record(proj, page_of("Atlas"), frames=True)
+    cold_review_record(proj, page_of("Atlas"), frames=True)
+    assert lint(proj).returncode == 0
+    frame = proj / frames_of("Atlas")[1]
+    frame.write_bytes(frame.read_bytes() + b"\0")                                              # a frame taken again, with other bytes
+    assert stale_inputs(proj, report(proj, "board-lint")) == [f"{frames_of('Atlas')[1]} changed"], "the lint report stands on the frames the review lists"
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert (f"Atlas: the page or its stills changed after the cold review: review again (rounds/r2/Atlas/cold-review.md lists another sha256 for {frames_of('Atlas')[1]})") in why, why
+    assert "key frames" not in why, "a frame that changed is said once"
+    capture_record(proj, page_of("Atlas"), frames=True)                                        # the frames as they were
+    assert lint(proj).returncode == 0
+    capture_record(proj, page_of("Atlas"))                                                     # the page captured again without --frames: capture.json lists none, the files stay
+    assert all((proj / path).is_file() for path in frames_of("Atlas"))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert (f"Atlas: the key frames rounds/r2/Atlas/cold-review.md lists are not the ones rounds/r2/Atlas/shots/capture.json lists now ({', '.join(frames_of('Atlas'))}): "
+            "run `brand-creator capture rounds/r2/Atlas/index.html --frames`, then review again") in why and "Ledger" not in why, why
+    cold_review_record(proj, page_of("Atlas"))                                                 # a review without the frames does not care
+    assert lint(proj).returncode == 0
+    capture_record(proj, page_of("Atlas"), frames=True)                                        # frames listed by capture.json but not by the review: nothing to say
+    assert lint(proj).returncode == 0
+
+
+def test_a_page_without_key_frames_keeps_the_six_inputs(proj):
+    """Review focus 3: a page with no animation on load writes no frame (capture says so); its review lists the six inputs and passes, and no frame is asked for."""
+    import json
+    for name in NAMES:
+        assert not any((proj / path).exists() for path in frames_of(name))
+        assert "frames" not in json.loads((proj / f"rounds/r2/{name}/shots/capture.json").read_text(encoding="utf-8"))
+        assert "frame-1440" not in cold_of(proj, name).read_text(encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+
+
+def test_state_prints_the_g4_rules_part_as_the_line_a_cold_review_lists_and_the_text_a_reviewer_is_given(proj):
+    """`brand-creator state --part g4-rules`: the first line is the cold review's input line (without its dash), the second the part's text, the very text the sha256 is of."""
+    import hashlib
+    import json
+    mutate(proj / "BRAND-STATE.md", "- (rule) (...)", "- (rule) one mark per screen")
+    r = bc("state", "--part", "g4-rules", project=proj)
+    assert r.returncode == 0, r.stderr
+    first, text = r.stdout.splitlines()
+    assert first == f"BRAND-STATE.md#g4-rules sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}", r.stdout
+    part = json.loads(text)
+    assert part["g4"].endswith("approved system rules (test)") and part["rules"] == ["(rule) one mark per screen"], part
+    cold_review_record(proj, page_of("Atlas"), rules=True)                                     # the line the helper writes is the line the command prints
+    assert f"- {first}" in cold_of(proj, "Atlas").read_text(encoding="utf-8").splitlines()
+    for bad, word in (("rules", "not a part"), ("phase", "not a part")):
+        r = bc("state", "--part", bad, project=proj)
+        assert r.returncode == 2 and word in r.stderr and "g4-rules" in r.stderr, (bad, r.stdout, r.stderr)
+    (proj / "BRAND-STATE.md").write_text("no frontmatter here\n", encoding="utf-8")
+    r = bc("state", "--part", "g4-rules", project=proj)
+    assert r.returncode == 1 and r.stdout == "" and "BRAND-STATE.md (the G4 rules) cannot be read: " in r.stderr, (r.stdout, r.stderr)
+
+
 def test_the_card_shows_the_cold_verdict(proj):
     cold_review_record(proj, page_of("Atlas"), "fix", findings=("The headline says nothing that only this brand could say.",))
     r = lint(proj)
@@ -956,10 +1319,71 @@ def test_the_card_shows_the_cold_verdict(proj):
     assert r.returncode == 1 and 'Atlas: the card says data-cold="ship"' in detail(proj, "site:cold"), r.stdout
     mutate(board_of(proj), '<p class="cold" data-cold="ship">', '<p class="cold" data-cold="maybe">')       # the first card, Ledger
     r = lint(proj)
-    assert r.returncode == 1 and 'Ledger: data-cold must be "ship" or "fix", got \'maybe\'' in detail(proj, "site:cold"), r.stdout
+    assert r.returncode == 1 and 'Ledger: data-cold must be "ship", "fix" or "owner", got \'maybe\'' in detail(proj, "site:cold"), r.stdout
     mutate(board_of(proj), '<p class="cold" data-cold="maybe">', '<p class="cold" data-removed="maybe">')
     r = lint(proj)
-    assert r.returncode == 1 and 'Ledger: the card needs one cold line (data-cold="ship" or "fix"), it has 0' in detail(proj, "site:cold"), r.stdout
+    assert r.returncode == 1 and 'Ledger: the card needs one cold line (data-cold="ship", "fix" or "owner"), it has 0' in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_second_cold_review_may_say_owner_and_the_board_lints_clean(proj):
+    """G4-05: `verdict: owner` is a third verdict (what is left is a choice only the owner can make; its findings are questions to them). `site:cold` passes it like `ship`, the card shows it, an unknown verdict
+    still fails, and a board whose second review says `owner` lints clean."""
+    ask = ("Do you want the tear-off to stay on the first screen, or the plain headline the brief asks for?",)
+    cold_review_record(proj, page_of("Atlas"), "fix", findings=("The second action reads as a stock label.",))             # the first review: fix
+    board_of(proj).write_text(board_text(colds={"Atlas": "fix"}), encoding="utf-8")
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: fix"
+    (proj / "rounds" / "r2" / "Atlas" / "index.html").write_text(page_text("Atlas") + "<!-- the second action reworded -->\n", encoding="utf-8")   # what was found is fixed in the page
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:check", "site:stills"], "the changed page makes its page check and stills stale until they are taken again"
+    settle(proj, 2, "Atlas")                                                                    # and the stills are taken again
+    cold_review_record(proj, page_of("Atlas"), "owner", findings=ask)                          # the second review: only the owner can decide what is left
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert 'Atlas: the card says data-cold="fix" and rounds/r2/Atlas/cold-review.md says verdict: owner' in detail(proj, "site:cold")
+    board_of(proj).write_text(board_text(colds={"Atlas": "owner"}), encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:cold"]["status"] == "pass" and detail(proj, "site:cold") == "Ledger: ship; Atlas: owner"
+    card = board_of(proj).read_text(encoding="utf-8")
+    assert '<p class="cold" data-cold="owner">Cold review: <b>owner</b>' in card, "the card shows the last verdict"
+    mutate(cold_of(proj, "Atlas"), "verdict: owner", "Verdict: OWNER  ")                      # letter case and a trailing space do not matter, as for the other two
+    assert lint(proj).returncode == 0
+    mutate(cold_of(proj, "Atlas"), "Verdict: OWNER  ", "verdict: maybe")                       # an unknown verdict still fails, and the message names the three
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert "must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner` (its first line is 'verdict: maybe')" in detail(proj, "site:cold")
+    mutate(cold_of(proj, "Atlas"), "verdict: maybe", "verdict: owners")                        # a longer word is no verdict either
+    assert lint(proj).returncode == 1 and "(its first line is 'verdict: owners')" in detail(proj, "site:cold")
+
+
+def test_the_card_may_claim_owner_and_nothing_else_beyond_the_three_verdicts(proj):
+    cold_review_record(proj, page_of("Atlas"), "owner", findings=("Which of the two headlines is the brand's voice?",))
+    board_of(proj).write_text(board_text(colds={"Atlas": "owner"}), encoding="utf-8")
+    assert lint(proj).returncode == 0
+    mutate(board_of(proj), '<p class="cold" data-cold="owner">', '<p class="cold" data-cold="ship">')
+    r = lint(proj)
+    assert r.returncode == 1 and 'Atlas: the card says data-cold="ship" and rounds/r2/Atlas/cold-review.md says verdict: owner' in detail(proj, "site:cold"), r.stdout
+    mutate(board_of(proj), '<p class="cold" data-cold="ship">', '<p class="cold" data-cold="decide">')       # the first card, Ledger
+    r = lint(proj)
+    assert r.returncode == 1 and 'Ledger: data-cold must be "ship", "fix" or "owner", got \'decide\'' in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_board_made_before_the_owner_verdict_lints_as_it_did(proj):
+    """Review focus 2: two `fix` reviews on a board made in an earlier release, six inputs each, still lint clean: the new verdict adds no failure and no warning."""
+    for name in NAMES:
+        cold_review_record(proj, page_of(name), "fix", findings=("The headline says nothing that only this brand could say.",))
+    board_of(proj).write_text(board_text(colds={"Ledger": "fix", "Atlas": "fix"}), encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:cold"]["status"] == "pass" and detail(proj, "site:cold") == "Ledger: fix; Atlas: fix"
+    assert not [x for x, row in rows(proj).items() if row["status"] == "warn" and x.startswith("site:cold")], "no warning is added by the stop rule"
+
+
+def test_the_template_cold_line_names_the_three_verdicts():
+    """G4-05: the cold line of the hero card and of the page card says ship, fix or owner, and the owner verdict has its own mark on the card."""
+    template = " ".join(TEMPLATE.read_text(encoding="utf-8").split())
+    assert template.count('data-cold="[[fill: ship, fix or owner]]">Cold review: <b>[[fill: ship, fix or owner]]</b>') == 2, "the hero card and the page card say the three verdicts"
+    assert '.cold[data-cold="owner"]' in template, "the owner verdict has its own mark on the card"
 
 
 def test_the_cold_review_of_a_page_card_may_be_left_out_but_a_card_may_not_claim_one(proj):
@@ -1321,12 +1745,41 @@ def test_the_contract_and_the_qa_phase_name_every_row_the_site_board_writes():
 def test_the_prompt_fragment_describes_the_cold_review_of_a_site_hero():
     text = " ".join((ROOT / "skills" / "brand-creator" / "references" / "prompt-fragments.md").read_text(encoding="utf-8").split())
     for needle in ("A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the board, the references or the reasons",
-                   "`rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix` first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), "
+                   "`rounds/r<N>/<name>/cold-review.md`: `verdict: ship`, `verdict: fix` or `verdict: owner` first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), "
                    "an `inputs:` list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the visitor most first, each short enough to sit on a single line",
-                   "does the first screen say what only this brand could say", "does any part read as a tell from `page-tells.json`",
+                   "does the first screen say what only this brand could say",
                    "A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the finding notes that the owner would have to supply it, "
                    "and does not fault the page for leaving it out."):
         assert needle in text, needle
+
+
+def test_the_prompt_fragment_names_the_tells_and_the_rules_the_cold_reviewer_is_given():
+    """G4-03: the reviewer is given no page-tells.json, so the fragment names the tells itself (each name of the file, in step with it), and says what the G4 rules part is for."""
+    import json
+    raw = (ROOT / "skills" / "brand-creator" / "references" / "prompt-fragments.md").read_text(encoding="utf-8")
+    text = " ".join(raw.split())
+    bullet = text[text.index("- A cold review of a site hero"):]
+    bullet = bullet[:bullet.index(" **Implementation and safety**")]
+    assert "page-tells.json" not in bullet, "the reviewer cannot read a file the prompt does not give it"
+    for tell in json.loads((ROOT / "skills" / "brand-creator" / "references" / "page-tells.json").read_text(encoding="utf-8"))["tells"]:
+        name = tell["name"][0].lower() + tell["name"][1:]
+        assert name in bullet, f"the cold-review bullet does not name the tell {tell['id']!r} ({name!r})"
+    for needle in ("It may also be given the approved G4 rules as text in the prompt (the output of `brand-creator state --part g4-rules`: the G4 record and the recorded rule lines, never the rest of `BRAND-STATE.md`)",
+                   "its `inputs:` list then ends with `- BRAND-STATE.md#g4-rules sha256:<hex>`, the first line of that output",
+                   "With the G4 rules in the prompt it also asks whether anything on the page breaks one, and a page that does what a rule says (a dark still that equals the light one, when a rule says so) is right, not a finding"):
+        assert needle in bullet, needle
+    agent = " ".join((ROOT / "agents" / "brand-reviewer.md").read_text(encoding="utf-8").split())
+    for needle in ("the prompt gives six files and no list, the variant's four stills, `brief/BRIEF.md` and `FACTS.md`. It may add the approved G4 rules as text in the prompt",
+                   "a page that does what a rule says (a dark still that equals the light one, when a rule says so) is right and is not a finding",
+                   "a page that breaks a rule is a finding, with the rule's own words. Without them, judge what the page shows"):
+        assert needle in agent, needle
+    phase = " ".join((ROOT / "skills" / "brand-creator" / "references" / "phases" / "07p-site-round.md").read_text(encoding="utf-8").split())
+    for needle in ("Run `brand-creator state --part g4-rules`. Its first line, `BRAND-STATE.md#g4-rules sha256:<hex>`, goes into `inputs:` with a dash in front, as the seventh input",
+                   "its second line (the G4 record and the recorded rule lines) you paste into the reviewer's prompt as text",
+                   "a dark still that equals the light one is right when a rule says so, and a page that breaks a rule is a finding",
+                   "Lint accepts the six inputs alone (a review made before this release) or the six plus that line",
+                   "A rule or the G4 record that changes after the review makes it stale (review again); another line of `BRAND-STATE.md` changing does not"):
+        assert needle in phase, needle
 
 
 # ---------------------------------------------------------------- the pages stage: the other pages, built from the hero the owner picked, and the choices they make
@@ -1538,7 +1991,7 @@ def test_takes_from_and_the_cold_review_are_optional_on_a_page(tmp_path):
     assert page.count('data-field="from-refs"') == 1 and '<p class="cold"' not in page
     r = lint3(p)
     assert r.returncode == 0, r.stdout
-    assert rows(p)["site:fields"]["status"] == "pass" and detail(p, "site:fields") == "What it is and Cost are filled in on every card (and Takes from where a card has the line)"
+    assert rows(p)["site:fields"]["status"] == "pass" and detail(p, "site:fields") == "What it is and Cost are filled in on every card (and Takes from where a card has the line), and every card has its Idea line"
 
 
 def test_a_takes_from_line_that_is_there_is_filled_in_and_what_it_is_and_cost_are_not_optional(tmp_path):
@@ -1596,6 +2049,14 @@ def test_a_page_with_a_cold_review_is_held_to_it(tmp_path):
     mutate(p / "rounds" / "r3" / "start" / "cold-review.md", "verdict: fix", "it is fine")
     r = lint3(p)
     assert r.returncode == 1 and "start: rounds/r3/start/cold-review.md must start with its verdict" in detail(p, "site:cold"), r.stdout
+
+
+def test_a_page_review_may_say_owner_too(tmp_path):
+    """G4-05: the pages stage reads a page's cold review by the same rules: an `owner` shown as `owner` passes."""
+    p = pages_project(tmp_path, colds={"start": "owner"})
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:cold"]["status"] == "pass" and detail(p, "site:cold") == "start: owner"
 
 
 def test_a_page_card_may_not_claim_a_cold_review_it_has_not_got(tmp_path):

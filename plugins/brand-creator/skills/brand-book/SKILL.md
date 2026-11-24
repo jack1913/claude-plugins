@@ -4,6 +4,7 @@ description: Builds, updates, reviews and exports the brand book of a brand with
 when_to_use: Use whenever someone wants brand guidelines, a brand book or a brand rules page written, changed, reviewed, approved or exported, or one chapter of it ("generate the brand book", "export the brand book as a PDF"), or when a brand-creator project reaches the brand book step. A brand that does not exist yet starts with brand-creator, even when the ask is a brand book or księga znaku for it. Polish triggers include "księga znaku", "zaktualizuj księgę znaku", "zasady marki", "wytyczne marki", "brandbook".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). Needs the Chromium installed by /brand-creator:setup for shots and book-pdf, and poppler (pdfinfo, pdftotext) for the PDF checks.
 allowed-tools: Bash(brand-creator *)
+user-invocable: false
 ---
 
 # Brand book
@@ -88,6 +89,11 @@ never passed.
 2. `patch book.html --old "<exact text>" --new "<new text>" --count <N> --note "<why, one line>"`. It refuses unless the
    text occurs exactly N times, and writes one line to the Edition log in BRAND-STATE.md. Never Edit or Write
    `book.html` directly, and never use a shell substitution on it.
+   `--loose-space` makes `--old` match a no-break space (U+00A0, U+202F) or a longer run of white space where it has a
+   space; the count must still be exact. A whole chapter: `book chapter --replace|--add ID --from <file>` (the file's
+   root is `<section data-chapter="ID">`) or `--remove ID`; it recomputes the contents' `data-count="chapters"`. Missing
+   no-break spaces (the book-lint warning): `book nbsp --fix` lists them, `--yes` writes them. Same edition path, same
+   `--new-edition` rule.
 3. An approved edition is not edited in place: add `--new-edition`, which opens the next edition (it needs its own G5).
 4. Keep the markup contract: `data-mark` on every embedded mark, no live text inside a mark (outline it with
    `outline-glyphs`), labelled diagrams in `<svg data-diagram>`, `data-path` and `data-sha` on file rows, one
@@ -97,14 +103,14 @@ never passed.
 ## Self-review
 
 Run it before showing the owner an edition, and present the result as one list: fixes that need no decision (made, then
-re-checked), then numbered "Decisions for you", each with a recommendation. `/brand-creator:review` runs the same list.
+re-checked), then numbered "Decisions for you", each with a recommendation. `/brand-creator:check --review` runs the same list.
 
 | # | Item | How it is checked |
 |---|---|---|
 | 1 | No mark depends on an installed font | `book-lint` (`marks:lint`); outline text with `outline-glyphs` |
 | 2 | Formal and short names are used consistently, and as the regulator requires where one applies | read every chapter and the cover; [regulated-industries](../brand-creator/references/regulated-industries.md) |
 | 3 | The book obeys its own rules: motion durations, reduced motion, the smallest label, the palette | `book-lint --self-consistency` (`motion:reduced`, `motion:replay`, `motion:stills`) |
-| 4 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows, verbatim, and the owner's source; UNVERIFIED when none was read |
+| 4 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows, verbatim, and the owner's source; UNVERIFIED when none was read. A statutory deadline, obligation or rate is in the book only when its row names the statute's consolidated text or the authority's own page and the date checked; otherwise it is left out and listed for the owner, never shown as UNVERIFIED |
 | 5 | The system has not drifted back into a rejected direction | the history chapter against the Directions table; judgement, said as such |
 | 6 | Every chapter the tier needs is there | `book-lint` (`chapters:required`) |
 | 7 | Components show their focus state | the components chapter, read in the shots |
@@ -143,7 +149,8 @@ fences. Once the owner decides:
    Yes to the kit → `kit build` (it prints the plan and writes nothing), show the owner the plan, then `kit build --yes`. The kit
    includes the per-brand skill as its `SKILL.md`, so a yes to the kit needs no separate `applied-skill`. Then fill the owner
    files with the owner: `voice.md` from the tone chapter and the FACTS voice rows, `visual.md` from the book, `golden-rules.md`
-   citing rule ids from `rules.json`. Then `kit build --yes` again (it records the owner's text and moves the version on) and
+   citing rule ids from `rules.json`, sorted under `## Fixed`, `## Defaults` and `## Examples` (propose the sort; the owner
+   decides it line by line; a rule left unsorted reads as fixed). Then `kit build --yes` again (it records the owner's text and moves the version on) and
    `kit check` until it passes. A later brand change means `kit build --yes` again, then `kit check`.
 5. These files are generated: a later change goes into the sources, then the command again. `check` fails a hand edit.
 

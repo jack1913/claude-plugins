@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "note": "Measured token costs of agent runs, in thousands of tokens (tokens_k = [low, high]; one figure with no spread has low equal to high). Each row is one measured use of one agent type, dated, with the run it came from. fleet-plan prints a row for the calls of its agent in its workflow and says 'not measured' for every other call: a figure from one use is not a measurement of another. A row with workflow null is a main-thread fleet that has no workflow to plan; the fleet gate states its figure from here. Add a row only from a measured run, never from an estimate.",
+  "rows": [
+    {
+      "id": "cold-review",
+      "agent": "brand-reviewer",
+      "workflow": null,
+      "what": "one cold review of one site hero variant: its four stills, the brief and the facts, nothing else",
+      "per": "call",
+      "tokens_k": [29, 29],
+      "calls": 21,
+      "measured": "2026-11-03",
+      "source": "21 cold reviews of one site round of the pilot brand (rounds 24 to 28), counted in the site-round retrospective of 2026-11-03: about 29k tokens per review"
+    },
+    {
+      "id": "research-fleet",
+      "agent": "brand-researcher",
+      "workflow": null,
+      "what": "the research fleet of one round: the researchers and their refuting verifier together",
+      "per": "round",
+      "tokens_k": [400, 400],
+      "measured": "2026-11-03",
+      "source": "the research fleet of the site rounds of the pilot brand (rounds 24 to 28), counted in the site-round retrospective of 2026-11-03: about 400k tokens per round, for the whole fleet, not per call"
+    }
+  ]
+}

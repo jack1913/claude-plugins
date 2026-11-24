@@ -26,14 +26,20 @@ named after your brand: `.claude/skills/acme-brand/` for Acme. Finder hides fold
 Command-Shift-period to see them. The hidden `.DS_Store` file Finder may leave there is ignored.
 
 The kit is also your brand's skill: the instructions Claude reads when it works for your brand. So you don't need the
-brand skill on its own.
+brand skill on its own. Its first page is short on purpose: how to work, your rules, what never to do, and a map of
+where everything else is.
 
 **Made for you.** Claude builds these from your brand project. Never edit them: change your project, then build again.
 
 - exact copies of your tokens, logo files, OFL fonts with their licence texts, and your motion files if you have any;
 - exact copies of the masters you approved, such as an ad or a deck template with its pictures, PDFs and fonts, from the
   `assets/masters/` folder of your brand project (more on that below);
+- exact copies of the web icons, social images and profile pictures Claude made for your brand, such as the favicon,
+  the Open Graph card and the avatar;
 - your brand rules, each with a short name, and the facts you confirmed, never contact details;
+- `brand.md`: your colours and their contrast, type, logo sizes, motion and what may be claimed, on one page;
+- `checklist.md`: a checklist to go through before anything is handed over, made from your rules;
+- `install.py`: a small installer, so anyone with a copy of your brand project can put the kit into a product;
 - ready-made code for your fonts, your logo in light and dark, and text on each background colour you named;
 - your approved site pages, with their screenshots and a note on each page's choices;
 - `kit.json`: the version, and a fingerprint of every file so a changed one gets caught.
@@ -46,16 +52,23 @@ the kit check warns that whoever builds your product must get it under its own l
 **Yours.** Claude writes each once, as a starter file, and never overwrites it. Delete one, and the next build writes
 the starter again.
 
-- `voice.md`, `visual.md` and `golden-rules.md`: how your brand sounds, how it looks beyond colours and fonts, and the
-  few rules every piece keeps.
-- `recipes/web-page.md`: the steps for building a web page in your brand. Change it to fit how you work.
+- `voice.md`, `visual.md` and `golden-rules.md`: how your brand sounds, how it looks beyond colours and fonts, and what
+  every piece keeps and what it may change.
+- `recipes/web-page.md`: what a page keeps, and the steps you usually build one by. Change it to fit how you work.
+  Whoever builds a page follows the steps or uses a better way of their own.
 - `EXTENDING.md`: how to add to the kit.
+- `recipes/ad.md` and `recipes/presentation.md`, once you approved ads or a deck in a masters round: the steps for a new
+  ad or presentation from your masters. Each has one note for you to fill: which direction to use when.
 
 A recipe or folder you add yourself, such as `recipes/email.md` or a `notes/` folder, is yours too, and it travels with
 the kit. At the next build it counts as a change, so the version goes up by one. It is copied into your product like the
 files above, but only where your product doesn't have it yet. A note of yours written in Markdown is checked like your
 recipes. A file of another kind, such as a PDF, is copied and its words are never checked. If it is a web page or a
 stylesheet, its links still have to lead to a file inside the kit.
+
+A build never overwrites a file of yours. When your tokens, `FACTS.md` or `BRAND-STATE.md` change after a build, the kit
+check warns and names each of your files you have not touched since that build, so you can read them against the brand.
+Claude never edits them. Building again records them as they are and clears the warning, so read them first.
 
 ## Put your masters in the kit
 
@@ -88,7 +101,7 @@ shapes first. Change a master later, and the kit check says "not verified" until
    made-for-you file and "scaffold" a starter file of yours:
 
    ```text
-   would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)
+   would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)
    …
    scaffold voice.md (…, written once, never overwritten)
    …
@@ -104,7 +117,7 @@ you from your brand book, and you correct them:
 
 1. `voice.md`: three sentences on how your brand sounds, with one right and one wrong example.
 2. `visual.md`: your layout habits, your image style and what to keep out of a picture.
-3. `golden-rules.md`: up to ten rules every piece keeps.
+3. `golden-rules.md`: your rules sorted under three headings, Fixed, Defaults and Examples, with up to ten under Fixed.
 
 In `visual.md` and `golden-rules.md`, each list line carries a tag that tells whoever builds a page what to keep:
 `[rule: <name>]` for one of your brand rules, by the short name the kit gives it, or `[example]` for one way of doing
@@ -114,6 +127,16 @@ it, free to change:
 - Photos use daylight, never flash. [rule: photos-use-daylight-never-flash]
 - A loaf on a wooden table, seen from above. [example]
 ```
+
+The heading a line stands under says how much it binds whoever builds for your brand:
+
+- **Fixed:** what every piece keeps.
+- **Defaults:** your usual pattern and your way of working. They use it or do better, and need no permission to leave
+  it, only a reason they can state.
+- **Examples:** one good application, such as a reference page. They take what helps.
+
+A rule you don't sort counts as fixed. The kit's `SKILL.md` explains the three to whoever uses the kit. Three things stay
+with you whatever they do: a new brand colour, a claim your facts don't hold, and a redrawn logo.
 
 A line with a size, a colour or a ratio, such as `48px`, also says where it comes from: a token, a rule, or `[example]`.
 Claude writes the tags as it drafts; you check them. In a recipe, or in any other note of yours written in Markdown, tag the bullet points too; numbered steps need none.
@@ -162,14 +185,43 @@ For the kit:
    It joins the list of changes as one line: the whole kit folder.
 
 2. Ask Claude to apply the changes on a branch: a side copy of your code where they wait until you accept them. Claude
-   suggests a name; say yes or give your own. It copies the kit's files one at a time into the same folder inside your
-   code. It never overwrites your own files there from an earlier copy, and never puts the kit in Claude's settings
-   folder, which all your projects share.
+   suggests a name; say yes or give your own. It runs the kit's own installer, which copies the kit into the same folder
+   inside your code. A file of yours there is updated only if that code never changed it; one someone changed stays as
+   it is. It never puts the kit in Claude's settings folder, which all your projects share.
 3. Before anything else, a separate review checks that every copied file is identical to your kit.
 
 Claude never saves the changes into your code's history for you. You look at them first, then keep them or throw them
 away. A published site doesn't serve the kit's folder, so whoever builds a page copies the tokens, fonts and logo it
 uses from the kit's `brand/` folder into the site's own files, as the web-page recipe says.
+
+## Install it without Claude
+
+A developer with a copy of your brand project, or of its mirror, can install the kit without brand-creator. They need
+Python 3 and a local copy of the product's code. From the brand project folder:
+
+```bash
+python3 .claude/skills/acme-brand/install.py ~/Dev/shop          # says what it would copy, and copies nothing
+python3 .claude/skills/acme-brand/install.py ~/Dev/shop --yes    # copies it
+```
+
+```text
+kit acme-brand, version 1.1
+shop: not installed
+…
+run again with --yes to copy
+```
+
+With `--yes` it ends like this:
+
+```text
+installed: <the shop's folder>/.claude/skills/acme-brand (version 1.1)
+next: review and commit it in <the shop's folder>
+```
+
+Run the same line again after the brand changes: it updates the copy by the same rules as Claude. A file of yours that
+the product took out stays out. It never deletes, never saves anything into the code's history and never installs into
+Claude's settings folder or your brand project. It warns when Claude's global skills folder also holds a skill for your
+brand, because Claude loads that one in every project.
 
 ## Check a copy is up to date
 
@@ -184,8 +236,13 @@ Under "kit copies", each website or app reads:
 - **not current**: its copy is older, or a file in it differs, is missing or is left over.
 
 For the detail, ask Claude to check the copy in that folder. It only reads, and names the files that differ, are
-missing or are left over, and what to copy. Your own files in a copy, the ones you added too, may differ: they belong to
-that code now, and an update keeps them.
+missing or are left over, and what to copy. A file of yours that the code never changed is updated when you change it in
+your brand project. One someone changed in that code, or added there, belongs to that code now, and an update keeps it.
+A copy updated with brand-creator 0.10 or earlier is the exception: a file of yours that the update left at an older
+version counts as changed there, so updates keep it too. To take your brand's version, copy that file from the kit by hand.
+
+The check also warns when that code holds another skill for your brand, such as an older hand-made kit: Claude may load
+either. Taking the old one out is your call.
 
 A file left over is one your brand dropped, such as a logo you took out. It is never deleted: when Claude applies the
 kit again, it moves the file into a `removed-` folder with the date, inside that code, keeping its path. Then the copy
@@ -228,6 +285,10 @@ shows as "not verified", with what to run again.
 | The build stops and names an approved site page | Its page check or screenshots fail or are out of date, it changed after you approved it, or it uses a file that isn't in your brand project. Do what the message says |
 | Claude says there is no kit when you add it to your code | Build the kit first |
 | Claude refuses a folder when it checks a copy | It refuses your home folder, Claude's settings folder and your brand project. Give it one website's or app's folder |
+| `install.py` says the folder is not inside a git work tree | Give it a folder inside a local copy (a clone) of the product's code |
+| `install.py` stops on a link (a shortcut) | It never writes through one. Look at where it leads, replace it with a real folder, then run it again |
+| `install.py` says the product holds a newer version | Your copy of the brand project is out of date. Update it (`git pull`), then run it again |
+| `install.py` or Claude says your own files changed since the last build | Ask Claude to build the kit again, then run it again |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 

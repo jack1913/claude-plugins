@@ -41,11 +41,27 @@ test("every workflow passes the static checks and every agent file the agent che
   assert.match(r.stdout, /PASS: 7 agents, 4 workflows checked/);
 });
 
+// Claude Code has no documented way to keep a plugin workflow out of the / menu, and typing one shows `meta.description` in a Yes / No prompt:
+// the description is one plain sentence of at most 120 characters, and `whenToUse` names the only entry point (one sentence too).
+const ENTRY = {
+  directions: "Only from the brand-creator skill, ",
+  naming: "Only from the brand-naming skill, ",
+  "review-panel": "Only from /brand-creator:check --review panel, ",
+  adopt: "Only from /brand-creator:brand-adopt, ",
+};
+
 test("meta is a pure literal with name = file name, description and phases; a computed meta is refused", () => {
   for (const n of NAMES) {
     const { meta } = F.loadWorkflow(path.join(WF, `${n}.js`));
     assert.equal(meta.name, n);
-    assert.ok(meta.description.startsWith("brand-creator"), n);
+    const d = meta.description, w = meta.whenToUse;
+    assert.ok(d.startsWith("brand-creator "), n);
+    assert.ok(d.length <= 120 && d.endsWith("it starts this after your yes."), `${n}: the run prompt shows one short sentence`);
+    assert.ok(!d.includes(". ") && d.split(".").length === 2, `${n}: the description is one sentence`);
+    assert.ok(w.startsWith(ENTRY[n]), `${n}: whenToUse names the one entry point`);
+    assert.ok(!w.includes(". ") && (w.endsWith(" said yes.") || w.endsWith(" size and cost.")), `${n}: whenToUse is one sentence that ends on the yes`);
+    assert.ok(w.includes("the owner") && w.includes("agent count, models, size and cost"), `${n}: whenToUse says who must be asked, and about what`);
+    assert.ok(!w.includes("Ends before") && !w.includes("Read only"), `${n}: whenToUse is one sentence`);
     assert.ok(Array.isArray(meta.phases) && meta.phases.length >= 2, n);
   }
   assert.deepEqual(F.literalProblems("{ name: 'x', description: \"y\", phases: [{ title: 'A' }], n: 2, ok: true }"), []);
@@ -54,6 +70,12 @@ test("meta is a pure literal with name = file name, description and phases; a co
   }
   const f = mutated("naming", "name: 'naming',", "name: 'nam' + 'ing',");
   assert.throws(() => F.loadWorkflow(f), /meta must be a pure literal/);
+});
+
+test("review-panel names its one entry point in its error message and nowhere names the removed /brand-creator:review", () => {
+  const src = fs.readFileSync(path.join(WF, "review-panel.js"), "utf8");
+  assert.ok(src.includes("run this from /brand-creator:check --review panel after the fleet gate"));
+  assert.ok(!/brand-creator:review(?![-\w])/.test(src));
 });
 
 test("the default path of every workflow starts fewer than 5 agents, all of known brand-creator types", async () => {
@@ -182,7 +204,7 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
     const implLines = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
     const kitCopy = implLines.filter((l) => l.startsWith("A Brand kit row"));
     assert.deepEqual(kitCopy, [
-      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; files kit status names as left over from an older kit are not on that list: move each to removed-<date>/ in the repository, keeping its path inside that folder (removed-<date>-2/ when a file is already there; never delete one), and list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.`,
+      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the kit's own installer: python3 "/PROJECT/.claude/skills/<slug>-brand/install.py" "${path}" --yes. It copies exactly the files of the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints (an owner file only where the repository has none or never changed it; kit.json last), never into ~/.claude/skills or any global skills folder, and moves files left over from an older kit to removed-<date>/ in the repository, keeping their paths inside that folder (removed-<date>-2/ when a file is already there; it never deletes one): list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.`,
     ], label);
     assert.ok(implLines.indexOf(kitCopy[0]) < implLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
     const revLines = r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
@@ -194,13 +216,14 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
   }
   const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], findings: ["1 header logo still points at the old file"] }] });
   assert.equal(fix.error, null);
-  assert.match(fix.calls.find((c) => c.label === "apply shop").prompt, /kit status --repo "\/REPOS\/shop" --project "\/PROJECT" prints: mkdir -p, then cp one file at a time/);
-  assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints/);
+  assert.match(fix.calls.find((c) => c.label === "apply shop").prompt, /copied by the kit's own installer: python3 "\/PROJECT\/\.claude\/skills\/<slug>-brand\/install\.py" "\/REPOS\/shop" --yes\. It copies exactly the files of the list .*kit status --repo "\/REPOS\/shop" --project "\/PROJECT" prints/);
+  assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the kit's own installer/);
+  assert.match(agents["brand-implementer"].body.replace(/\s+/g, " "), /It copies exactly the files of the list `brand-creator kit status --repo <path>` prints/);
   assert.match(agents["brand-implementer"].body, /nothing goes into\s+`~\/\.claude\/skills` or any global folder/);
   assert.match(agents["brand-reviewer"].body, /`brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0/);
   // a brand change that drops a generated file leaves files behind: every place that tells the copy says how they go (moved, never deleted), then kit status again
   const flatOf = (t) => t.replace(/\s+/g, " ");
-  const leftOver = /names\s+files left over from the older kit; they are not on the copy list: move each to `removed-<date>\/` in (that|the) repository, keeping its path inside that folder \(`removed-<date>-2\/` when a file is already there; never delete one\)/;
+  const leftOver = /it moves files left over from the older kit to `removed-<date>\/` in (that|the) repository, keeping their paths inside that folder \(`removed-<date>-2\/` when a file is already there; it never deletes one\)/;
   assert.match(flatOf(agents["brand-implementer"].body), leftOver);
   assert.match(flatOf(agents["brand-implementer"].body), /Then run `kit status --repo <path>` again; it must say current/);
   assert.match(flatOf(fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8")), leftOver);
@@ -516,4 +539,137 @@ test("fleet-plan prints the count, the models and the guideline; refuses unknown
   assert.match(up.stdout, /ABOVE THE SESSION MODEL/);
   assert.equal(bc(["fleet-plan", "nope", "--args", "{}"]).status, 2);
   assert.equal(bc(["fleet-plan", "naming"]).status, 2);
+});
+
+// ---- G4-06: the cost of a fleet is stated in tokens, from measured runs (skills/brand-creator/references/fleet-costs.json)
+
+const costsRow = (o = {}) => ({ id: "naming-judge", agent: "brand-judge", workflow: "naming", what: "the naming judge, one call", per: "call", tokens_k: [20, 35], measured: "2026-11-03", source: "a table made for this test", ...o });
+function costsFile(table) {
+  const f = path.join(tmpdir("bc-fleet-costs-"), "fleet-costs.json");
+  fs.writeFileSync(f, typeof table === "string" ? table : JSON.stringify(table));
+  return f;
+}
+function planWith(workflow, costs, extra = []) {
+  const a = path.join(tmpdir("bc-fleet-args-"), `${workflow}.json`);
+  fs.writeFileSync(a, JSON.stringify(fixture(workflow)));
+  return bc(["fleet-plan", workflow, "--args", `@${a}`, ...(costs ? ["--costs", costs] : []), ...extra]);
+}
+const agentLines = (out) => out.split("\n").filter((l) => /^\s+\d+\. /.test(l));
+
+test("fleet-plan prints a token range for an agent with a measured row and says not measured for one without", () => {
+  const r = planWith("naming", costsFile({ schema: 1, rows: [costsRow()] }));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const lines = agentLines(r.stdout);
+  assert.equal(lines.length, 4);
+  assert.match(lines.find((l) => l.includes("brand-creator:brand-judge")), /tokens: about 20-35k \(measured 2026-11-03\)/);
+  const hunters = lines.filter((l) => l.includes("brand-creator:brand-namer"));
+  assert.equal(hunters.length, 3);
+  for (const l of hunters) assert.match(l, /tokens: not measured/);
+  assert.match(r.stdout, /rough cost: about 20-35k tokens for the 1 measured agent, 3 not measured; at most \d+ turns in total \(maxTurns\)/);
+  assert.match(r.stdout, /token estimates: naming-judge \(measured 2026-11-03: a table made for this test\)/);
+  assert.doesNotMatch(r.stdout, /pass\(es\)|each about what that step costs/);
+  // the same plan as data: a measured agent carries its row, an unmeasured one null
+  const j = JSON.parse(planWith("naming", costsFile({ schema: 1, rows: [costsRow()] }), ["--json"]).stdout);
+  assert.deepEqual(j.calls[3].tokens, { row: "naming-judge", low_k: 20, high_k: 35, measured: "2026-11-03", source: "a table made for this test" });
+  assert.equal(j.calls[0].tokens, null);
+  assert.deepEqual(j.tokens, { low_k: 20, high_k: 35, measured_agents: 1, not_measured_agents: 3 });
+});
+
+test("fleet-plan adds the ranges of every measured agent, prints one number when low and high are equal, and never uses a row of another workflow or a row that is no per-call figure", () => {
+  const all = costsFile({ schema: 1, rows: [costsRow({ tokens_k: [30, 30] }), costsRow({ id: "naming-namer", agent: "brand-namer", tokens_k: [10, 12] })] });
+  const r = planWith("naming", all);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /brand-judge .*tokens: about 30k \(measured 2026-11-03\)/);
+  assert.match(r.stdout, /brand-namer .*tokens: about 10-12k \(measured 2026-11-03\)/);
+  assert.match(r.stdout, /rough cost: about 60-66k tokens in total \(4 agents\); at most \d+ turns/);
+  const other = costsFile({ schema: 1, rows: [costsRow({ workflow: "adopt" }), costsRow({ id: "judge-round", workflow: null, per: "round", tokens_k: [400, 400] })] });
+  const o = planWith("naming", other);
+  assert.equal(o.status, 0, o.stdout + o.stderr);
+  for (const l of agentLines(o.stdout)) assert.match(l, /tokens: not measured/);
+  assert.match(o.stdout, /rough cost: tokens are not measured for any of the 4 agents \(no row of fleet-costs\.json fits\); at most \d+ turns/);
+});
+
+test("a malformed fleet-costs file exits 2 and names the file and the problem; the plan is not printed", () => {
+  const bad = [
+    ["{not json", /is not JSON/],
+    [{ schema: 2, rows: [] }, /schema must be 1/],
+    [{ schema: 1, rows: {} }, /rows must be a list/],
+    [{ schema: 1, rows: [], price: 1 }, /unknown key "price"/],
+    [{ schema: 1, rows: [costsRow({ agent: "brand-nobody" })] }, /row "naming-judge": agent "brand-nobody" is not an agent in agents\//],
+    [{ schema: 1, rows: [costsRow({ agent: "constructor" })] }, /row "naming-judge": agent "constructor" is not an agent in agents\//],
+    [{ schema: 1, rows: [costsRow({ agent: ["brand-judge"] })] }, /row "naming-judge": agent \["brand-judge"\] is not an agent in agents\//],
+    [{ schema: 1, rows: [costsRow({ workflow: "nope" })] }, /row "naming-judge": workflow "nope" is not a workflow/],
+    [{ schema: 1, rows: [costsRow({ tokens_k: [35, 20] })] }, /row "naming-judge": tokens_k must be \[low, high\] in thousands of tokens, 0 < low <= high/],
+    [{ schema: 1, rows: [costsRow({ tokens_k: [0, 5] })] }, /tokens_k must be \[low, high\]/],
+    [{ schema: 1, rows: [costsRow({ measured: "03-11-2026" })] }, /row "naming-judge": measured must be a date, YYYY-MM-DD/],
+    [{ schema: 1, rows: [costsRow({ measured: "2026-02-30" })] }, /measured must be a date/],
+    // a date that looks right but is out of range makes `new Date(...).toISOString()` throw: it must still be a problem, not a crash
+    [{ schema: 1, rows: [costsRow({ measured: "2026-13-01" })] }, /row "naming-judge": measured must be a date, YYYY-MM-DD/],
+    [{ schema: 1, rows: [costsRow({ measured: "2026-00-10" })] }, /measured must be a date/],
+    [{ schema: 1, rows: [costsRow({ measured: "2026-01-32" })] }, /measured must be a date/],
+    [{ schema: 1, rows: [costsRow({ measured: 20261101 })] }, /measured must be a date/],
+    [{ schema: 1, rows: [costsRow({ source: " " })] }, /row "naming-judge": source must be a sentence saying which run it came from/],
+    [{ schema: 1, rows: [costsRow({ per: "pass" })] }, /row "naming-judge": per must be "call" or "round"/],
+    [{ schema: 1, rows: [costsRow({ per: "round" })] }, /row "naming-judge": a row of a workflow must be per "call"/],
+    [{ schema: 1, rows: [costsRow({ calls: 0 })] }, /row "naming-judge": calls must be a whole number, 1 or more/],
+    [{ schema: 1, rows: [costsRow({ price: 3 })] }, /row "naming-judge": unknown key "price"/],
+    [{ schema: 1, rows: [{ ...costsRow(), id: undefined }] }, /row 1: id must be a lower-case slug/],
+    [{ schema: 1, rows: ["x"] }, /row 1: must be an object/],
+    [{ schema: 1, rows: [costsRow(), costsRow()] }, /row "naming-judge": the id is used twice/],
+    [{ schema: 1, rows: [costsRow(), costsRow({ id: "again" })] }, /row "again": brand-judge in naming already has a row/],
+  ];
+  for (const [table, problem] of bad) {
+    const f = costsFile(table);
+    const r = planWith("naming", f);
+    assert.equal(r.status, 2, `${JSON.stringify(table)}: ${r.stdout}${r.stderr}`);
+    assert.ok(r.stderr.includes(f), `the message names the file: ${r.stderr}`);
+    assert.match(r.stderr, problem);
+    assert.equal(r.stdout, "", "no plan is printed on a bad table");
+  }
+  const gone = path.join(tmpdir("bc-fleet-costs-"), "missing.json");
+  const m = planWith("naming", gone);
+  assert.equal(m.status, 2);
+  assert.ok(m.stderr.includes(gone) && /cannot read/.test(m.stderr), m.stderr);
+});
+
+test("the shipped fleet-costs.json is a valid table with every row dated and sourced, and fleet-plan --check fails a bad table", () => {
+  const file = path.join(ROOT, "skills/brand-creator/references/fleet-costs.json");
+  const { rows, problems } = F.loadCosts(file, agents, NAMES);
+  assert.deepEqual(problems, []);
+  assert.ok(rows.length >= 2);
+  for (const r of rows) assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.measured) && r.source.trim().length > 20, r.id);
+  // the two measured runs the group 4 plan names: the cold review of a site hero (a call of the reviewer) and the research fleet of a round
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  assert.ok(byId["cold-review"] && byId["cold-review"].agent === "brand-reviewer" && byId["cold-review"].per === "call" && byId["cold-review"].workflow === null);
+  assert.ok(byId["research-fleet"] && byId["research-fleet"].agent === "brand-researcher" && byId["research-fleet"].per === "round");
+  const bad = costsFile({ schema: 1, rows: [costsRow({ agent: "brand-nobody" })] });
+  const c = bc(["fleet-plan", "--check", "--costs", bad]);
+  assert.equal(c.status, 1, c.stdout + c.stderr);
+  assert.match(c.stdout, /FAIL .*fleet-costs\.json: row "naming-judge": agent "brand-nobody" is not an agent in agents\//);
+  assert.match(c.stdout, /^FAIL: \d+ agents, \d+ workflows checked$/m);
+  const ok = bc(["fleet-plan", "--check"]);
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+  // a bad table never crashes the check: an out-of-range date, an agent that is a prototype key or an array each FAIL with exit 1
+  for (const [o, problem] of [[{ measured: "2026-13-01" }, /measured must be a date, YYYY-MM-DD/], [{ measured: "2026-01-32" }, /measured must be a date, YYYY-MM-DD/],
+    [{ agent: "constructor" }, /agent "constructor" is not an agent in agents\//], [{ agent: ["brand-judge"] }, /agent \["brand-judge"\] is not an agent in agents\//]]) {
+    const f = costsFile({ schema: 1, rows: [costsRow({ id: "x", ...o })] });
+    const r = bc(["fleet-plan", "--check", "--costs", f]);
+    assert.equal(r.status, 1, `${JSON.stringify(o)}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /^FAIL .*fleet-costs\.json: row "x": /m);
+    assert.match(r.stdout, problem);
+    assert.doesNotMatch(r.stderr, /RangeError|at .*fleet_plan\.mjs/);
+  }
+});
+
+test("the plan of each of the four workflows prints a token range or says not measured for every agent, and never the old pass wording", () => {
+  for (const w of NAMES) {
+    const r = planWith(w);
+    assert.equal(r.status, 0, `${w}: ${r.stdout}${r.stderr}`);
+    const n = Number(/: (\d+) agent\(s\)/.exec(r.stdout)[1]);
+    const lines = agentLines(r.stdout);
+    assert.equal(lines.length, n, w);
+    for (const l of lines) assert.match(l, /tokens: (not measured|about [\d.]+(-[\d.]+)?k \(measured \d{4}-\d{2}-\d{2}\))/, `${w}: ${l}`);
+    assert.match(r.stdout, /^rough cost: (about [\d.]+(-[\d.]+)?k tokens|tokens are not measured)/m, w);
+    assert.doesNotMatch(r.stdout, /pass\(es\)|single-thread/, w);
+  }
 });

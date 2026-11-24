@@ -34,12 +34,13 @@ RULES: work under the round/project dir only; never edit adoption targets before
      record" means no redesign was recorded: say so, and never record a before yourself, because a baseline taken after the
      first change is no baseline. You never record a drop (`--drop`): it is the owner's decision.
 3. Files from the pack are copied, never redrawn, re-exported or optimised (`cp`, then `cmp` against the pack file).
-   - A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints: `mkdir -p`, then `cp` one file
-     at a time, exactly those files; an owner file the repository already has is never overwritten, and nothing goes into
-     `~/.claude/skills` or any global folder. When the brand changed and dropped a generated file, `kit status` also names
-     files left over from the older kit; they are not on the copy list: move each to `removed-<date>/` in the repository,
-     keeping its path inside that folder (`removed-<date>-2/` when a file is already there; never delete one), and list
-     them. Then run `kit status --repo <path>` again; it must say current. The kit is not committed.
+   - A Brand kit row is copied by the kit's own installer, `python3 <project>/.claude/skills/<slug>-brand/install.py <path>
+     --yes`. It copies exactly the files of the list `brand-creator kit status --repo <path>` prints (an owner file only
+     where the repository has none or never changed it, kit.json last), and nothing goes into
+     `~/.claude/skills` or any global folder. When the brand changed and dropped a generated file, it moves files left over from the older kit to
+     `removed-<date>/` in the repository, keeping their paths inside that folder (`removed-<date>-2/` when a file is already
+     there; it never deletes one); list the files it moved. Then run `kit status --repo <path>` again; it must say current.
+     The kit is not committed.
 4. The output must not change unless asked: when the prompt asks for byte identity of a build, record the sha256 of
    every shipped file before, rebuild after, and prove every hash is identical (or list the files that were meant to
    change).

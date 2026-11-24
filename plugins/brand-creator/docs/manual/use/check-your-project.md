@@ -21,6 +21,9 @@ you approve.
    - 3: a check could not run. The report says "not verified" and why.
 
    A check that did not run is never reported as a pass.
+   When a result says a report is out of date ("stale", often after you changed `FACTS.md`), ask for the check to
+   refresh it: Claude runs the page checks, the contrast, the book check, the kit check and the board check again first, and tells you
+   what it ran. Reports that write your files, such as the adapter files, are only named, never re-run for you.
 3. Claude fixes nothing unasked. It offers the fixes as one list: those that need no decision first, then numbered
    decisions with a recommendation.
 
@@ -49,15 +52,25 @@ The full steps are in [Check a page against your brand](check-a-page.md).
 
 ## Get a review
 
-> /brand-creator:review
+> /brand-creator:check --review
 
 Claude reads the latest work against its own rules and the checks, challenges its own findings, and gives you one list:
 fixes that need no decision, numbered decisions with a recommendation, and up to five strengths that must not change. You
 approve the list. Nothing is fixed before.
 
-Add `panel` for a review panel: separate reviewers for design, content and technical, plus legal, platform and
+To review one thing, name it: `/brand-creator:check --review board` (or `book`, `pack`, `all`).
+
+Add `panel` (`/brand-creator:check --review panel`, or `--panel`) for a review panel: separate reviewers for design, content and technical, plus legal, platform and
 accessibility when they apply, then a judge. By default Claude runs them one after another in your session. Extra agents
 start only after you see their count, models, size and cost and say yes.
+
+A review takes nothing else, so `check` refuses some commands and runs nothing:
+
+- With `--review` or `--panel`, any word other than the thing to review and `panel` is refused with a one-line usage
+  message. That holds before or after `--review`.
+- A bare `panel` without `--review` is refused with "did you mean --review panel?". To search your project for the word
+  panel itself, put it in quotes.
+- `--page` together with `--review` is refused. Run them one after the other.
 
 ## Check it worked
 

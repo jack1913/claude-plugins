@@ -22,9 +22,9 @@ from typing import Callable, NamedTuple
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_CANNOT = 0, 1, 2, 3
 STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
-GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7")
+GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G4m", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
-USER_AGENT = "brand-creator/0.5.0 (+https://example.invalid/brand-creator)"
+USER_AGENT = "brand-creator/0.15.2 (+https://example.invalid/brand-creator)"
 
 
 class CliError(Exception):
@@ -562,6 +562,16 @@ class State:
 
 def read_state(project: Path) -> State:
     return State(project / STATE_FILE)
+
+
+def inventory_needed(tier: str, architecture: str) -> bool:
+    """The Full tier and product-in-family need INVENTORY.md before round 1 (board-lint's project:inventory row; `state --set tier=` names it when the tier is raised)."""
+    return str(tier or "").strip().lower() == "full" or str(architecture or "").strip().lower() == "product-in-family"
+
+
+def inventory_recorded(project: Path, st) -> bool:
+    """INVENTORY.md exists, or BRAND-STATE.md records `inventory: none (no target repo)`."""
+    return (project / "INVENTORY.md").is_file() or str(st.get("inventory", "") or "").strip().lower().startswith("none")
 
 
 def gate_recorded(project: Path, gate: str) -> str:

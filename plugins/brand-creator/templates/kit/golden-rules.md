@@ -1,5 +1,5 @@
 # {{brand}} golden rules
 
-The few rules every piece made for {{brand}} keeps, whatever the format.
+What every piece made for {{brand}} keeps and what it is free to change, by the three weights `SKILL.md` explains.
 
-[[fill: up to ten rules, each tagged with a rule id from rules.json or as an example]]
+[[fill: the brand's rules sorted under the headings `## Fixed`, `## Defaults` and `## Examples`, up to ten under Fixed, each line tagged with a rule id from rules.json or as an example]]

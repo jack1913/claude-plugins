@@ -4,6 +4,7 @@ description: Finds a name for a business, product, shop, practice or person, or 
 when_to_use: Use whenever someone asks for name ideas or asks whether a name is taken or can be used, even for a quick list ("name ideas for my bakery", "is the name X taken", "can I use this name for my app"), or when a brand-creator project reaches the naming step with the name still open or at risk. Polish triggers include "wymyśl nazwę", "czy nazwa jest wolna", "sprawdź nazwę", "nazwa dla firmy", "jak nazwać".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). The screening step needs network access; everything before it runs offline.
 allowed-tools: Bash(brand-creator *)
+user-invocable: false
 ---
 
 # Brand naming

@@ -1,4 +1,4 @@
-"""Static checks over the skills and their references: frontmatter, budgets, links, verbatim lines, wrappers."""
+"""Static checks over the skills and their references: frontmatter, budgets, links, verbatim lines, wrappers, the / menu."""
 import fnmatch
 import json
 import os
@@ -12,7 +12,10 @@ from helpers import ROOT
 SKILLS = ROOT / "skills"
 ORCH = SKILLS / "brand-creator" / "SKILL.md"
 REFS = SKILLS / "brand-creator" / "references"
-WRAPPERS = ("new", "round", "status", "setup", "check", "review", "launch")
+WRAPPERS = ("round", "status", "setup", "check")
+REMOVED_SKILLS = ("new", "launch", "review")   # folded into the brand-creator skill (new, launch) and into check --review (review)
+MENU = {"brand-creator", "setup", "status", "check", "round", "brand-adopt"}   # the skills the / menu lists
+HIDDEN = {"brand-naming", "brand-assets", "brand-book"}   # user-invocable: false: Claude starts them from the owner's words
 ENTRY = 'brand-creator --data "${CLAUDE_PLUGIN_DATA}"'  # quoted: a data path may hold spaces (CONTRACT.md, entry point)
 RULE = "Bash(brand-creator *)"
 
@@ -37,7 +40,7 @@ def all_skills():
 
 
 def test_every_skill_has_valid_frontmatter():
-    allowed = {"name", "description", "when_to_use", "argument-hint", "arguments", "disable-model-invocation",
+    allowed = {"name", "description", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable",
                "allowed-tools", "compatibility", "license", "metadata"}
     names = set()
     for p in all_skills():
@@ -51,6 +54,8 @@ def test_every_skill_has_valid_frontmatter():
         assert len(body.splitlines()) < 500, p
         names.add(fm["name"])
     assert {"brand-creator", "brand-naming", "brand-assets", "brand-book", "brand-adopt", *WRAPPERS} <= names
+    assert names == MENU | HIDDEN, names ^ (MENU | HIDDEN)
+    assert not names & set(REMOVED_SKILLS), "a skill that was folded away is back"
 
 
 def yaml_plain_scalar_problem(v):
@@ -98,6 +103,10 @@ def test_orchestrator_frontmatter():
     for trig in ("księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy",
                  "BRAND-STATE.md", "buy the domain", "file the trademark", "fold in a judge report", "accent minimum", "Etsy",
                  "shop", "podcast", "brand guidelines", "brand book"):
+        assert trig in fm["when_to_use"], trig
+    # no command starts a project or the launch hand-off any more (docs say "start a brand called Acme", "help me launch",
+    # "give me the launch checklist"), so the words that the docs promise are in the text Claude reads
+    for trig in ("start a brand called Acme", "help me launch", "the launch checklist", "pomóż mi z premierą marki"):
         assert trig in fm["when_to_use"], trig
     # headroom: the skill listing cuts the text at 1536 characters; keep at least 150 spare so a later addition does not cut the
     # Polish triggers at the end
@@ -163,7 +172,7 @@ def test_long_references_start_with_a_table_of_contents():
 
 
 def test_phase_files_exist_and_stubs_are_short():
-    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "07w-website-references", "07p-site-round",
+    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "07w-website-references", "07p-site-round", "07m-masters-round",
             "09-qa", "10-book", "11-adoption", "12-history", "13-launch"}
     stubs: set = set()
     # the phase's single source is another skill
@@ -294,14 +303,29 @@ def _status_cmd(data):
     return shlex.split(cmd.replace("${CLAUDE_PLUGIN_ROOT}", str(ROOT)).replace("${CLAUDE_PLUGIN_DATA}", str(data)))
 
 
+UV_NAMES = ("uv", "uvx")
+
+
 def _path_without_uv(tmp_path):
-    """bin/ of the plugin (as Claude Code puts it on PATH), python3 and the system folders, but no uv."""
+    """bin/ of the plugin (as Claude Code puts it on PATH), python3 and the system folders, but no uv. A system folder that holds uv
+    (a Linux distribution's package puts it in /usr/bin) is replaced by a folder of links to everything in it but uv."""
     tools = tmp_path / "pathbin"
     tools.mkdir()
     py = shutil.which("python3")
     assert py, "python3 is needed for this test"
     (tools / "python3").symlink_to(py)
-    path = os.pathsep.join([str(tools), str(ROOT / "bin"), "/usr/bin", "/bin"])
+    system = []
+    for d in dict.fromkeys(os.path.realpath(x) for x in ("/usr/bin", "/bin")):   # /bin is a link to /usr/bin on most Linux systems
+        if not any(os.path.lexists(os.path.join(d, n)) for n in UV_NAMES):
+            system.append(d)
+            continue
+        shadow = tmp_path / f"system{len(system)}"
+        shadow.mkdir()
+        for e in os.scandir(d):
+            if e.name not in UV_NAMES:
+                (shadow / e.name).symlink_to(e.path)
+        system.append(str(shadow))
+    path = os.pathsep.join([str(tools), str(ROOT / "bin"), *system])
     assert shutil.which("uv", path=path) is None, "precondition: uv must be hidden, or this test proves nothing"
     assert shutil.which("brand-creator", path=path) == str(ROOT / "bin" / "brand-creator")
     return path
@@ -312,7 +336,8 @@ def test_status_injection_exits_0_with_a_message_outside_a_project(tmp_path):
     data.mkdir()
     env = {**os.environ, "PATH": os.pathsep.join([str(ROOT / "bin"), os.environ["PATH"]])}
     r = subprocess.run(_status_cmd(data), cwd=tmp_path, capture_output=True, text=True, env=env)
-    assert r.returncode == 0 and "no brand project found" in r.stdout + r.stderr and "/brand-creator:new" in r.stdout + r.stderr
+    out = r.stdout + r.stderr
+    assert r.returncode == 0 and "no brand project found" in out and "saying what the brand is for" in out and "/brand-creator:new" not in out
 
 
 def test_status_injection_works_on_a_machine_without_uv(tmp_path):
@@ -380,7 +405,7 @@ def test_page_tells_names_each_tell_with_its_keys_and_both_word_lists():
     """The generic page tells `page-check` warns about: every tell says what it is, why, how it is measured and with which numbers; a tell with a word list has it in each language."""
     d = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
     assert d["version"] == 1 and d["$description"] and d["languages"] == ["en", "pl"]
-    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles"]
+    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box", "tilted-form"]
     required = {"id", "name", "what", "why", "measure"}
     for t in d["tells"]:
         assert required <= set(t) and set(t) <= required | {"threshold", "words"}, t["id"]
@@ -488,7 +513,8 @@ RECIPE_VALUE = re.compile(r"(?i)\d(?:\.\d+)?\s*(?:%|(?:px|rem|em|ms|s|vh|vw|svh|
 
 def test_the_web_page_recipe_is_steps_only_with_no_values():
     """The kit's web-page recipe is seven numbered steps and no value: the brand's values live in its tokens and rules.json, and the recipe points at the page check's rows instead of
-    copying a word list or a threshold. Static, so no data directory is needed (tests/test_kit.py has a module-level mark that a test inside it cannot escape)."""
+    copying a word list or a threshold. The steps are the brand's practice: they stand under Defaults, between what is fixed and the examples, and send no choice to the owner.
+    Static, so no data directory is needed (tests/test_kit.py has a module-level mark that a test inside it cannot escape)."""
     for sample in ("Hero padding 48px", "a 200ms ease", "a 60% ground", "1.5 rem", "contrast 4.5:1", "#0a0a0a", "rgb(0 0 0)", "oklch(0.5 0.1 200)"):
         assert RECIPE_VALUE.search(sample), sample
     for sample in ("step 3 of 7", "a phone and a desktop width", "tell:hero-text-budget", "# Web page"):
@@ -496,8 +522,16 @@ def test_the_web_page_recipe_is_steps_only_with_no_values():
     text = RECIPE.read_text(encoding="utf-8")
     lines = text.splitlines()
     assert lines[0] == "# Web page" and lines[1] == ""
-    assert lines[2] == "Steps only. The brand's values live in the tokens and rules.json; a line you add that pins a value cites a token or a rule, or is tagged `[example]`."
-    assert lines[-1] == "The other pages follow the same steps."
+    assert lines[2] == ("What a page for this brand keeps, and how we usually make one. `SKILL.md` explains the three weights (Fixed, Default, Example). "
+                        "The brand's values live in the tokens and rules.json; a line you add that pins a value cites a token or a rule, or is tagged `[example]`.")
+    heads = [line for line in lines if line.startswith("#")]
+    assert heads == ["# Web page", "## Fixed", "## Defaults", "### How we usually make one", "## Examples"], heads
+    practice = text.split("### How we usually make one\n", 1)[1].split("\n## ", 1)[0]
+    assert practice.startswith("\nThis is the brand's own practice. Follow it, or use a better way of your own: the fixed lines hold either way.\n\n1. ")
+    assert practice.rstrip("\n").endswith("\n\nThe other pages follow the same steps.") and len(re.findall(r"(?m)^\d+\. ", practice)) == 7, "all seven steps are practice"
+    assert "ask the owner" not in text and "the owner" not in text and "a proposal" not in text, "no choice is sent to the owner"
+    assert "a published page carries no sample data" in text.split("## Fixed\n", 1)[1].split("\n## ", 1)[0]
+    assert "one answer, not the answer" in text.split("## Examples\n", 1)[1]
     steps = re.findall(r"(?m)^(\d+)\. (.*)$", text)
     assert [n for n, _ in steps] == [str(i) for i in range(1, 8)], "seven numbered steps"
     assert all(step.startswith(lead) for (_, step), lead in zip(steps, RECIPE_LEADS)), "in this order: the visitor's job, references, tokens, hero, page check, cold read, before publishing"
@@ -520,7 +554,8 @@ def test_the_web_page_recipe_is_steps_only_with_no_values():
     assert len(words) > 40 and not [w for w in words if w.casefold() in text.casefold()], "no stock label or word list is copied"
     # the gaps the kit test baseline found
     for needle in ("into the product's own public or static folder and link them from there", "Never link into `.claude/skills/`",
-                   "with the owner's web-design skill loaded beside this kit, never instead of it", "a plain placeholder marked as a sample",
+                   "with a web-design skill loaded beside this kit, never instead of it", "a plain placeholder marked as a sample",
+                   "where brand-creator and the brand project are at hand", "Without the page check, go through `checklist.md` and the fixed lines by hand",
                    "mark every sample with the `[data-sample]` attribute and a label", "Run the page check again"):
         assert needle in text, needle
 
@@ -640,7 +675,7 @@ def test_g0_fits_the_ask_user_question_tool_in_every_place_it_is_described():
     """G0 holds at most 3 concrete scope questions (tier, architecture when siblings show, name when open), each with 2 to 4
     options; the mark source is inferred and stated, never asked; free text and the folder do not go in the call. The one
     upload consent (review surface) is the only other item, and only when boards could be uploaded."""
-    texts = {p: p.read_text(encoding="utf-8") for p in (ORCH, SKILLS / "new" / "SKILL.md", REFS / "phases" / "00-intake.md")}
+    texts = {p: p.read_text(encoding="utf-8") for p in (ORCH, REFS / "phases" / "00-intake.md")}
     for p, t in texts.items():
         flat = " ".join(t.split())
         assert "at most 3 scope questions" in flat, p
@@ -756,18 +791,227 @@ def test_brand_adopt_is_user_invoked_and_states_every_safety_rule_of_the_apply()
     assert "the brand-adopt skill" in _flat(REFS / "phases" / "11-adoption.md")
 
 
-def test_check_review_and_launch_wrappers_say_what_they_run():
-    check, review, launch = (_flat(SKILLS / s / "SKILL.md") for s in ("check", "review", "launch"))
+def test_check_holds_the_gates_the_cascade_the_page_check_and_the_review_with_its_panel():
+    """`review` was folded into `check --review`: every rule the review skill held is pinned here, in check, and the argument-hint names the flags."""
+    fm, body = frontmatter(SKILLS / "check" / "SKILL.md")
+    for flag in ("--page <file-or-folder-page-or-localhost-url>", "--review [board|book|pack|all] [panel]", "--panel", "<old value or phrase>"):
+        assert flag in fm["argument-hint"], flag
+    assert fm["disable-model-invocation"] == "true" and "user-invocable" not in fm   # typed only, and in the / menu
+    check = _flat(SKILLS / "check" / "SKILL.md")
     assert "check --project <dir> --cascade" in check and "history/MANIFEST.sha256" in check and "Never report a row that did not run as passed" in check
-    for needle in ("Self-review (always)", "one approvable list", "Lens panel (optional)", "Default: single-thread", "fleet gate",
+    for needle in ("## Review (`--review`)", "### Self-review (always)", "one approvable list", "### Lens panel (optional)", "Default: single-thread", "fleet gate",
                    "explicit yes", "A (before launch), B (soon) and C (optional)", "must not change", "Lenses read; they never edit",
-                   "Panels advise"):
-        assert needle in review or needle in " ".join((SKILLS / "review" / "SKILL.md").read_text().split()), needle
-    for needle in ("launch-todo --project <dir>", "**one action**", "exact click path", "--record G7", "never the act",
-                   "available, free or clear", "recheck first"):
+                   "Panels advise", "`--panel` alone", "`--review panel`", "### Lens panel as a workflow", "fleet-plan review-panel --args @<file>",
+                   "one `brand-creator:brand-reviewer` per lens", "then one `brand-creator:brand-judge`", "Do not edit the work under review while the panel runs",
+                   "challenge every finding", "The owner approves the list; nothing is fixed before.", "(1440 and 390, light and dark)",
+                   "`book-lint --self-consistency` for the book", "Measured numbers instead of adjectives"):
+        assert needle.lower() in check.lower(), needle
+    assert check.index("### Self-review (always)") < check.index("### Lens panel (optional)") < check.index("### Lens panel as a workflow")
+    assert rules_line(body) == rules_line(ORCH.read_text(encoding="utf-8"))
+    assert "/brand-creator:new" not in check
+
+
+def test_the_launch_hand_off_rules_live_in_the_launch_phase_file():
+    """`launch` was folded into the brand-creator skill: the hand-off rules are the phase file's, and the orchestrator sends the owner's words there."""
+    launch = _flat(REFS / "phases" / "13-launch.md")
+    assert launch.index("## Handing it over") < launch.index("## Gate")
+    for needle in ("launch-todo --project <dir>", "[--name <candidate>]", "**one action**", "the first unticked box in file order", "(trademark comes first; nothing is bought before its answer)",
+                   "exact click path", "(the page to open, what to type, which button)", "what it costs when that is known", "what to tell you afterwards", "Then stop and wait.",
+                   "--record G7", "Buy it for me", "never the act", "never open a registrar's checkout, a filing form or a sign-up page on the owner's behalf",
+                   "a reading of one source on one day", "REGISTERED, NOT-FOUND or UNKNOWN", "available, free or clear", "recheck first",
+                   "No name screening on file", "will be UNKNOWN", "offer the names run first", "None → say so and stop"):
         assert needle in launch, needle
-    for s in ("review", "launch"):
-        assert rules_line((SKILLS / s / "SKILL.md").read_text(encoding="utf-8")) == rules_line(ORCH.read_text(encoding="utf-8")), s
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    row = next(ln for ln in orch.split(" | P") if ln.startswith("13 |"))
+    assert 'when asked in words ("help me launch", "buy the domain")' in row and "Handing it over" in row and "13-launch" in orch
+    assert "**G7 Outward.**" in orch and "the owner buys, files, registers and contacts" in orch
+    assert "/brand-creator:launch" not in orch + launch
+
+
+def test_no_skill_page_or_script_tells_the_owner_to_type_a_removed_command():
+    """`/brand-creator:new`, `:launch` and `:review` are gone: the words, or `/brand-creator:check --review`, replace them. The changelog and the frozen archive may name them."""
+    pat = re.compile(r"brand-creator:(?:new|launch|review)(?![-\w])")
+    files = [*SKILLS.rglob("*.md"), *(ROOT / "agents").glob("*.md"), *(ROOT / "workflows").glob("*.js"), *(MANUAL).rglob("*.md"),
+             ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "scripts" / "state.py", ROOT / "scripts" / "CONTRACT.md",
+             *(ROOT / "docs" / "internals").glob("*.md"), *(ROOT / "evals").rglob("*.md")]
+    found = [f"{p.relative_to(ROOT)}: {m.group(0)}" for p in files for m in pat.finditer(p.read_text(encoding="utf-8"))]
+    assert not found, found
+    for gone in REMOVED_SKILLS:
+        assert not (SKILLS / gone).exists(), gone
+
+
+def test_the_slash_menu_lists_six_skills_and_the_other_three_are_started_from_words():
+    """The owner's decision: the menu shows brand-creator, setup, status, check, round and brand-adopt. `user-invocable: false` only hides a skill from the
+    menu; its description stays in Claude's context, so the trigger evals stay valid."""
+    menu, hidden, typed_only = set(), set(), set()
+    for p in all_skills():
+        fm, _ = frontmatter(p)
+        name = fm["name"]
+        if fm.get("user-invocable") == "false":
+            hidden.add(name)
+            assert "disable-model-invocation" not in fm, f"{name}: hidden and typed-only would be unreachable"
+        else:
+            menu.add(name)
+        if fm.get("disable-model-invocation") == "true":
+            typed_only.add(name)
+    assert menu == MENU and hidden == HIDDEN
+    assert typed_only == {"setup", "status", "check", "round", "brand-adopt"}   # brand-creator and the hidden three stay model-invocable
+    # a hidden skill keeps its description and when_to_use as they were evaluated: the trigger-eval lists exist for it
+    evals = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
+    for name in HIDDEN | {"brand-creator"}:
+        assert any(c["should_trigger"] for c in evals[name]), name
+    assert not set(REMOVED_SKILLS) & set(evals)
+
+
+def test_the_launch_hand_off_runs_in_any_tier_when_asked_and_full_plans_it_by_default():
+    """One claim in the phase map, the tiers table and the tier page: the hand-off (LAUNCH.md) is not Full only."""
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    top = orch[:orch.index("## Round mechanics")]
+    table = top[top.index("## Scope tiers"):top.index("## Two axes")]
+    full = next(ln for ln in table.split(" | ") if ln.startswith("+ P1c inventory"))
+    assert full.endswith("launch (by default; any tier on ask)"), full
+    row = next(ln for ln in ORCH.read_text(encoding="utf-8").splitlines() if ln.startswith("| P13 |"))
+    assert row.rstrip().endswith("| any on ask; F by default |") and "Full only" not in top
+    page = _flat_md(MANUAL / "getting-started" / "choose-a-tier.md")
+    assert "a launch checklist (`LAUNCH.md`), planned by default" in page
+    assert "The launch checklist is not only for Full: in any tier, say \"help me launch\"" in page
+    assert "It runs in any tier when the owner asks." in _flat(REFS / "phases" / "13-launch.md")
+    makes = _flat_md(MANUAL / "reference" / "what-it-makes.md")
+    assert "## Adoption and launch (Full tier)" not in makes and "The launch checklist is for any tier when you ask, and Full plans it by default." in makes
+
+
+def test_check_says_in_its_description_that_it_also_reviews():
+    """`check` is typed only, so its description is the / menu text, not a trigger: it must name the review that replaced /brand-creator:review."""
+    fm, _ = frontmatter(SKILLS / "check" / "SKILL.md")
+    d = fm["description"]
+    assert "With --review, reviews the latest work against the project's own rules and presents the findings as one list to approve" in d
+    assert " you " not in d and "gives you" not in d   # docs-standard section 5: a skill description is third person, never "you"
+    assert "(add panel for a review panel)" in d and d.endswith("Runs only when typed as /brand-creator:check.") and len(d) <= 1024
+    commands = _flat_md(MANUAL / "reference" / "commands.md")
+    assert "or reviews the latest work and gives you one list to approve" in commands   # the commands page is "from the description"
+
+
+def test_check_reads_its_arguments_by_one_set_of_rules():
+    """A bare word can be a --review target, the word panel, or an old value to search for. The skill text says which, and what is refused."""
+    flat = _flat(SKILLS / "check" / "SKILL.md")
+    body = flat[flat.index("## Arguments"):flat.index("## Review (`--review`)")]
+    for needle in (
+            # the --review grammar: at most a target, then panel
+            "`--review` takes at most a target (`board`, `book`, `pack` or `all`) and then `panel`, in that order",
+            # with --review or --panel, any other word, before or after, is refused and never read as an old value
+            "With `--review` or `--panel`, any word that is not that target or `panel` in its place is refused, before or after,",
+            "with the one line `usage: /brand-creator:check --review [board|book|pack|all] [panel]`",
+            "It is never read as an old value to search for",
+            # old values are the words left over, except a bare panel
+            "Old values and phrases (step 3) are the words left over when `--review` and `--panel` are absent. Except: a bare `panel`",
+            "without `--review` is refused with `did you mean --review panel?` (to search for the word itself, quote it)",
+            # --page and --review together
+            "`--page` and `--review` together are refused: run them one after the other",
+            # --panel is an alias
+            "`--panel` is an alias of `--review panel`",
+            # a refusal runs nothing
+            "A refused command runs nothing"):
+        assert needle in body, needle
+    # each rule is stated once, in that section, and the intro line points at it
+    assert flat.count("did you mean --review panel?") == 1 and flat.count("run them one after the other") == 1
+    assert "read as in [Arguments](#arguments)" in flat
+    # the hint shows the exclusive forms: --review and --panel stand apart from --page and the old values (`|` separates choices), and the commands page copies it
+    hint = frontmatter(SKILLS / "check" / "SKILL.md")[0]["argument-hint"]
+    assert hint == ("[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...] | --review [board|book|pack|all] [panel] | --panel"), hint
+    # the user pages say the same in short sentences, and none of them contradicts the line that tells the reader to add panel
+    use = _flat_md(MANUAL / "use" / "check-your-project.md")
+    ref = _flat_md(MANUAL / "reference" / "commands.md")
+    assert hint.replace("|", "\\|") in ref   # the Arguments column copies the hint (a pipe is escaped in a table cell)
+    for page in (use, ref):
+        assert "did you mean --review panel?" in page and "put it in quotes" in page
+    assert "any word other than the thing to review and `panel` is refused with a one-line usage message. That holds before or after `--review`." in use
+    assert "`--page` together with `--review` is refused. Run them one after the other." in use
+    assert "Anything else after `--review`" not in use and "run those one after the other" not in use
+    assert "With either, any other word, before or after, is refused with a one-line usage message; it is never searched for as an old value." in ref
+
+
+def test_a_review_asked_in_words_is_offered_as_the_typed_check_command():
+    """The trigger evals send a review or panel asked in words (in a project folder) to brand-creator, and `check` is typed only: the orchestrator says what to
+    do then (offer the typed command for a review list or a panel; the round's own self-review before it is shown still runs in brand-creator).
+    The line sits below Round mechanics, where the size budget of the top section does not apply."""
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    line = ("A review of the latest work as one list, or a panel, asked in words is not run from here: offer `/brand-creator:check --review [panel]`, "
+            "which only the owner can type. The self-review of a round before you show it (Round mechanics, step 4, and the refine loop in the next paragraph) "
+            "stays yours and runs here.")
+    assert orch.count(line) == 1
+    assert orch.index("## Round mechanics") < orch.index(line) < orch.index("## Recording state")
+    # the rule never contradicts what already runs here: the round's own self-review (step 4) and the refine loop's step 2 without the reviewer
+    assert "Iterate at least twice before showing" in orch[orch.index("## Round mechanics"):orch.index(line)]
+    assert "Refinement is a main-thread loop" in orch[orch.index(line):]
+    assert "Without the yes, you do step 2 yourself" in " ".join((REFS / "phases" / "05-refinement.md").read_text(encoding="utf-8").split())
+    fm, _ = frontmatter(SKILLS / "check" / "SKILL.md")
+    assert fm["disable-model-invocation"] == "true"
+
+
+def test_the_hidden_skills_say_how_to_name_them_when_claude_does_not_pick_them_up():
+    """brand-naming, brand-assets and brand-book are `user-invocable: false`: no / entry to fall back on, so the manual says the words that load a skill
+    by name (the Skill tool can load a skill that is only hidden from the menu; `disable-model-invocation` is the flag that blocks it)."""
+    pages = {"brand-naming": "name-your-brand.md", "brand-assets": "make-icons-and-images.md", "brand-book": "make-the-brand-book.md"}
+    commands = _flat_md(MANUAL / "reference" / "commands.md")
+    for skill, page in pages.items():
+        line = f"If Claude does not pick it up, say \"use the {skill} skill\"."
+        assert line in _flat_md(MANUAL / "use" / page), (skill, page)
+        assert f"\"use the {skill} skill\"" in commands, skill
+        fm, _ = frontmatter(SKILLS / skill / "SKILL.md")
+        assert fm["user-invocable"] == "false" and "disable-model-invocation" not in fm
+    assert "If Claude does not pick one up, name it" in commands
+
+
+def test_the_folded_skills_are_started_by_the_orchestrator_from_the_owners_words():
+    """`new` became Step 0 of the orchestrator plus the intake phase file; its status and round neighbours no longer offer a command that is gone."""
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    step0 = orch[orch.index("## Step 0"):orch.index("## Running the tools")]
+    for needle in ("Nothing → read [00-intake](references/phases/00-intake.md)", "Starting from the owner's words", "run G0 (below), then scaffold with",
+                   "Asked to start a new brand meanwhile: ask whether to resume it or start a separate one next to it."):
+        assert needle in step0, needle
+    intake = _flat(REFS / "phases" / "00-intake.md")
+    assert intake.index("## Starting from the owner's words") < intake.index("## Techniques")
+    for needle in ("No command starts a project", "Step 0 of the orchestrator has already settled whether a project is open",
+                   "Read what already exists (site, repo, logo files) before asking anything", "Then run G0", "(`./<slug>/` here)", "${user_config.projects_root}",
+                   "The slug is, in this order: the folder name the owner gave (step 3; it wins over the name when both are given), else one made from the name the owner gave", "`acme` for Acme", "`brand-<yyyymmdd>`", "new <slug> --name \"<Name>\" --tier <tier> --root <folder>", "Fill `brief/BRIEF.md` and `FACTS.md`",
+                   "`state --record G0", "Reply with the response template", "If the scaffold exits 3, tell the owner to run `/brand-creator:setup` first"):
+        assert needle in intake, needle
+    for skill in ("round", "status", "check"):
+        flat = _flat(SKILLS / skill / "SKILL.md")
+        assert "offer to start one (the owner says what the brand is for, in words)" in flat, skill
+
+
+def test_the_resume_or_separate_rule_lives_in_step_0_only_and_the_intake_does_not_look_for_a_project_again():
+    """Step 0 already ran `state --project-auto` and found nothing before it sends the owner to the intake phase file; the file does not run it
+    again, and the rule 'resume it or start a separate one' has one home (Step 0, where a project was found)."""
+    orch = ORCH.read_text(encoding="utf-8")
+    start = _flat(REFS / "phases" / "00-intake.md")
+    start = start[start.index("## Starting from the owner's words") + 1:start.index("## Techniques")]
+    assert "state --project-auto" not in start and "Check first that no project is already open here" not in start
+    rule = "whether to resume it or start a separate one next to it"
+    assert " ".join(orch.split()).count(rule) == 1 and rule not in _flat(REFS / "phases" / "00-intake.md")
+
+
+def test_the_project_folder_is_offered_in_a_plain_message_and_the_owner_may_name_another_place_or_folder_name():
+    """Two rules of the removed `new` skill and of the old Step 0: the folder is never an AskUserQuestion item (so G0 keeps its three questions),
+    and the offer is 'I'll create ./<slug>/ in the current folder unless you name another place'. The owner can also name the folder in words."""
+    intake = _flat(REFS / "phases" / "00-intake.md")
+    start = intake[intake.index("## Starting from the owner's words") + 1:intake.index("## Techniques")]
+    for needle in ("The project folder is not an AskUserQuestion item (G0 keeps its three questions)",
+                   "I'll create ./<slug>/ in the current folder unless you name another place",
+                   "The owner may name another place, or a folder name that differs from the brand name, in words (\"put it in ~/brands/acme-rebrand\")",
+                   "the last part of the path is the slug (the folder name) and the rest is `--root`",
+                   "the folder name is the slug, so it can differ from the brand name",
+                   "it wins over the name when both are given",
+                   "I'll create <parent>/<slug>/ next to <open project> unless you name another place"):   # a new one beside an open project is offered where it goes
+        assert needle in start, needle
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    step0 = orch[orch.index("## Step 0"):orch.index("## Running the tools")]
+    assert "(\"Starting from the owner's words\")" in step0   # Step 0 points at the section that holds the folder rules
+    assert "and the steps below run as for a first project" in start   # a 'separate one' answer from Step 0 starts here, next to the open project
+    assert "Only the working slug `brand-<yyyymmdd>` is renamed after G1; a folder name the owner gave keeps its name." in start
+    g0 = orch[orch.index("**G0 Scope.**"):orch.index("**G1 Name go.**")]
+    assert "the project folder when unset go in one plain-text message after the call, not in it" in g0
 
 
 def test_history_launch_and_cascade_references_hold_the_plan_items():
@@ -794,6 +1038,57 @@ def test_history_launch_and_cascade_references_hold_the_plan_items():
                    "snapshot diff", "verify-idempotent", "check --project <dir> --cascade", "headers and footers", "DMG backgrounds",
                    "NSIS", "Open Graph", "fix every hit in a source, never in an output", "Show the specific section", "ADR"):
         assert needle.lower() in c.lower(), needle
+
+
+def test_a_labelled_sample_a_new_token_and_the_full_tier_say_what_they_really_cost_where_each_is_explained():
+    """G4-10: (a) a labelled sample needs no visible badge, (b) a semantic token or a declared pair that comes or goes fails `counts:data` and, once the
+    book is approved, needs a new edition and G5, (c) a Full book also has the Adoption and Launch checklist chapters and its check fails without them."""
+    import bookdata   # the docs state what the code does: pin the facts they rest on
+    full = {c[0] for c in bookdata.CHAPTERS if "full" in c[2]}
+    standard = {c[0] for c in bookdata.CHAPTERS if "standard" in c[2]}
+    assert {"adoption", "launch"} <= full and not {"adoption", "launch"} & standard, "the chapters only a Full book has"
+    assert {"roles", "pairs"} <= set(bookdata.COUNT_NAMES), "the counts a token or a pair changes"
+    colour = " ".join((ROOT / "templates" / "book" / "colour.md").read_text(encoding="utf-8").split())
+    assert "{{count:roles}}" in colour and "{{count:pairs}}" in colour, "the colour chapter quotes both counts"
+    # (a) the phase file and the page-check reference: the label is the attribute, nothing shows on the page
+    phase = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in ("(`[data-sample]`: a labelled sample), never in the open.", "The attribute is the label: a labelled sample needs no visible badge or note on the page.",
+                   "`page-check` passes its claims and puts it on the before-publishing list, to be replaced with real content before the page is published."):
+        assert needle in phase, needle
+    assert "shown as one" not in phase, "no badge is asked for"
+    check = _flat(ROOT / "docs" / "manual" / "reference" / "page-check.md")
+    for needle in ("- A sample with no label fails, and its text is checked.",
+                   "- A labelled sample passes the claims check. The page needs no visible badge or note; the label in the code is enough.",
+                   "- The result lists your samples: what to replace before you publish."):
+        assert needle in check, needle
+    assert check.index("A sample with no label fails") < check.index("A labelled sample passes the claims check") < check.index("The result lists your samples")
+    # (b) where an edition is explained: the book phase, the cascade, the book page of the manual
+    book_phase = _flat(REFS / "phases" / "10-book.md")
+    for needle in ("Adding or removing a semantic token or a declared contrast pair changes the counts the book computes (`roles`, `pairs`;",
+                   "Until the book is rebuilt (or patched, for a hand-authored one), `book-lint` fails `counts:data`",
+                   "open the next one first (`state --set edition=<N+1>` for a generated book, `patch --new-edition` for a hand-authored one) and record G5 for it."):
+        assert needle in book_phase, needle
+    assert book_phase.index("edited in place: `patch --new-edition`") < book_phase.index("Adding or removing a semantic token") < book_phase.index("## Adapters and the applied skill")
+    cascade = _flat(REFS / "cascade.md")
+    for needle in ("A semantic token or a declared contrast pair that is added or removed changes the book's counts (`roles`, `pairs`), so `book-lint` fails `counts:data` until the book is "
+                   "rebuilt (or patched, for a hand-authored one).",
+                   "Step 4's edition rule holds for a generated book too: an approved book then needs a new edition and a new G5 ([10-book](phases/10-book.md#collapse-edition-and-approval))."):
+        assert needle in cascade, needle
+    assert (REFS / "phases" / "10-book.md").read_text(encoding="utf-8").count("## Collapse, edition and approval") == 1, "the cascade links to this heading"
+    manual_book = _flat(ROOT / "docs" / "manual" / "use" / "make-the-brand-book.md")
+    for needle in ("Adding or removing a colour role (a name a surface uses, such as `text` or `accent`) or a contrast pair changes the numbers the book prints, "
+                   "so the book check fails until Claude rebuilds the book. If you already approved the book, the rebuilt one is a new edition, and you approve it again.",
+                   "| The book check fails on `counts:data`"):
+        assert needle in manual_book, needle
+    # (c) the tier page and the book page of the manual
+    tier = _flat(ROOT / "docs" / "manual" / "getting-started" / "choose-a-tier.md")
+    assert "In Full, the brand book also has an Adoption chapter and a Launch checklist chapter. The book check fails without them." in tier
+    for needle in ("In Full the book also has an Adoption chapter and a Launch checklist chapter, and the book check fails without them.",
+                   "| The book check fails on `chapters:required` and names `adoption` and `launch` |"):
+        assert needle in manual_book, needle
+    for page in ("reference/page-check.md", "getting-started/choose-a-tier.md", "use/make-the-brand-book.md"):
+        found = INTERNAL_CODE.findall((ROOT / "docs" / "manual" / page).read_text(encoding="utf-8"))
+        assert not found, f"{page}: gate, phase or decision numbers on a user page: {found}"
 
 
 def test_connectors_are_optional_placeholders_and_the_plugin_ships_no_mcp_config():
@@ -885,7 +1180,7 @@ def test_the_phase_map_points_at_the_website_steps():
 def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_gate_before_any_pick_board():
     p = SKILLS / "round" / "SKILL.md"
     fm, body = frontmatter(p)
-    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
     assert ": " not in fm["description"] and "style board" in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("references/phases/01s-style-research.md", "templates/style-board.html", '`data-board="style"`', "round 0", "`rounds/r0/`",
@@ -901,8 +1196,8 @@ def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_ga
     assert "[pick|refine]" not in body
 
 
-def test_the_new_wrapper_says_the_style_research_comes_before_round_1():
-    flat = _flat(SKILLS / "new" / "SKILL.md")
+def test_starting_a_project_says_the_style_research_comes_before_round_1():
+    flat = _flat(REFS / "phases" / "00-intake.md")
     assert "what comes next (category research in Standard and Full, then the style research and its board, then round 1)" in flat
     assert "(research or round 1)" not in flat
 
@@ -1035,10 +1330,53 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "every `board-lint` run writes the one report `assets/_checks/board-lint.json`, so the lint of the review copy took the place of the board's, and `check` wants the report of `rounds/r<N>/board.html`",
             "or a changed G4 record or \"(rule)\" line of `BRAND-STATE.md` after the check, the capture or the lint",
             "Other writes to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current",
-            "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages board) also has What changed and Weak points",
-            "**G4p The site's reference pages approved.**"):
+            "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as the copy above of the previous pages board, which keeps every page card, because the approval copies only the cards on the last pages board) also has What changed and Weak points",
+            "**G4p The site's reference pages approved.**",
+            # a redo asks which earlier site rules still stand, before any variant is built (G4-01)
+            "An earlier site, when there is one: `site/site.json`", "a `removed-*/site/` folder", "an incumbent site named in the brief",
+            "0. **Which earlier site rules still stand.**",
+            "Only when `site/site.json` exists, a `removed-*/site/` folder does, or the brief records an incumbent site",
+            "List the earlier choices tagged `rule` in each `site.json` (id, text, source)",
+            "name the \"(rule)\" lines under \"Rules (G4)\" of `BRAND-STATE.md` that came from the old site",
+            "Ask the owner once which still stand, in their words, and wait for the answer before any variant is built.",
+            "A rule of an earlier site binds nothing until the owner says it stands: a rule that came from a site they rejected is not a rule of the redo.",
+            "Write the answer into `DECISIONS.md` as one entry (`Gate: G4p`, `Decided: ...`)",
+            "each rule that stands by id and text, each one dropped named as dropped",
+            "A rule that stands is cited by the new board's `data-source` like any rule", "There is no new gate id.", "With no earlier site, skip this step.",
+            # the approved masters and the signature move are inputs; each hero states its one idea before it is built (G4-02)
+            "What the brand already approved, which a hero starts from instead of building bare",
+            "`assets/masters/` (the approved templates and pictures, reusable as they are: a hero loads one by its relative path and never redraws it)",
+            "`motion/motion.json` (when it says `\"motion\": \"on\"` the brand moves: its signature move, `signature.name` and the places in `signature.where`, is shown on the first screen of each variant, or the card says why that variant leaves it out",
+            "with `off` nothing moves and nothing is asked",
+            "Before any variant is built, each states its **one memorable idea** in one line", "a choice and not a layout", "Two variants with one idea are one variant.",
+            "The idea goes on the card as the Idea line (`data-field=\"idea\"`)",
+            "a hero card with no idea line, or an empty one, fails `site:fields`",
+            "It starts from what the brand approved (Inputs): an approved master or picture of `assets/masters/` is used as it stands",
+            "the signature move shows on the first screen, or the card's What it is line says why this variant leaves it out",
+            "the check line (`data-check=\"pass\"` or `\"fail\"`, as its report says), its idea, what it is, what it takes from the references,",
+            "**A bare hero while the brand's approved work sits unused.**",
+            "The Idea line of a hero card (`data-field=\"idea\"`) is read by `site:fields`: missing or empty it fails",
+            "A page card's Idea line is read the same way"):
         assert needle in flat, needle
+    # the inputs are listed before the hero is built, and the idea is stated before the page of the variant is
+    assert flat.index("## Inputs") < flat.index("What the brand already approved") < flat.index("## Outputs and paths")
+    assert flat.index("**one memorable idea**") < flat.index("2. **The page.**") < flat.index("It starts from what the brand approved (Inputs)") < flat.index("Per variant, in this order:")
     assert "rules of G4 in `qa/rules.json`" not in flat and "copy of the refine round" not in flat
+    # the question comes before the first variant is built and before the three steps of a variant
+    assert flat.index("0. **Which earlier site rules still stand.**") < flat.index("1. **The variants.**") < flat.index("Per variant, in this order:")
+    assert flat.index("## Inputs") < flat.index("An earlier site, when there is one") < flat.index("## Outputs and paths")
+    # the manual page says it in the reader's words, with no gate id
+    manual = _flat(ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md")
+    for needle in ("If this site replaces an earlier one, Claude first lists the rules from it and asks which still stand.",
+                   "Claude writes your answer in your list of decisions (`DECISIONS.md`)", "a rule you drop is named as dropped"):
+        assert needle in manual, needle
+    assert "G4p" not in manual
+    for needle in ("They start from what you already approved: the templates and pictures you signed off (your masters) are used as they are,",
+                   "and if your logo moves, its signature move shows on the first screen, or the board says why a version leaves it out.",
+                   "Before it builds one, Claude writes down the one idea the version rests on, in a line.",
+                   "- the one idea it rests on, in a line"):
+        assert needle in manual, needle
+    assert "site:fields" not in manual, "the manual says no lint row"
     assert "older release" not in flat, "page-check has never been released: no owner has a report from an older release"
     assert "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run" not in flat, "a hero board has no choices: the review copy's lint replaced the board's report"
     assert "Set the phase once" not in flat and "lists `BRAND-STATE.md` among its inputs" not in flat and "which every `page-check` report lists" not in flat, "the old rule: every write to BRAND-STATE.md makes the reports stale"
@@ -1071,14 +1409,242 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
         assert needle in changelog, needle
 
 
+def test_the_hero_is_tried_live_before_the_board_and_copied_into_the_round_with_its_paths_made_deeper():
+    """G4-08: between the references pick and the hero board the owner opens each variant as a plain page in `tryout/<Name>/` and iterates on it with no proof, record or board per change; at the stage gate the
+    variants are copied into `rounds/rN/<Name>/` with every relative path one level deeper, and the full hero board runs as before. Nothing cites a try-out; a choice made there is not the hero pick."""
+    flat = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in (
+            "2a. **The try-out (the first hero board only).**", "The owner tries the variants live before any proof is made.",
+            "Build each one as a plain page in `tryout/<Name>/index.html` (a folder of the project, beside `rounds/`, never inside it), to every rule of step 2",
+            "It loads what it needs from `assets/` by a path seen from `tryout/<Name>/` (`../../assets/tokens/tokens.css`) and from its own folder, never from another try-out's.",
+            "On this board steps 1 and 2 are built here and not in `rounds/r<N>/<Name>/`: no `rounds/r<N>/` exists until the stage gate below.",
+            "A name already used under `tryout/` is not reused.",
+            "they open the pages in their own browser (local files; nothing is published) and say what to change",
+            # no ceremony per change
+            "**Nothing runs per change:** no `capture`, `page-check`, cold review, board, lint, `shot` or review copy.",
+            "A `page-check tryout/<Name>/index.html --project <dir> --widths 390,1440` only when the owner asks for one", "its report is not the board's proof",
+            # nothing cites a try-out, and a choice made there is not the hero pick
+            "**Nothing cites a try-out.** No card, record, `cold-review.md` or `DECISIONS.md` entry names `tryout/`", "is not the hero pick: the pick is made on the board and written down from there (step 6)",
+            "The first hero board still shows 2 or 3 variants",
+            # the stage gate: the copy, and the paths made one level deeper
+            "**At the stage gate**, when the owner says in their words that the try-outs are ready for the board (never on your own)",
+            "make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never copy onto a `rounds/r<N>/<Name>/` that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page)",
+            "`cp -R tryout/<Name> rounds/r<N>/<Name>`",
+            "every relative path that leaves the variant's own folder gets one more `../`",
+            "(`../../assets/tokens/tokens.css` becomes `../../../assets/tokens/tokens.css`)", "`href`, `src`, `srcset`, `url()`, `@import`", "a path inside the folder stays as it is",
+            "check that every relative path of the copy leads to a file: a page with a wrong path still opens, but loads no tokens and no fonts",
+            # the try-out is moved aside after the copy: `check --cascade` searches tryout/ and skips removed-*/
+            "Last, move the whole `tryout/` folder (a variant the owner dropped too) to `removed-<date>/tryout/` (`removed-<date>-2/` when that name is taken; never delete)",
+            "`check --cascade` searches every folder but `history/`, `decisions/`, earlier rounds and `removed-*/`, so a try-out left in place would hold the old name, price or wording and fail the cascade after the first change",
+            "the full hero board runs as today (steps 3 to 6), its gates unchanged",
+            # the output, the ordering sentence, the pitfall and the enforcement line
+            "| A try-out of a hero variant (the first hero board only), one folder each, named as its variant | `tryout/<Name>/index.html`: a plain local page the owner opens in their own browser;",
+            "the whole folder moves to `removed-<date>/tryout/` at the stage gate |",
+            "On the first hero board the owner tries the variants live first (step 2a): steps 1 and 2 are built in `tryout/<Name>/`, not in `rounds/r<N>/<Name>/`, no `rounds/r<N>/` exists until the stage gate, and none of the proofs of step 3 is made until they say the variants are ready.",
+            "**A try-out treated as a round.**", "a card, a record or a `DECISIONS.md` entry that cites `tryout/` rests on nothing", "rewrite them for the depth",
+            "a variant also built in `rounds/r<N>/` before the gate ends as `<Name>/<Name>/` and puts the page from before the owner's live edits on the board", "so there is no `rounds/r<N>/` until the gate",
+            "a `tryout/` left in place after the gate fails `check --cascade` after the first rename, price or wording change: move it aside",
+            # the enforcement line says what the lint reads and what it does not, and that the cascade does read a try-out
+            "on the round's board (`rounds/r<N>/board.html`) a card that points into `tryout/` fails `site:files`", "`check --cascade` does search `tryout/`, which is why step 2a moves it to `removed-<date>/` at the stage gate"):
+        assert needle in flat, needle
+    assert "sketch" not in flat.split("2a. **The try-out")[1].split("3. **Per variant")[0], "named a try-out, never a sketch (anti-patterns.md keeps `sketch` for the logo rounds)"
+    # before the proofs of step 3 and before the board, after the page of step 2; the ordering sentence comes before step 0
+    assert flat.index("2. **The page.**") < flat.index("2a. **The try-out") < flat.index("3. **Per variant, in this order:") < flat.index("4. **The board**")
+    assert flat.index("Build the pages before the board, in this order") < flat.index("(step 2a)") < flat.index("0. **Which earlier site rules still stand.**")
+    # the round skill carries the step in its own words
+    skill = _flat(SKILLS / "round" / "SKILL.md")
+    section = skill[skill.index("## A site round"):]
+    for needle in ("2a. On the first hero board, build each variant as a try-out first: a plain page, `tryout/<name>/index.html` (beside `rounds/`), to the rules of step 2",
+                   "that the owner opens in their own browser and changes with you live (local files: nothing is published)", "Give the owner the paths and stop.",
+                   "No `capture`, `page-check`, cold review, board or lint runs per change", "only when the owner asks",
+                   "no card, record or `DECISIONS.md` entry cites a try-out, and a choice made there is not the hero pick",
+                   "On this board steps 1 and 2 are built in `tryout/<name>/`, not in `rounds/r<N>/<name>/`, and no `rounds/r<N>/` exists until the stage gate below.",
+                   "When the owner says in their words that the try-outs are ready for the board, make `rounds/r<N>/` (step 1; a new, empty folder, never a copy onto an existing `rounds/r<N>/<name>/`) and copy each variant that stays into `rounds/r<N>/<name>/`",
+                   "giving every relative path that leaves its folder one more `../` (the copy is one level deeper)", "checking that each path of the copy leads to a file",
+                   "then move the whole `tryout/` folder to `removed-<date>/tryout/` (never delete: `check --cascade` searches `tryout/`, so a try-out left in place fails it after the first rename or price change)",
+                   "then steps 3 to 6 run as written", 'The step is "The hero first", step 2a, in the phase file.'):
+        assert needle in section, needle
+    assert section.index("2. One folder per hero variant") < section.index("2a. On the first hero board") < section.index("3. For each folder, in this order:")
+    # the manual says it in the reader's words: where the pages are, that nothing else runs, that it is no pick, and no lint row or gate id
+    manual = _flat(ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md")
+    for needle in ("3. Before any board, Claude builds the two or three versions as plain pages for you to try.", "Each version is a folder in your brand project, `tryout/<Name>/`, with a page named `index.html`, and Claude tells you where they are.",
+                   "Open them in your own browser (they stay on your computer), say what to change, and Claude changes the page while you look.",
+                   "Nothing else runs while you try: no pictures, no checks, no board, so each change is quick.", "Ask for a quick check at phone and desktop width whenever you want one.",
+                   "What you say while you try is not your pick: you pick on the board, and nothing Claude writes down mentions a try-out.", "When the versions look right, tell Claude to put them on the board.",
+                   "Claude copies them into the round and moves the `tryout/` folder into a folder named `removed-` plus the date (nothing is deleted)",
+                   "4. Claude puts the versions on a board.", "5. Pick one, mix two",
+                   "While you try the first-screen versions, `tryout/` in your brand project holds a folder for each."):
+        assert needle in manual, needle
+    assert manual.index("3. Before any board") < manual.index("4. Claude puts the versions on a board.") < manual.index("5. Pick one, mix two")
+    # how the versions are made and the idea behind each belong to the step that builds them (3), not to the step that shows the board (4)
+    step3, step4 = manual[manual.index("3. Before any board"):manual.index("4. Claude puts the versions on a board.")], manual[manual.index("4. Claude puts the versions on a board."):manual.index("5. Pick one, mix two")]
+    for needle in ("Each is organised like the references you picked", "They start from what you already approved", "Before it builds one, Claude writes down the one idea the version rests on, in a line."):
+        assert needle in step3 and needle not in step4, needle
+    assert "sketch" not in manual and "G4p" not in manual and "site:files" not in manual
+
+
+def test_a_tryout_is_shared_as_a_private_page_only_with_the_owners_ask_and_yes_and_the_manual_no_longer_says_never_publishes():
+    """G4-17: `inline` makes one self-contained copy of a try-out; Claude publishes it as a private Artifact page only when the owner asks and has said yes to claude.ai pages (`review_surface`
+    `artifact`, or the one upload question), records the address as `tryout_url` (never `review_url`), and clears it at the stage gate; with no yes nothing is published. Every home says so in its own words."""
+    flat = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in (
+            "**Sharing a try-out (only with the owner's yes).** A try-out stays a local page.",
+            "When the owner asks to show one to someone, and has said yes to claude.ai pages (`review_surface` is `artifact`, or they answer yes to the one upload question of the orchestrator's Review surface)",
+            "make one self-contained copy outside the project: `brand-creator --data \"${CLAUDE_PLUGIN_DATA}\" inline tryout/<Name>/index.html --project <dir> --out \"${CLAUDE_PLUGIN_DATA}/scratch/tryout-<Name>.html\"`",
+            "Say the size it prints, then publish that file as a private Artifact page with the Artifact tool and record its address with `state --set tryout_url=<url>`, never as `review_url` (the page of the boards)",
+            "With no yes, or no Artifact tool, nothing is published and the try-out stays local: say so once.",
+            "`inline` refuses a page that loads from another website (exit 2, naming the URL): take that out of the try-out",
+            "a link to another file is dead in it, and a change is made in the try-out and published again.",
+            "At the stage gate clear the address (`state --set tryout_url=`) and tell the owner the private page is theirs to remove on claude.ai.",
+            "| A shared copy of a try-out (only when the owner asks and said yes to claude.ai pages) | one self-contained `.html` file made by `inline`, outside the project; published as a private Artifact page; its address in `BRAND-STATE.md` → `tryout_url`, cleared at the stage gate |",
+            "- **A try-out published without the owner's yes.** A try-out is a local page.", "an address written to `review_url` instead of `tryout_url`, and a `tryout_url` still set after the stage gate are wrong.",
+            "- `inline` reads no gate of the board: it refuses a page that loads from another website (exit 2) and writes only outside the project or under `tryout/`.",
+            "That the owner asked for the copy and said yes to publishing it is judgement and is not scripted."):
+        assert needle in flat, needle
+    # the sharing step sits inside step 2a, after the rule that nothing cites a try-out and before the stage gate; it does not change what 2a already said about the local page
+    assert flat.index("**Nothing cites a try-out.**") < flat.index("**Sharing a try-out (only with the owner's yes).**") < flat.index("**At the stage gate**, when the owner says in their words")
+    assert "they open the pages in their own browser (local files; nothing is published) and say what to change" in flat
+    skill = _flat(SKILLS / "round" / "SKILL.md")
+    section = skill[skill.index("2a. On the first hero board"):skill.index("3. For each folder, in this order:")]
+    for needle in ("A try-out is shared as a private Artifact page only when the owner asks and has said yes to claude.ai pages (`review_surface` `artifact`, or the one upload question)",
+                   "`inline tryout/<name>/index.html --out <a file outside the project>` makes one self-contained copy",
+                   "you publish it and record its address with `state --set tryout_url=<url>` (never `review_url`), and clear it at the stage gate; with no yes, nothing is published."):
+        assert needle in section, needle
+    manual = _flat(ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md")
+    for needle in ("They stay on your computer, and nothing is published without your yes, and then only as a private page.",
+                   "Want someone else to see a version, or to see it on your phone? Ask Claude to share it.",
+                   "If you already allowed private claude.ai pages (or say yes when Claude asks), Claude puts one self-contained copy of that version online as a private page and gives you its address. Without your yes, nothing leaves your computer.",
+                   "Links to other files don't work in the copy, and you can remove the page on claude.ai when you are done with it.",
+                   "If you asked to share a version, Claude gave you the address of its private page.",
+                   "Claude says a version cannot be shared because it loads something from another website"):
+        assert needle in manual, needle
+    assert "never publishes" not in manual and "Claude never publishes anything" not in manual
+    assert manual.index("Ask Claude to share it.") < manual.index("When the versions look right, tell Claude to put them on the board.")
+    assert "inline" not in manual and "tryout_url" not in manual and "Artifact" not in manual and "G4" not in manual, "the manual speaks the owner's words: no command, key or gate id"
+    commands = _flat(ROOT / "docs" / "manual" / "reference" / "commands.md")
+    assert ("**Sharing a first-screen version.** While you try the versions, you can ask Claude to share one. Claude makes one self-contained copy of it and, only with your yes to private claude.ai pages "
+            "(the `review_surface` [setting](settings.md)), publishes the copy as a private page and gives you its address. Without your yes, the version stays on your computer.") in commands
+    settings = _flat(ROOT / "docs" / "manual" / "reference" / "settings.md")
+    assert "A first-screen version you ask Claude to share as a private page follows the same answer" in settings
+    assert "Boards, and a first-screen version you ask to share, go to claude.ai as a private page only if you allow it." in _flat(ROOT / "README.md")
+    # the command is in the entry point's help, its contract and the QA table; the key is in the state template
+    usage = (ROOT / "bin" / "brand-creator").read_text(encoding="utf-8").split("usage() {")[1].split("EOF\n}")[0]
+    assert re.search(r"(?m)^  inline <page\.html>  +one self-contained copy of a page of the project", usage) and "(a page that loads from another website: exit 2)" in usage
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("### inline `brand-creator inline <page.html> --out <file.html> [--project DIR]` (`scripts/inline_page.py`) writes one self-contained copy of a page of the project",
+                   "exit 2 a URL on another website", "a classic script with `defer` goes to the end of `<body>`",
+                   "a `.html` file outside the project or under `<project>/tryout/`", "the instructions write it outside the project, in the data folder's `scratch/`",
+                   "`tryout_url` (written by `state --set tryout_url=<url>`, cleared by `state --set tryout_url=`) is the private page a shared try-out of the site round is on",
+                   "It is a key of its own, apart from `review_url`"):
+        assert needle in contract, needle
+    qa = _flat(REFS / "phases" / "09-qa.md")
+    assert "| `inline <page.html> --out <file.html>` | none (the file `--out` names, outside the project or under `tryout/`) |" in qa
+    assert "That the owner asked for the copy and said yes to publishing it as a private page is judgement and is not scripted" in qa
+    template = (ROOT / "templates" / "BRAND-STATE.md").read_text(encoding="utf-8")
+    assert re.search(r'(?m)^review_url: ""\s+# the one stable review page', template) and re.search(r'(?m)^tryout_url: ""\s+# the private page a shared try-out of the site round is on', template)
+
+
+def test_the_site_round_takes_key_frames_of_a_page_that_animates_on_load():
+    """G4-04: `capture --frames` in the phase file, the cold review's three more inputs, the prompt, the reviewer's brief, the contract and the command's usage text."""
+    flat = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in ("**A page that animates when it loads** (an entrance, a tear-off, a reveal) is taken with `capture rounds/r<N>/<Name>/index.html --project <dir> --frames` instead.",
+                   "`shots/frame-1440-0.png`, `frame-1440-50.png` and `frame-1440-100.png`: the first screen at 1440, light, at the start, the middle and the end of the longest animation that runs on load, and `capture.json` lists them.",
+                   "Read all three: the four stills show only where the motion ends.",
+                   "A page that does not animate on load (no animation, or only ones that repeat forever) gets no frame, and the command says so; the cold review then keeps its six inputs.",
+                   "**The key frames, when the page animates on load.**", "The three frames go into `inputs:` after the six", "all three or none.",
+                   "Lint accepts the six inputs alone, the six plus the rules line, the six plus the three frames, or all of them.",
+                   "A frame that changes after the review, or one `capture.json` no longer lists (the page was taken again without `--frames`), makes the review stale: run `capture --frames` and review again.",
+                   "`site approve` never copies `shots/`, so the frames stay in the round."):
+        assert needle in flat, needle
+    assert flat.index("`--frames`") < flat.index("## The cold review") < flat.index("**The key frames, when the page animates on load.**") < flat.index("## The other pages")
+    step = flat[flat.index("Per variant, in this order:"):]
+    assert step.index("`capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills") < step.index("--frames") < step.index("`page-check rounds/r<N>/<Name>/index.html")
+    fragment = _flat(REFS / "prompt-fragments.md")
+    bullet = fragment[fragment.index("- A cold review of a site hero"):]
+    bullet = bullet[:bullet.index(" **Implementation and safety**")]
+    for needle in ("For a page that animates when it loads it may also be given the three key frames of the first screen (`shots/frame-1440-0.png`, `-50` and `-100`: the start, the middle and the end of the longest animation that runs on load, each listed in `inputs:`)",
+                   "it reads the motion from them (does the entrance carry the idea, does anything stay on screen after it ends) and does not guess it from the end stills"):
+        assert needle in bullet, needle
+    agent = _flat(ROOT / "agents" / "brand-reviewer.md")
+    assert "it may add three more paths, the key frames of the first screen (`shots/frame-1440-0.png`, `-50.png` and `-100.png`: the start, the middle and the end of the animation): Read them in that order and judge the motion from them" in agent
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("`capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]`", "**Key frames (`--frames`).**", "**The key frames the reader may be given.**",
+                   "One frame or two fail `site:cold`", "a page taken again without `--frames` makes the review stale"):
+        assert needle in contract, needle
+    usage = (ROOT / "bin" / "brand-creator").read_text(encoding="utf-8")
+    assert "--frames adds three key frames of the first screen" in " ".join(usage.split())
+    assert "[--frames]" in (ROOT / "scripts" / "render.mjs").read_text(encoding="utf-8")
+
+
+def test_the_cold_review_stops_after_two_reviews_and_has_a_third_verdict_for_the_owner():
+    """G4-05 (O3): at most two cold reviews per variant per board (the first, and one after the fixes); `verdict: owner` says the rest is the owner's call; a third review is not run; the card shows the last
+    verdict; the fleet gate states the number of calls the rule allows. The phase file, the round skill, the fleet reference, the prompt, the reviewer's brief, the contract and the manual say so."""
+    phase = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in ("The first non-empty line is `verdict: ship`, `verdict: fix` or `verdict: owner`.",
+                   "**At most two cold reviews per variant per board.** The first, and one after you fixed what it found; a third is not run.",
+                   "`verdict: owner`: what is left is a choice only the owner can make, and its findings are written as questions to them",
+                   "The second review may say `owner`",
+                   "If the second review still says `fix`, do not change the page and review it a third time",
+                   "The card's cold line shows the last verdict",
+                   "after the owner's yes to the count (at most two calls per variant), the model and the cost",
+                   "the prompt of the second call states in one line that it is the second and last review of this variant",
+                   "a line of the prompt, not an input, and not the first review's findings or your reasons",
+                   "\"when the prompt says this is the second review\", in its brief"):
+        assert needle in phase, needle
+    assert phase.index("## The cold review") < phase.index("**At most two cold reviews per variant per board.**") < phase.index("## The other pages")
+    # what is left for the owner goes to the board's Questions section (numbered, lettered options, one recommended), My call keeps the recommendation
+    for needle in ("Put those questions on the board, in its Questions section (from question 2 on a hero board, after the board's own two questions on the pages board), each with lettered options and exactly one recommended",
+                   "My call stays your recommendation, as on every board",
+                   "put what is left to the owner on the board the same way, as questions",
+                   "its findings as questions on the board's Questions section (one recommended each), your recommendation in My call"):
+        assert needle in phase, needle
+    assert "the questions in My call" not in phase and "as questions, on the card and in My call" not in phase
+    contract_ref = _flat(REFS / "board-contract.md")
+    assert 'a cold line (`data-cold="ship|fix|owner"`)' in contract_ref and 'data-cold="ship|fix"' not in contract_ref, "the site board card paragraph lists the three verdicts"
+    fleet = _flat(REFS / "fleet.md")
+    for needle in ("At most two calls per hero variant per board: the first review, and one after the fixes; a third is not run",
+                   "The fleet gate message for these calls states the number the rule allows", "(2 variants: up to 4 calls; 3 variants: up to 6)",
+                   "a `verdict: owner` review is the last one for that variant",
+                   "the prompt of the second call of a variant states it in one line, \"This is the second and last review of this variant.\"",
+                   "That line is an addition to the inputs above, as are the G4 rules as prompt text and the three key frames that [07p-site-round](phases/07p-site-round.md) allows",
+                   "a line of the prompt, not an input, and never the first review's findings or your reasons", "The prompt of a first call has no such line"):
+        assert needle in fleet, needle
+    assert "the one addition" not in fleet, "the second call's line is not the only thing added to the six paths"
+    assert fleet.index("## The cold review of a site hero") < fleet.index("At most two calls per hero variant per board") < fleet.index("## A fleet without a workflow")
+    fragment = _flat(REFS / "prompt-fragments.md")
+    bullet = fragment[fragment.index("- A cold review of a site hero"):]
+    bullet = bullet[:bullet.index(" **Implementation and safety**")]
+    for needle in ("`verdict: ship`, `verdict: fix` or `verdict: owner` first",
+                   "`owner` says that what is left is a choice only the owner can make, and then each finding is a question to the owner",
+                   "The prompt of the second review says so in one line of its own, which stands outside this fragment, so a first call built from the fragment never carries it (the exact line is in [fleet.md](fleet.md); a line of the prompt, not an input, and not the first review's findings)",
+                   "the prompt of the first has no such line", "When the prompt says this is the second review, put what you would only list for another round of fixes as a question to the owner"):
+        assert needle in bullet, needle
+    assert "This is the second and last review of this variant." not in bullet, "a first call built from the fragment must not carry the second call's line"
+    agent = _flat(ROOT / "agents" / "brand-reviewer.md")
+    for needle in ("`verdict: ship`, `verdict: fix` or `verdict: owner`", "a choice only the owner can make",
+                   "When the prompt says this is the second review, say `owner` for what you would otherwise only list for another round of fixes",
+                   "A prompt that does not say so is the first review: a fault is `fix`"):
+        assert needle in agent, needle
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("is not `verdict: ship`, `verdict: fix` or `verdict: owner`", 'an element with `data-cold="ship"`, `"fix"` or `"owner"`', "`owner` passes like `ship`",
+                   "At most two cold reviews are run per variant per board",
+                   "the prompt of the second call says in one line that it is the second and last review of the variant (a line of the prompt, not an input)"):
+        assert needle in contract, needle
+    skill = _flat(SKILLS / "round" / "SKILL.md")
+    for needle in ("`verdict: ship`, `verdict: fix` or `verdict: owner`", "at most two cold reviews per variant per board (the first, and one after the fixes); a third is not run",
+                   "The prompt of an agent's second call says in one line that it is the second and last review of the variant; the first call's has no such line"):
+        assert needle in skill, needle
+    assert "`verdict: ship`, `verdict: fix` or `verdict: owner`" in _flat(REFS / "phases" / "09-qa.md")
+
+
 def test_the_round_wrapper_has_a_site_kind():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
-    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
     assert "the site round's reference pages" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("`site` (the site round: the hero in two or three variants, then the other pages; steps below, \"A site round\")",
                    "`07p-site-round.md` (a site board)",
-                   "So is the first site board of each stage (below, \"A site round\").",
+                   "So is the first site board of each stage, and a later hero board is `mkdir rounds/r<N>` with a copy of each picked variant only, never of the whole round (below, \"A site round\").",
                    "Before a site board, run `state --project <dir> --require G4w` (exit 1: the website references come first; say so and stop)",
                    "A G4w that is `skipped by owner` goes on.",
                    "a site round from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html` (`data-board=\"site\"`), once its pages are made, captured and checked",
@@ -1091,10 +1657,10 @@ def test_the_round_wrapper_has_a_site_kind():
     assert flat.index("Before a site board, run") < flat.index("Build `rounds/r<N>/board.html`") < flat.index("Lint until exit 0")
     section = flat[flat.index("## A site round"):]
     for needle in ("The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`): never a copy of an earlier round.",
-                   "A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous board of that stage; then make `capture`, `page-check` and the cold review again",
+                   "A later pages board starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the previous pages board and keeps every page card. A later hero board is `mkdir rounds/r<N>`, then",
                    "The first hero board shows 2 or 3 variants.", "`data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page)",
                    "a labelled `[data-sample]` element", "makes no request to another address",
-                   "fix a failing row in the page, or let its card say `fail`; never `pass`", "`verdict: ship` or `verdict: fix`", "`by: in-thread` by default and not blind",
+                   "fix a failing row in the page, or let its card say `fail`; never `pass`", "`verdict: ship`, `verdict: fix` or `verdict: owner`", "`by: in-thread` by default and not blind",
                    "`brand-creator:brand-reviewer` call per hero variant", "only after the fleet gate and the owner's yes",
                    "`data-hero=\"<the picked variant>\"` and a choices section that tags every choice `rule`", "or `example`",
                    "shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.",
@@ -1102,8 +1668,20 @@ def test_the_round_wrapper_has_a_site_kind():
                    "A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check` report holds only its G4 rules (the G4 record and the \"(rule)\" lines)",
                    "only a change to those needs `page-check` on each page of the round and then `board-lint rounds/r<N>/board.html --project <dir>` again",
                    "lint a pages board again when a rule of it cites a line only `BRAND-STATE.md` holds",
-                   "never fill-in templates"):
+                   "never fill-in templates",
+                   # a redo asks which earlier site rules still stand, before any variant is built (G4-01)
+                   "0. At the hero stage, when `site/site.json` exists, a `removed-*/site/` folder does, or the brief records an incumbent site, list the earlier choices tagged `rule` (id, text, source)",
+                   "and the \"(rule)\" lines of G4 that came from the old site",
+                   "ask the owner once which still stand, in their words, and wait for the answer before any variant is built",
+                   "Write the answer into `DECISIONS.md` (`Gate: G4p`, `Decided: ...`, each dropped rule named as dropped)",
+                   "a rule that stands is cited by `data-source` like any rule", "No new gate id.",
+                   # the approved masters and the signature move are inputs; each hero states its one idea (G4-02)
+                   "A hero starts from what the brand approved: the approved masters and pictures in `assets/masters/` as they are",
+                   "when `motion/motion.json` says the brand moves, its signature move on the first screen, or the card says why a variant leaves it out",
+                   "Before building, each hero variant states its one memorable idea in one line (the card's Idea line).",
+                   "a hero card also has its idea line (`data-field=\"idea\"`; a card without it fails `site:fields`)"):
         assert needle in section, needle
+    assert section.index("0. At the hero stage") < section.index("1. The first board of each stage"), "the question comes before the first board"
     # the pages are made, checked and read before the board is built from them, and the board is shot last
     order = [section.index(n) for n in ("`brand-creator --data \"${CLAUDE_PLUGIN_DATA}\" capture rounds/r<N>/<name>/index.html", "`... page-check rounds/r<N>/<name>/index.html",
                                         "then the cold review: `rounds/r<N>/<name>/cold-review.md`", "Build the board from the template", "shoot the board last")]
@@ -1317,7 +1895,7 @@ def test_the_drawing_engines_reference_says_what_the_brief_must_say_and_what_lan
     for needle in ("`${CLAUDE_PLUGIN_ROOT}/templates/canvas-brief.md`", "`brief/canvas-round-<N>.md`",
                    # the seven things the brief must say
                    "the exact round folder to write to (`rounds/r<N>/<direction>/`)", "which from round 2 starts as a copy of the previous round",
-                   "`cp -R rounds/r<N-1> rounds/r<N>` first when the folder is not there yet", "which colour goes to which item",
+                   "`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first when the folder is not there yet", "which colour goes to which item",
                    "a target footprint at 16 px", "the dark-background rule for the mark", "a 1 px keyline in the light colour", "a separate dark version",
                    "whether larger grids are redrawn or upscaled: redraw the 32 grid, never upscale",
                    "references that need screening before drawing starts (other companies' marks, platform marks, characters): screening, not clearance",
@@ -1372,7 +1950,7 @@ def test_the_canvas_brief_template_has_a_slot_for_everything_the_brief_must_say_
     for needle in (# 1 the exact round folder
                    "Write the round's files only inside `rounds/r[[fill: N]]/`", "`rounds/r[[fill: N]]/[[fill: direction folder]]/`",
                    # ... which from round 2 starts as a copy of the previous round (round 4 of a real project was drawn without it)
-                   "the round folder starts as a copy of the previous round", "run `cp -R rounds/r<N-1> rounds/r<N>` first",
+                   "the round folder starts as a copy of the previous round", "run `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first",
                    "the previous round itself is never written to",
                    # 2 which colour goes to which item
                    "which colour goes to which item",
@@ -1571,7 +2149,7 @@ def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_qui
     assert "and leave out motion and script rules unless something moves" not in flat, "the old G4 sentence let every tier leave motion out"
     assert "the motion round comes next" not in flat, "P6 (the masters) comes between G3 and the motion round, as 07-tokens says: after G3 and the P6 masters"
     below = " ".join(text[text.index("## Round mechanics"):].split())
-    for needle in ("A motion round is the exception: the first starts as an empty folder, a later one copies the previous motion round (the round skill).",
+    for needle in ("A motion round and a site board are the exceptions (the round skill: a later hero board copies only the picked variants).",
                    "a motion round from `templates/motion-board.html`",
                    "A motion round has no review template either: its review page is a copy of the board with its pictures inlined (the round skill), linted with `--round <N>`."):
         assert needle in below, needle
@@ -1590,7 +2168,7 @@ def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_qui
 
 def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_board():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
-    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
     assert "motion board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("`refine` and `motion` (a round after G3 that tries the signature move as variants; steps below, \"A motion round\")",
@@ -1605,7 +2183,7 @@ def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_
         assert needle in flat, needle
     section = flat[flat.index("## A motion round"):]
     for needle in ("The first motion round is a new, empty folder (`mkdir rounds/r<N>`): do not copy the refine round.",
-                   "A later one, the refine loop on the picked or combined variant, starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous motion round",
+                   "A later one, the refine loop on the picked or combined variant, starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the previous motion round",
                    "set the `page` of each `rounds/r<N>/<name>/proof.json` to `rounds/r<N>/<name>/index.html` (a proof that still points into the old round fails `board-lint`)",
                    "The first motion round shows exactly 3 variants", "A later one shows 1 or more.",
                    "(`frames` cannot step through `requestAnimationFrame`)",
@@ -1885,7 +2463,7 @@ def test_the_manual_says_standard_and_full_settle_motion_and_shows_no_internal_c
     commands = flat["reference/commands.md"]
     for needle in ("`[style\\|pick\\|refine\\|motion\\|site-refs\\|site] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
                    "Records, once, that nothing moves.", "`motion` is a round after you approve the design that tries your logo's move",
-                   "| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
+                   "| `style`, `pick`, `refine`, `motion`, `site-refs`, `site` or `masters` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
                    "| `--off \"<reason>\"` | Records that nothing moves, with your reason in your own words. It never writes over an earlier answer",
                    "| `--json` | Prints the answer as data. Not together with `--off` |"):
         assert needle in commands, needle
@@ -2034,3 +2612,58 @@ def test_the_changelog_of_the_motion_release_opens_with_the_migration_note_and_l
     fixed = flat[flat.index("### Fixed"):]
     assert "and every vote stays." in fixed and "the three votes stay" not in flat, "a style board has four to six cards, a round page three to five: every vote stays"
     assert "`board-lint` checks it on every kind of board (`page:votes`): it fails a board whose cards share a radio name, or whose radios are not named `vote-<its name>`" in fixed
+
+
+def test_the_site_round_group_5_instruction_lines_are_in_the_texts():
+    """L1a of 0.8.0: the pages reuse the hero's world, later boards carry the picked variants, a round is copied without its per-round files, builders live in the project, the H1 is not the signature line,
+    the mock-up tell is about fake UI, and the approval lists what is left behind."""
+    flat = lambda p: " ".join(p.read_text(encoding="utf-8").split())
+    p7, hist, ws = flat(PHASES / "07p-site-round.md"), flat(PHASES / "12-history.md"), flat(REFS / "working-style.md")
+    tone, tells = " ".join((ROOT / "templates" / "book" / "tone.md").read_text(encoding="utf-8").split()), (REFS / "page-tells.json").read_text(encoding="utf-8")
+    for needle in ("write the hero's motifs down as a short system", "Each page card has an Idea line (`data-field=\"idea\"`)", "it fails", "a tilt or a drawing goes around a form, never on it",
+                   "state the number of reviews and their cost before running them",
+                   "rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/", "rounds/r<N-1>/<Name>/ rounds/r<N>/<Name>/` for each picked variant", "keeps every page card", "A later board of the hero stage carries only the variant(s)", "rounds/r<N>/_build/", "never in the session scratchpad",
+                   "The H1 says what the brand is and for whom", "`copy: site H1`", "`copy: signature line`", "never drop graphics to avoid the warning", "is about a drawn screen of a product made of boxes (fake UI), not about drawing",
+                   "**List what the approved site leaves behind**", "Method: cleaning old rounds"):
+        assert needle in p7, needle
+    assert "Every script that builds a page, a board or a picture lives in `rounds/r<N>/_build/` (or `tools/`), never in the session scratchpad, which a restart wipes." in ws
+    assert "copy: site H1" in tone and "copy: signature line" in tone and "H1" in tone
+    assert "graphics are never dropped to avoid the warning" in tells
+    for p in (SKILLS / "round" / "SKILL.md", SKILLS / "brand-creator" / "SKILL.md", PHASES / "05-refinement.md", REFS / "drawing-engines.md", ROOT / "templates" / "canvas-brief.md"):
+        txt = p.read_text(encoding="utf-8")
+        assert "cp -R rounds/r<N-1> rounds/r<N>" not in txt, f"{p.name} still tells the agent to cp -R a round"
+
+
+def test_history_names_cleanup_and_no_bang_removal():
+    """12-history.md sends the cleaning of old rounds through `brand-creator cleanup` (the plan, the recorded yes, the removal, the refresh), never through a line the owner types."""
+    hist = " ".join((PHASES / "12-history.md").read_text(encoding="utf-8").split())
+    for needle in ("brand-creator cleanup", "--record-yes", "--yes", "check --refresh"):
+        assert needle in hist, needle
+    assert "xargs" not in hist and "git rm" not in hist and "--pathspec-from-file" not in hist
+    assert "Method: cleaning old rounds" in hist
+
+
+def test_l1b_rules_are_written_where_the_agent_reads_them():
+    """An answer is not copy, legal claims need a primary source, one numbered list per turn, researchers return partial results."""
+    norm = lambda s: " ".join(s.split())
+    refs = ROOT / "skills" / "brand-creator"
+    facts = (ROOT / "templates" / "FACTS.md").read_text(encoding="utf-8")
+    state = (ROOT / "templates" / "BRAND-STATE.md").read_text(encoding="utf-8")
+    assert "## Internal context" in state and "no page, board," in norm(state)
+    flat = norm(facts)
+    assert "An answer is not a fact" in flat and "## Internal context" in flat
+    assert "checked in the primary source" in flat and "a portal, blog or commercial summary is never the source" in flat and "the date checked" in flat
+    p7 = norm((refs / "references" / "phases" / "07p-site-round.md").read_text(encoding="utf-8"))
+    assert "## Internal context" in p7 and "primary source" in p7 and "never a portal or blog" in p7
+    ws = norm((refs / "references" / "working-style.md").read_text(encoding="utf-8"))
+    assert "never a second \"1.\"" in ws and "never a second \"1.\"" in p7
+    assert "An answer is context, not copy." in ws and "only when the owner says it may be said publicly" in ws and "under `## Internal context` in `BRAND-STATE.md`" in ws
+    agent = norm((ROOT / "agents" / "brand-researcher.md").read_text(encoding="utf-8"))
+    assert "two thirds of your turns" in agent and "tagged UNVERIFIED" in agent
+    assert "**Statutes and legal requirements: primary source only.**" in agent and "a portal or blog makes it `secondary`" in agent
+    book = norm((ROOT / "skills" / "brand-book" / "SKILL.md").read_text(encoding="utf-8"))
+    assert "A statutory deadline, obligation or rate is in the book only when its row names the statute's consolidated text or the authority's own page" in book and "never shown as UNVERIFIED" in book
+    assert "a portal or blog is never that source" in norm((ROOT / "templates" / "book" / "tone.md").read_text(encoding="utf-8"))
+    for name in ("regulated-industries.md", "phases/01-research.md"):
+        txt = norm((refs / "references" / name).read_text(encoding="utf-8"))
+        assert "statutory deadline" in txt and "consolidated text or the authority's own page" in txt and "a portal or blog is never that source" in txt.replace("A portal", "a portal"), name

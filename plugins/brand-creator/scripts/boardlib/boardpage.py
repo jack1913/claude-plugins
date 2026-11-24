@@ -22,7 +22,7 @@ HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 PLACEHOLDER = re.compile(r"^\s*(todo|tbd|\.\.\.|\(\.\.\.\)|lorem ipsum.*)\s*$", re.I)
 MIN_TERRITORIES = 4   # a style board shows at least this many style territories (the style lint requires them)
 MIN_GROUPS = 4   # a website references board shows at least this many groups of sites (the references lint requires them)
-KINDS = ("pick", "refine", "style", "motion", "site-refs", "site")   # the data-board values; a motion board (a round after G3 that tries the signature move), a website references board (a round after G4) and a site board (a round after G4w) are no pick, style, reset or rejected round
+KINDS = ("pick", "refine", "style", "motion", "site-refs", "site", "masters")   # the data-board values; a motion board (a round after G3 that tries the signature move), a website references board (a round after G4) and a site board (a round after G4w) are no pick, style, reset or rejected round
 FILL = "[[fill"
 # "Option 2", "Style A", "Direction II", "Option #2", "Style-3": a label, not a word name. A label word alone, or followed by a number
 # (with or without a separator), or by one letter or a roman numeral after a space, "-" or "#". "Routes", "Looker" and "Moody" are words.

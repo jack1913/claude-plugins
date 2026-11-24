@@ -8,12 +8,13 @@
     brand-creator kit build --yes               write the kit (needs G5 recorded and the owner's explicit OK, which is --yes)
     brand-creator kit build --plan              print what would be written and exit 0
     brand-creator kit build --yes --replace     a file of the kit that was edited by hand, or one put into a generated folder, stops the build; --replace moves it aside
-    brand-creator kit check                     prove the kit is whole, current and filled in (writes the report kit-check; read only otherwise)
+    brand-creator kit check [--all]             prove the kit is whole, current and filled in (writes the report kit-check; read only otherwise); --all also lists every tag and value problem
     brand-creator kit status --repo DIR[=LABEL] [--repo ...] [--json]   is the copy of the kit in a product repository current, and what to copy (writes nothing)
 
 The kit holds the brand's own files copied byte for byte at their project paths under brand/ (the token files, the logo files and the drawings qa/rules.json names
-for each size band), SKILL.md (the applied skill, written by the same builder, its paths pointing inside the kit, with a "## The kit" section) and kit.json, which
-records the sha256 of every generated file, the version and what the kit was made from. The version is <edition>.<build>: the edition is BRAND-STATE.md
+for each size band), SKILL.md (the applied skill, written by the same builder from the kit's own template, its paths pointing inside the kit: steps, a "## The kit" section,
+the owner's rules, the "never" list and a map), brand.md (the colour, type, layout, mark, motion and claims sections), checklist.md (built from rules.json), install.py (the kit's
+installer, scripts/adaptlib/kitcopy.py byte for byte) and kit.json, which records the sha256 of every generated file, the version and what the kit was made from. The version is <edition>.<build>: the edition is BRAND-STATE.md
 approved_edition, the build number starts at 1 and goes up by 1 when a build changes any kit content. A second build with nothing changed writes nothing.
 
 The rules and the facts are data: rules.json holds the "(rule)" lines of BRAND-STATE.md Rules (G4) each with an id (the ASCII slug of its first six words, `-2`, `-3` for a repeat),
@@ -64,7 +65,7 @@ makes it stale. Rows: kit:files (every generated file is what kit.json lists, ki
 relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails; a link to a folder is its index.html when the kit has one there;
 a link to a font that kit.json lists in fonts.not_copied is a warning: the font must be supplied under its own licence), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
 `Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
-what changed) and kit:owned (warns when an owner file was changed, added or removed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
+what changed), kit:owned (warns when an owner file was changed, added or removed since the last build) and kit:behind (a warning, only when it has something to say: the owner's files not touched since the build, once the tokens, FACTS.md or BRAND-STATE.md changed after it; the files are never edited). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
 Two rows read the owner's Markdown files (recipes/**/*.md and any other .md of hers except EXTENDING.md and voice.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md (an owner file that is not Markdown is never read by
 kit:fill, kit:tags or kit:numbers): kit:tags (every bullet, and in golden-rules.md and visual.md every numbered
 line too, outside code fences, carries `[example]` or `[rule: <id>]`; a numbered step of a recipe needs no tag. Every id a `[rule: <id>]` names, on any line of those files, a numbered step, a sentence or
@@ -81,15 +82,17 @@ Writes the report `kit` (rows kit:written and kit:owned; outputs lists every gen
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
 project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds a folder, or a folder an owner file belongs in (recipes/) that is a file; a link among the owner's files, whatever it points at (--replace moves it); assets/masters that is no folder, a link to a folder in it. Exit 2 also: a master that is a link leading out of the project. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
 
-`kit status` reads <DIR>/.claude/skills/<slug>-brand/ of each repository and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
+`kit status` reads .claude/skills/<slug>-brand/ at the root of the git work tree each DIR is in (where install.py copies the kit; DIR itself when it is in none) and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
 (no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
-differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the implementer moves it
-to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
-differ (the repository's own, kept on update) and the copy list: the generated files to copy
-(kit.json last), then the owner files the repository lacks (all of the owner's files, those she added too), as paths relative to the kit folder. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
+differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the kit's install.py
+moves it to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
+differ (the repository changed or added them: its own, kept on update), the rules its golden-rules.md sorts differently from the brand (each line of kit.json `sort` that has another weight there, or is gone: named, never copied over; --json: `sort_differ`), the owner files to update (unchanged in the repository since the last copy, by the `owned` record of its kit.json), a second
+skill for the same brand in the repository's .claude/skills/ (a warning), and the copy list: the generated files to copy, then the owner files the repository lacks (all of the owner's files, those she
+added too), then the owner files to update, kit.json last, as paths relative to the kit folder. The comparison is scripts/adaptlib/kitcopy.py, which the kit carries as install.py. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
 Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
 and after). Exit 2: no kit in the project; a folder that does not exist; the project itself or a folder inside it; your home folder or any path inside ~/.claude (the kit goes into one product
-repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what).
+repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what), or an owner file changed or was added
+since the last build (build first, so that the copy records it).
 """
 import argparse
 import functools
@@ -108,6 +111,7 @@ sys.path.insert(0, str(HERE / "boardlib"))   # kitlib.known_rule_ids reads the c
 sys.path.insert(0, str(HERE / "pagelib"))    # kitlib names the page-check report of an approved reference page with pagelib/pagecheck.py (pagecheck.report_tool)
 import adapt  # noqa: E402
 import adoptdata  # noqa: E402
+import kitcopy  # noqa: E402
 import kitlib  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, plugin_version,  # noqa: E402
                      require_gate, sha256_bytes, today, write_bytes_if_changed)
@@ -274,7 +278,9 @@ def links_row(rep, project: Path, doc: dict) -> None:
                         f"{'it does' if len(loose) == 1 else 'they do'} not resolve inside the kit: the font must be supplied under its own licence, copied into the product from where you licensed it: {named(loose)}; "
                         f"the other {got['links'] - len(loose)} resolve inside the kit"))
     else:
-        rep.add("kit:links", "pass", label, detail=f"{got['links']} relative link{'s' if got['links'] != 1 else ''} in {got['files']} .md, .html and .css files resolve inside the kit")
+        n = got["placeholders"]
+        rep.add("kit:links", "pass", label, detail=f"{got['links']} relative link{'s' if got['links'] != 1 else ''} in {got['files']} .md, .html and .css files resolve inside the kit"
+                + ((f"; 1 template placeholder ({{{{...}}}}) is no link and is left as it is" if n == 1 else f"; {n} template placeholders ({{{{...}}}}) are no links and are left as they are") if n else ""))
 
 
 def fill_row(rep, project: Path) -> None:
@@ -316,7 +322,12 @@ def sources_row(rep, project: Path, doc: dict) -> None:
         rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand's sources cannot be read ({e.message}); run `brand-creator kit build --yes` again")
         return
     if changed:
-        rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand changed after the kit was built ({', '.join(changed)}); run `brand-creator kit build --yes`")
+        try:
+            behind = kitlib.behind_files(project, doc)[1]
+        except CliError:
+            behind = []
+        first = f"read the owner's files kit:behind names ({', '.join(behind)}) against the brand first, the build records them as they are; " if behind else ""
+        rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand changed after the kit was built ({', '.join(changed)}); {first}run `brand-creator kit build --yes`")
     else:
         rep.add("kit:sources", "pass", label, detail="the sources kit.json records are the ones the project has now")
 
@@ -339,6 +350,18 @@ def owned_check_row(rep, project: Path, doc: dict) -> None:
         rep.add("kit:owned", "pass", label, detail=f"the {len(doc['owned'])} owner files are as the last build recorded them")
 
 
+def behind_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:behind (warn, only when there is something to say): the owner's files nobody has touched since the build, once the brand's tokens, FACTS.md or BRAND-STATE.md changed after it. Never edits a file."""
+    try:
+        changed, files = kitlib.behind_files(project, doc)
+    except CliError:
+        return   # kit:sources already says "not verified: the brand's sources cannot be read"
+    if files:
+        rep.add("kit:behind", "warn", "the owner's files were written against the brand as it is now",
+                detail=f"{', '.join(files)} not touched since the build, and {kitlib.behind_names(changed)} changed after it: read {'it' if len(files) == 1 else 'each'} against the brand, edit it yourself if it is behind, then run `brand-creator kit build --yes` "
+                       f"(the build never edits your files)")
+
+
 IDS_HINT = "fix it and run `brand-creator kit check` again"
 
 
@@ -354,14 +377,14 @@ def unjudged_note(got: dict) -> str:
     return f"; {got['unjudged']} line(s) that name a rule were not judged, because the rule ids cannot be read ({got['unread'].message}); {IDS_HINT}"
 
 
-def tags_row(rep, project: Path, known) -> None:
+def tags_row(rep, project: Path, known) -> list[str]:
     """Row kit:tags: every bullet of a recipe and of the reference-page notes, and every bullet or numbered line of golden-rules.md and visual.md, carries `[example]` or a `[rule: <id>]`, and every rule id
     named on any line of those files (a numbered step, a sentence, a heading, a code fence too) is one the kit knows. An untagged line fails whether or not the rule ids can be read; with only lines that
     name a rule left, an unreadable site record is not verified."""
     label = "every rule line in the owner's files says what it is: an example or a rule the kit knows"
     got = kitlib.tag_check(project, known)
+    listed = [f"{f}:{line} {why}" for f, line, why in got["bad"]]                 # every one, returned for `kit check --all`
     if got["bad"]:
-        listed = [f"{f}:{line} {why}" for f, line, why in got["bad"]]
         rep.add("kit:tags", "fail", label, detail=f"{len(listed)} of {got['lines']} line(s) lack a valid tag: {named(listed)}; {kitlib.TAG_HINT}{unjudged_note(got)}")
     elif got["unread"] is not None:
         unreadable_ids_row(rep, "kit:tags", label, got["unread"])
@@ -369,15 +392,16 @@ def tags_row(rep, project: Path, known) -> None:
         rep.add("kit:tags", "pass", label, detail=f"{got['lines']} line(s) carry `{kitlib.TAG_EXAMPLE}` or a rule id the kit knows")
     else:
         rep.add("kit:tags", "pass", label, detail="no bullet or numbered line needs a tag")
+    return listed
 
 
-def numbers_row(rep, project: Path, known) -> None:
+def numbers_row(rep, project: Path, known) -> list[str]:
     """Row kit:numbers: every value in the owner's files (code fences too) cites a token, a known rule or `[example]` on its own line, and a token reference exists (outside a code fence on any line, inside one on a line with a value).
     A failure that needs no rule id is found whether or not the rule ids can be read; with none, an unreadable site record is not verified."""
     label = "every value in the owner's files cites a token or a rule, or says it is an example"
     got = kitlib.number_check(project, known)
+    listed = [f"{f}:{line} ({why})" for f, line, why in got["bad"]]               # every one, returned for `kit check --all`
     if got["bad"]:
-        listed = [f"{f}:{line} ({why})" for f, line, why in got["bad"]]
         rep.add("kit:numbers", "fail", label, detail=f"{len(listed)} line(s) hold a value with no citation or a token that does not exist: {named(listed)}; {kitlib.VALUE_HINT}{unjudged_note(got)}")
     elif got["unread"] is not None:
         unreadable_ids_row(rep, "kit:numbers", label, got["unread"])
@@ -385,6 +409,7 @@ def numbers_row(rep, project: Path, known) -> None:
         rep.add("kit:numbers", "pass", label, detail=f"{got['values']} value(s) on {got['lines']} line(s) cite a token, a known rule or `{kitlib.TAG_EXAMPLE}`")
     else:
         rep.add("kit:numbers", "pass", label, detail="no value (a number with a unit, a ratio or a colour) needs a citation")
+    return listed
 
 
 def reference_page_rows(rep, project: Path, doc: dict) -> None:
@@ -410,12 +435,20 @@ def check(project: Path, a) -> int:
     plugin_row(rep, doc)
     sources_row(rep, project, doc)
     owned_check_row(rep, project, doc)
+    behind_row(rep, project, doc)
     known = functools.cache(lambda: frozenset(kitlib.known_rule_ids(project)))   # read at the first tag that names a rule, once
-    tags_row(rep, project, known)
-    numbers_row(rep, project, known)
+    every = {"kit:tags": tags_row(rep, project, known), "kit:numbers": numbers_row(rep, project, known)}
     reference_page_rows(rep, project, doc)
     rep.extra.update({"kit_version": doc["version"], "kit_tree_sha": kitlib.tree_sha(project)})
-    return rep.finish()
+    code = rep.finish()
+    if a.all:                                     # the rows name the first few; --all prints every line, one per line, and the report stays as it is
+        for row, lines in every.items():
+            if lines:
+                print(f"every line {row} fails ({len(lines)}):")
+                print("\n".join(f"  {ln}" for ln in lines))
+        if not any(every.values()):
+            print("--all: no tag or value problem to list")
+    return code
 
 
 def build(project: Path, a) -> int:
@@ -433,10 +466,15 @@ def build(project: Path, a) -> int:
     owner = kitlib.owner_plan(project)                     # the owner's files: every scaffold is filled now, so an unknown placeholder stops the run before anything is written
     csha = kitlib.content_sha({rel: sha256_bytes(data) for rel, data in generated.items()}, owner["owned"])
     prev = kitlib.previous(project)
+    try:
+        behind = kitlib.behind_files(project, kitlib.load(project))[1] if kitlib.exists(project) else []   # read now: the build re-records the hashes and the sources
+    except CliError as e:
+        behind = []
+        print(f"note: which owner files are behind the brand is not verified, the existing kit.json cannot be read ({e.message})")
     version = kitlib.next_version(prev, edition, csha)
     files = kitlib.with_version(generated, version)
     src = kitlib.sources(project)
-    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages, masters)
+    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages, masters, sort=kitlib.sort_plan(project, owner))
     if a.plan or not a.yes:
         print(f"would write {len(files)} generated files into {kd_rel}/ (version {version})")
         for rel in sorted(files):
@@ -473,6 +511,8 @@ def build(project: Path, a) -> int:
     rep.add("kit:written", "pass", f"{kd_rel}/ generated",
             detail=f"{len(files)} generated files: {written} written, {unchanged} unchanged, {len(moving)} moved to {folder}/; version {version}")
     owner_row(rep, scaffolded, kept)
+    if behind:
+        print(f"note: the brand changed since the last build and these owner files were not touched since it, so they may be behind the brand (not verified, the build never edits them): {', '.join(behind)}")
     font_row(rep, fonts)
     ground_row(rep, kitlib.ground_plan(project))
     reference_row(rep, pages)
@@ -494,21 +534,6 @@ def parse_repo(spec: str) -> tuple[str, str, Path]:
         fail(EXIT_USAGE, f"--repo {p}: not a folder")
     real = Path(os.path.realpath(d))
     return label.strip() or re.sub(r"[^A-Za-z0-9._-]+", "-", real.name) or "repo", p, real
-
-
-def refusal(project: Path, real: Path) -> str | None:
-    """Why a folder cannot be read as a product repository, or None: the brand project itself or a folder inside it, your home folder, or a path inside ~/.claude (a global skills folder).
-    `real` has its links resolved. The text starts with "is" and goes after the name of the folder."""
-    root = Path(os.path.realpath(project))
-    if real == root or root in real.parents:
-        return "is the brand project itself or a folder inside it: name a product repository"
-    home = Path(os.path.realpath(Path.home()))
-    if real == home:
-        return "is your home folder: the kit goes into one product repository at a time, never into a global skills folder"
-    for claude in {home / ".claude", Path(os.path.realpath(Path.home() / ".claude"))}:
-        if real == claude or claude in real.parents:
-            return "is inside ~/.claude: the kit goes into one product repository at a time, never into a global skills folder"
-    return None
 
 
 def adoption_repos(project: Path) -> list[str]:
@@ -533,41 +558,6 @@ def adoption_repos(project: Path) -> list[str]:
     return out
 
 
-def left_over_to(kd_rel: str) -> str:
-    """Where a file left over from an older kit goes in the repository (the implementer moves it there; nothing is deleted): removed-<date>/, then the kit folder, then its path in the kit."""
-    return f"removed-<date>/{kd_rel}/"
-
-
-def not_current_line(res: dict) -> str:
-    """The first line of a copy that is not current. With two versions that differ it names both. With the same version on both sides it says so and what differs, so that it does
-    not read as a contradiction: the version is the same, the files are not."""
-    return f"{res['label']}: " + kitlib.not_current_text(res["installed_version"], res["project_version"], res["differ"], res["missing"], res["left_over"])
-
-
-def status_lines(res: dict, kd_rel: str) -> list[str]:
-    """The text of one repository: its state, what differs, and the copy list."""
-    v, label = res["project_version"], res["label"]
-    if res["state"] == kitlib.NOT_INSTALLED:
-        L = [f"{label}: not installed"]
-    elif res["state"] == kitlib.CURRENT:
-        L = [f"{label}: current (version {v})"]
-    else:
-        L = [not_current_line(res)]
-    if res["note"]:
-        L.append(f"  {res['note']}")
-    for title, items in (("generated files that differ", [f"{rel} ({why})" for rel, why in res["differ"]]),
-                         ("generated files that are missing", res["missing"]),
-                         (f"left over from an older kit (not in this kit, so not on the copy list; move each to {left_over_to(kd_rel)} in the repository, keeping its path; nothing is deleted)",
-                          res["left_over"]),
-                         ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]])):
-        if items:
-            L += [f"  {title}:", *(f"    {i}" for i in items)]
-    if res["copy"]:
-        L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, kit.json last, then the owner files the repository lacks):")
-        L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel}" for rel in res["copy"]]
-    return L
-
-
 def status(project: Path, a) -> int:
     if not kitlib.exists(project):
         fail(EXIT_USAGE, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)")
@@ -581,14 +571,18 @@ def status(project: Path, a) -> int:
     planned = []
     for spec in specs:                                    # every folder is judged before one is read: a bad one stops the run with nothing printed
         label, given, real = parse_repo(spec)
-        why = refusal(project, real)
+        why = kitcopy.refusal(project, real)
         if why:
             fail(EXIT_USAGE, f"--repo {given} {why}")
+        real = kitcopy.repo_root(real) or real            # the root of the git work tree DIR is in, where install.py copies the kit; a folder in none is read as it is
+        why = kitcopy.refusal(project, real)
+        if why:
+            fail(EXIT_USAGE, f"--repo {given}: the repository {real} {why}")
         installed = real / adapt.SKILL_DIR / name
         if installed.is_symlink():
             fail(EXIT_USAGE, f"--repo {given}: {kd_rel}/ is a link, and a link is never read through: look at where it leads and replace it with a folder")
         target = Path(os.path.realpath(installed))
-        why = refusal(project, target)
+        why = kitcopy.refusal(project, target)
         if why:
             fail(EXIT_USAGE, f"--repo {given}: {kd_rel} leads to {target}, which {why}")
         planned.append((label, real, installed))
@@ -603,15 +597,12 @@ def status(project: Path, a) -> int:
     kept = all(r["read_only"] for r in results)
     ok = kept and all(r["state"] == kitlib.CURRENT for r in results)
     if a.json:
-        keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "copy", "copy_owner", "read_only")
-        for r in results:   # where the files left over go, in the repository: only said when there are some
-            r["left_over_to"] = left_over_to(kd_rel) if r["left_over"] else None
-        shown = [{k: ([{"file": rel, "why": why} for rel, why in r[k]] if k in ("differ", "owner_differ") else r[k]) for k in keys} for r in results]
+        shown = [kitcopy.result_json(r, kd_rel) for r in results]
         print(json.dumps({"kit": name, "version": doc["version"], "repos": shown, "current": ok}, indent=2, ensure_ascii=False))
     else:
         print(f"kit {name}, version {doc['version']}")
         for r in results:
-            print("\n".join(status_lines(r, kd_rel)))
+            print("\n".join(kitcopy.status_lines(r, kd_rel)))
         if kept:
             print("read only: nothing in the installed kit folders changed while they were read")
     for r in results:
@@ -632,6 +623,7 @@ def main() -> int:
     b.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")   # also after the subcommand
     c = sub.add_parser("check", help="prove the kit is whole: files, links, fill markers, versions, sources, the owner's files, their tags and values (writes the report kit-check)")
     c.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")
+    c.add_argument("--all", action="store_true", help="after the rows, print every line kit:tags and kit:numbers fail, one per line (the rows name the first few)")
     st = sub.add_parser("status", help="is the copy of the kit in a product repository current, and what to copy (reads only; writes nothing)")
     st.add_argument("--repo", action="append", default=[], metavar="DIR[=LABEL]",
                     help="a product repository (repeatable; read only). Without it, every repository that has a kit row in adoption.json")

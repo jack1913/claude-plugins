@@ -4,6 +4,7 @@ description: Turns an approved logo or mark into the platform files a product sh
 when_to_use: Use whenever someone wants icons, favicons, social images, store art or tray icons made from a logo they already have, even a single file ("favicons from my logo.svg", "app icon set for iOS and macOS from this SVG", "make the .ico and tray icons", "OG image from our logo"), or when a brand-creator project reaches the icons and images step. Polish triggers include "favicony z logo", "ikony aplikacji z logo", "wygeneruj ikony", "zestaw ikon dla iOS", "plik .ico z logo".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). Apple packs need macOS with Xcode and have no fallback. Off macOS the small-size check needs an explicit --renderer opt-in and the Tauri .icns needs --renderer pillow. Social images and store frames need the Chromium installed by /brand-creator:setup.
 allowed-tools: Bash(brand-creator *)
+user-invocable: false
 ---
 
 # Brand assets
@@ -137,7 +138,11 @@ required surfaces in `brief/BRIEF.md`.
    pixels ship: favicon layers, `.ico`, PNG icons, tray, Linux hicolor. Apple builds every size from one master.
    `emit web`, `emit windows`, `emit linux` and `emit tray` draw each size by the band rule, and `check` fails a layer
    recorded off the rule. `icon.svg` is one scalable file shown in browser tabs: the band rule's drawing for the tab size, or
-   `favicon.drawing` in `qa/rules.json` when the owner picked another one.
+   `favicon.drawing` in `qa/rules.json` when the owner picked another one. The ground of the touch and maskable icons, the
+   avatar and the Apple app icons is `icons.ground` in `qa/rules.json`: `light` (default), `dark`, or `drawing` for a mark drawn on its own full-bleed
+   square, which then fills the touch and square app icons edge to edge and is shrunk on its own ground in the maskable icon,
+   the avatar and the watchOS, tvOS and visionOS icons until its ink is inside their safe areas. `social.mode` `dark` puts the Open Graph card and the GitHub preview on the
+   dark ground.
 3. **Several marks.** When the products share one system but each has its own mark, `qa/rules.json` lists them in `marks`,
    each with its own bands (and its name, favicon, accent role and tagline label); the top-level `bands` stay empty. Run every
    emitter once per mark with `--mark <id>`: its files go to `assets/<target>/<id>/`, its report to `emit-<target>/<id>`, and its
@@ -190,6 +195,7 @@ required surfaces in `brief/BRIEF.md`.
   `--visionos-content-fraction`; the gate fails rather than shrinking it silently.
 - The marketing icon is RGB with no alpha channel. The App Store no-alpha rule is status U in the spec table.
 - Without Chromium set up, pass `--no-cards`. Otherwise the DMG background and store frames stop the emit with exit 3.
+  `--no-cards` keeps the cards an earlier run wrote; `--drop-cards` retires them (moved to `removed-<date>/`).
 
 ## Tray
 

@@ -372,6 +372,54 @@ def test_no_cards_skips_the_chromium_outputs_and_says_so(acme):
     assert any(x["id"] == "cards" and "--no-cards" in x["detail"] for x in report(acme, "emit-apple")["results"])
 
 
+
+def _lettering_src(html: str) -> str | None:
+    import base64
+    m = re.search(r'<img class="lettering"[^>]*src="data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)"', html)
+    return base64.b64decode(m.group(1)).decode("utf-8") if m else None
+
+
+def test_the_cards_set_the_drawn_wordmark_not_the_name_in_the_system_font(acme):
+    assert apple(acme).returncode == 0
+    wordmark = (acme / "assets/logo/wordmark.svg").read_text()
+    for page in ("dmg-1x.html", "frame-iphone.html"):
+        html = re.sub(r"<!--.*?-->", "", (acme / "assets/apple/_build" / page).read_text(), flags=re.S)
+        assert _lettering_src(html) == wordmark, page
+        assert "<h1>" not in html and "<b>" not in html, page
+    assert not any(x["id"] == "note:cards name" for x in report(acme, "emit-apple")["results"])
+    (acme / "assets/logo/wordmark.svg").unlink()
+    (acme / "assets/logo/wordmark-dark.svg").unlink()
+    assert apple(acme).returncode == 0
+    assert "<h1>Acme</h1>" in (acme / "assets/apple/_build/frame-iphone.html").read_text()
+    row = next(x for x in report(acme, "emit-apple")["results"] if x["id"] == "note:cards name")
+    assert row["status"] == "warn" and "wordmark" in row["detail"]
+
+
+def test_the_screenshot_frame_has_square_corners_when_every_radius_token_is_0(acme):
+    radius = re.compile(r"\.slot\{[^}]*?border-radius:([^;}]+)")
+    assert apple(acme).returncode == 0
+    assert radius.search((acme / "assets/apple/_build/frame-iphone.html").read_text()).group(1) != "0"
+    f = acme / "assets/tokens/tokens.json"
+    doc = json.loads(f.read_text())
+    doc["other"].update({k: "0px" for k in doc["other"] if k.startswith("radius.")} or {"radius.sm": "0px"})
+    f.write_text(json.dumps(doc))
+    assert apple(acme).returncode == 0
+    assert radius.search((acme / "assets/apple/_build/frame-iphone.html").read_text()).group(1) == "0"
+
+
+def test_drop_cards_retires_the_cards_an_earlier_run_wrote(acme):
+    assert apple(acme).returncode == 0
+    cards = [a["path"] for a in manifest(acme)["artefacts"] if a["path"].startswith(("assets/apple/dmg/", "assets/apple/store/"))]
+    assert len(cards) >= 4
+    r = apple(acme, "--drop-cards")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not any((acme / c).exists() for c in cards)
+    assert not [a for a in manifest(acme)["artefacts"] if a["path"] in cards]
+    assert set(report(acme, "emit-apple")["retired"]) >= set(cards)
+    assert all(any(d.joinpath(c).is_file() for d in acme.glob("removed-*")) for c in cards)     # moved out, never deleted
+    assert any(x["id"] == "cards" and "--drop-cards" in x["detail"] for x in report(acme, "emit-apple")["results"])
+
+
 # ================================================================ bands, downscale, previews
 
 def test_a_coarse_grid_master_needs_an_exemption_and_is_recorded(acme):

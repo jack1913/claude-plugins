@@ -9,15 +9,21 @@ approved fleet; do not auto-delegate." That is a request to Claude, not a lock.
 
 ## The four workflows
 
-| Workflow | Runs as | Default agents | Ends before |
-| --- | --- | --- | --- |
-| directions | `/brand-creator:directions` | 3 designers (each in its own `rounds/rN/<direction>/` folder) and 1 advisory judge | Your direction pick |
-| review-panel | `/brand-creator:review-panel` | 3 read-only reviewers, one per angle, and 1 judge | You approve the list |
+| Workflow | Runs as | Started from | Default agents | Ends before |
+| --- | --- | --- | --- | --- |
+| directions | `/brand-creator:directions` | brand-creator, for a round of directions | 3 designers (each in its own `rounds/rN/<direction>/` folder) and 1 advisory judge | Your direction pick |
+| review-panel | `/brand-creator:review-panel` | `/brand-creator:check --review panel` | 3 read-only reviewers, one per angle, and 1 judge | You approve the list |
+| naming | `/brand-creator:naming` | brand-naming, when you ask for name ideas | 2 name hunters, 1 screener (no lookups without your privacy OK) and 1 judge | Your name pick |
+| adopt | `/brand-creator:adopt` | `/brand-creator:brand-adopt`, when you ask to apply the brand | Per repository: 1 implementer on your branch and 1 independent reviewer | Every commit. It never commits |
+
+These four appear in the `/` menu, but they are meant to be started by brand-creator after you approve the agents and the
+cost. Claude Code offers no way to keep a plugin's workflow out of that menu. If you type one yourself, you see its steps
+and a "Yes, run it / No" prompt before anything runs, but not the agent count, models and cost that brand-creator shows
+you first. Answer No, and ask brand-creator for that step instead: typed on its own, a workflow has none of the settings
+brand-creator gives it and stops before any agent starts.
 
 The directions workflow's designers draw the marks as SVG code themselves, so Claude offers it only after your yes to that
 weaker way ([Get your marks drawn](../use/get-your-marks-drawn.md)).
-| naming | `/brand-creator:naming` | 2 name hunters, 1 screener (no lookups without your privacy OK) and 1 judge | Your name pick |
-| adopt | `/brand-creator:adopt` | Per repository: 1 implementer on your branch and 1 independent reviewer | Every commit. It never commits |
 
 The directions workflow starts only after you picked a style, or skipped that step before your first board. If you reject
 every direction, it starts again only after you pick a style on a new style board. Nothing is drawn before.

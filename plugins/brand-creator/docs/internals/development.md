@@ -19,16 +19,33 @@ Run from `plugins/brand-creator/`:
 BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 ```
 
-- `tests/run-all.sh` runs pytest and `node --test`. `--smoke` adds two end-to-end runs: the Acme smoke
-  (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the Quick-tier smoke (`tests/smoke/quick.sh`, a
-  made-up bakery on a PATH with no Apple tools and no git, ending with the short guide).
-- `BRAND_CREATOR_TEST_PARTS=pytest` (or `node`, `smoke`, comma-separated) runs only those parts, as each CI job does. An
+- `tests/run-all.sh --fast` is the daily run, under 2 minutes on a 12-core Mac: pytest leaves out every test that took a
+  second or more in the last measured run, node:test runs only its files under a second a test (the others drive Chromium),
+  and there is no smoke. It says what it left out ("FAST TIER: ..."). It never replaces the release run.
+- `BRAND_CREATOR_TEST_FILES="tests/test_kit.py tests/test_kitcopy.py"` runs only those pytest files: the tests a change
+  touches. With `BRAND_CREATOR_TEST_PARTS=pytest` it works in `tests/docker/run.sh` too.
+- `tests/durations.json` holds what the fast tier and the order of every run read: each pytest test of a second or more,
+  and each node:test file's tests and seconds. After adding or slowing tests,
+  measure again with a full run and write it with `tests/tools/durations.py` (its docstring has the commands); a test
+  missing from the file always runs, so a stale file only makes `--fast` slower.
+- `tests/run-all.sh` runs pytest and `node --test`. `--smoke` adds the end-to-end runs, side by side, each in a folder of
+  its own: the two halves of the Acme smoke (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the
+  Quick-tier smoke (`tests/smoke/quick.sh`, a made-up bakery on a PATH with no Apple tools and no git, ending with the
+  short guide). Each log is printed whole once all three have ended (about 10.5 minutes one after another).
+- `BRAND_CREATOR_TEST_PARTS=pytest` (or `node`, `smoke`, comma-separated) runs only those parts, as each Docker run of the release run does. An
   unknown part, or a choice that runs nothing, is a usage error (exit 2).
-- `ACME_SMOKE_PART=finish` (or `rest`) runs one half of the Acme smoke, as each macOS smoke job does: the build up to the
-  frozen round, then `tools/finish.sh` alone, or every section after it. The default, `all`, runs both.
-- pytest runs with `--dist worksteal`, so a block of long tests never waits on one worker (the suite takes under half the
-  time it took with the default `load`). Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
+- `ACME_SMOKE_PART=finish` (or `rest`) runs one half of the Acme smoke, as `tests/run-all.sh --smoke` does: the build up to
+  the frozen round, then `tools/finish.sh` alone, or every section after it. The default, `all`, runs both, one after
+  the other.
+- pytest runs on one worker per CPU core, in Docker too (`BRAND_CREATOR_TEST_WORKERS` sets another number), with `--dist
+  worksteal`, so a block of long tests never waits on one worker (the suite takes under half the time it took with the
+  default `load`). Two per core helps the page-check tests alone, which mostly wait for their page, but overloads the
+  machine in a full run. Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
   (pytest-timeout from `tests/requirements.txt`); a node test has 180 s. A hung test fails by name.
+- `node --test` runs the files side by side and the tests of one file one after another, so the slowest file sets the
+  end of the node run. Keep a file under about a minute and a half: split a longer one by what it tests, with its shared
+  helpers in a `_<name>.mjs` module (`_capture.mjs`, `_edges.mjs`, `_motion.mjs`), and point the citations of
+  `09-qa.md` at the new file.
 - The test tools are pinned, with every package they need, in `tests/requirements.txt`, compiled by uv from
   `tests/requirements.in` (the command is in both files).
 - Mutation tests prove each gate by breaking a scratch copy.
@@ -40,44 +57,87 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   `profiles` (`test_emit_profiles.py`), `book-motion` (`test_book_motion.py`), `kit` (`test_kit.py`: a hand edit,
   a fill marker, a link out of the kit, a value with no citation, an unknown rule id, a status that compares sizes,
   an owner file written over) and `wiring` (`test_adoption_wiring.py`: a compare that ignores losses, `wiring` left
-  out of `TARGET_KEYS`, a skipped read-only proof, a URL that is not on this machine); `--list` prints every break.
+  out of `TARGET_KEYS`, a skipped read-only proof, a URL that is not on this machine), `grounds` (the grounds of
+  `tokens.json` and the owner's dated naming read by one rule in every command) and `site-round` (group 4: a hero card's
+  Idea line, the `owner` verdict, the stray-box tell and its tall window, a font dropped from `fontcheck`, the finish
+  chain's adapter step, the mock-up's page band and list union, the error word beside a code, and a try-out shared only
+  with the owner's yes and inlined from code files only); `--list` prints every break.
 - A test that cannot run prints "NOT VERIFIED". `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure.
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
-- The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.
+- Tests that spend money (`costs_money`: OpenRouter image generation, a billed run) run only with `BRAND_CREATOR_PAID=1`. Without it,
+  `tests/conftest.py` and `tests/run-all.sh` take every `OPENROUTER_*` and `USE_LLM_DESIGN_*` variable out of the run, and a lookup
+  of `openrouter.ai` from a test fails.
+- No test needs a private file. Keeping private brand names out of the repository is not a test: see
+  [Private terms](#private-terms).
 - A set-up data directory comes from `brand-creator --data <dir> setup --yes`.
 - No run writes into the data directory it is given. pytest, node:test and each smoke give the tools a data directory of
   their own: links to the given one's npm packages and Chromium, and a scratch folder of its own. pytest keeps it with its
   last three runs. node:test and the smokes delete theirs only after a passing run; any other run keeps it, and a failing
   run prints where. node:test treats its temporary projects the same way.
 
-A quicker pytest-only run, without the smokes:
+A quicker pytest-only run, without node:test and the smokes:
 
 ```bash
-uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4 --dist worksteal
+BRAND_CREATOR_TEST_PARTS=pytest tests/run-all.sh
 ```
 
 ## Run Linux in Docker
 
 `tests/docker/run.sh` builds the Debian 13 image, copies the plugin in read-only, runs `setup`, pytest, node:test and the
-Acme smoke, and accepts only the macOS-only NOT VERIFIED skips. `BRAND_CREATOR_TEST_PARTS` picks the parts, and
+Acme smoke, and accepts only the macOS-only NOT VERIFIED skips. `BRAND_CREATOR_TEST_PARTS` picks the parts,
+`BRAND_CREATOR_TEST_FILES` the pytest files (when a release may limit Linux to the files it touches: ADR-0008's update), and
 `BRAND_CREATOR_SUITE_MINUTES` (default 45) is the deadline inside the container: past it the suite is stopped and the log is
 still checked. `BRAND_CREATOR_TEST_OUT=<dir>` keeps the run log and pytest's JUnit file in a new `linux-run.*` folder inside it.
 
 ## CI
 
-`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs, all in parallel except the verdict. Each job
+`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs, the verdict after the other. Each job
 that checks out the repository runs in `plugins/brand-creator/`; the verdict needs no checkout.
-It starts on a push to `main` or a pull request that changes `plugins/brand-creator/` or the workflow file, never on a tag.
+It starts on a push to `main` or a pull request that changes `plugins/brand-creator/`, the workflow file or the release run's
+(`tests/test_docker_ci.py` tests the shape of both), never on a tag.
 
 | Job | What it runs |
 | --- | --- |
-| linux (pytest), linux (node), linux (smoke) | one part of the Docker suite each (`tests/docker/run.sh` with `BRAND_CREATOR_TEST_PARTS`), each within its own deadline; the run log and the JUnit file are kept as an artifact |
-| validate | `claude plugin validate --strict` on the plugin, and the validate test in `tests/test_static.py` |
-| macos (pytest) | the Apple-tool tests, with `BRAND_CREATOR_REQUIRE_ALL=1` |
-| macos (smoke-finish), macos (smoke-rest) | the two halves of the Acme smoke on macOS (`ACME_SMOKE_PART`), with `emit apple` |
+| validate | `claude plugin validate --strict` on the plugin, then the quick tests (`test_static`, `test_skills`, `test_agents_workflows`, `test_guard`, `test_evals`, `test_docker_ci`, `test_paid_guard`, `test_private_terms`) with any skip a failure; the one test that needs a set-up data directory is deselected by name |
 | brand-creator | the verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green). A release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed ([Release a plugin](../../../../docs/internals/release.md#the-tag-rulesets)) |
 
 The workflow never runs `claude plugin eval`: it is billed. See [Evals](evals.md).
+
+No job of this workflow runs on macOS or builds the Docker image: CI is kept to a few minutes per push
+([ADR-0008](../../../../docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). The full suite,
+on macOS and in the Linux Docker image, runs before each release instead ([Release run](manual-checks.md#release-run)).
+
+`.github/workflows/brand-creator-release.yml` is that release run on GitHub's runners
+([ADR-0009](../../../../docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)). It starts only by hand:
+`gh workflow run brand-creator-release.yml --ref main`.
+
+| Job | What it runs |
+| --- | --- |
+| macos | on `macos-26`, with any skip a failure: pytest in three shares of the test files (`python3 tests/tiering.py shard <share> 3` deals them out by measured time, so each job ends inside its hour), and one job for node:test and the smoke; no test is left out |
+| linux | `tests/docker/run.sh` in two jobs: pytest, then node:test and the smoke |
+| brand-creator-release | the verdict: passes only when every other job passed |
+
+## Private terms
+
+This plugin was built while making real brands, and their names must not reach this public repository. That is not a
+test of the plugin: someone who has never seen a private brand cannot leak it. It is a scan that whoever holds private
+brand projects runs on their own machine, before git sends anything ([ADR-0010](../../../../docs/adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md)).
+
+If your machine holds private brand projects, install the hook once in your clone, from the repository root:
+
+```bash
+python3 plugins/brand-creator/tests/tools/private_terms.py install-hook --projects <the folder of your brand projects>
+```
+
+- `--projects` takes each project's name and slug as the terms. `--public <slug>` leaves out a project that is public.
+  `--list <file.json>` adds terms, colours and allowed phrases you keep by hand
+  (`{"terms": [], "hex": [], "allow": []}`).
+- Every push from that clone is then scanned by what it adds: added lines, added paths and commit messages, in the whole
+  repository. A hit stops the push and names the commit, the file and the line.
+- The hook keeps its own copy of the tool, so run `install-hook` again after the tool changes.
+- To scan by hand, give the same sources and `--range origin/main..HEAD`, or `--files` for every tracked file as it is.
+
+If your machine holds none, you need nothing.
 
 ## Validate
 

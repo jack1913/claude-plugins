@@ -18,5 +18,9 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0010](ADR-0010-the-site-round-makes-reference-pages-not-templates.md) | The site round makes reference pages, not templates: hero first, a cold review, choices tagged rule or example, and a recorded gate (G4p) | accepted |
 | [ADR-0011](ADR-0011-a-generated-brand-kit-around-the-applied-skill.md) | A generated brand kit sits around the applied skill | accepted |
 | [ADR-0012](ADR-0012-a-redesign-records-the-sites-wiring.md) | A redesign records the site's wiring: six kinds of item before and after, and a loss only as dropped with a reason | accepted |
+| [ADR-0013](ADR-0013-old-rounds-leave-through-cleanup.md) | Old rounds leave through `brand-creator cleanup`: whole committed folders, after a recorded yes tied to the exact plan | accepted |
+| [ADR-0014](ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md) | The kit installs itself (`install.py`) and updates owner files a repository never changed | accepted |
+| [ADR-0015](ADR-0015-the-kit-states-three-weights.md) | The kit states three weights (fixed, default, example): the steps stay as the brand's practice, and three things are never made up | accepted |
+| [ADR-0016](ADR-0016-the-kit-records-the-sort-of-its-rules.md) | The kit records the brand's sort of its rules, and `kit status` names what a repository sorts differently | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).

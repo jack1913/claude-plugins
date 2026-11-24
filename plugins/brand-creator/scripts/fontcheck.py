@@ -18,8 +18,11 @@ Three separate answers per font file:
      the browser from `/brand-creator:setup`; `--no-platform` leaves it out on purpose and the report says so.
 Fonts: every font under assets/fonts/ of the project, plus each --font FILE (repeatable, .ttf .otf .woff .woff2).
 Default font budget (owner-adjustable rule): at most two open-licence, self-hostable families.
+Every run writes the one report over the last, so a font an earlier run checked and this one does not name drops out of it and the
+kit leaves it out: such a font that still exists in the project is a `fonts:dropped` warning (no merge: name every font in one run).
 """
 import json
+import math
 import re
 import subprocess
 import sys
@@ -74,15 +77,39 @@ def invalid_weight(font) -> int | None:
     return stored if stored is not None and not 1 <= stored <= 1000 else None
 
 
+def weight_range(font) -> list[int] | None:
+    """[lowest, highest] weight of a variable font, as CSS takes a range (whole numbers from 1 to 1000, the lowest below the highest): the `wght` axis of
+    its fvar table, kept inside what the axis holds. None for a static font, a variable font with no `wght` axis, or an axis that gives no such range."""
+    axis = next((a for a in font["fvar"].axes if a.axisTag == "wght"), None) if "fvar" in font else None
+    if axis is None:
+        return None
+    low, high = max(1, math.ceil(axis.minValue)), min(1000, math.floor(axis.maxValue))
+    return [low, high] if low < high else None
+
+
+def slant_range(font) -> list[int] | None:
+    """[lowest, highest] slant of a variable font, as CSS takes an oblique range (whole degrees from -90 to 90, the lowest below the highest): the `slnt` axis of
+    its fvar table with the sign turned (the axis counts a clockwise slant as negative, CSS as positive), kept inside what the axis holds. None for a static font,
+    a variable font with no `slnt` axis, or an axis that gives no such range. An `ital` axis is not read: Chromium 149 does not set it for italic text, so a face
+    declared italic for it would show the upright letters."""
+    axis = next((a for a in font["fvar"].axes if a.axisTag == "slnt"), None) if "fvar" in font else None
+    if axis is None:
+        return None
+    low, high = max(-90, math.ceil(-axis.maxValue)), min(90, math.floor(-axis.minValue))
+    return [low, high] if low < high else None
+
+
 def face(font, stem: str) -> dict:
-    """-> {family, weight, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
-    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the style `italic` when OS/2
-    fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
+    """-> {family, weight, weight_range, slant_range, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
+    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the weight range and the slant range of a variable
+    font (`weight_range`, `slant_range`), else None; the style `italic` when OS/2 fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
     nm = font["name"]
     italic = bool(font["OS/2"].fsSelection & 1) if "OS/2" in font else False
     italic = italic or ("head" in font and bool(font["head"].macStyle & 2))
     return {"family": nm.getDebugName(16) or nm.getDebugName(1) or stem,
             "weight": font["OS/2"].usWeightClass if "OS/2" in font and invalid_weight(font) is None else 400,
+            "weight_range": weight_range(font),
+            "slant_range": slant_range(font),
             "style": "italic" if italic else "normal"}
 
 
@@ -113,6 +140,29 @@ def licence_hint(font) -> tuple[str, str, dict]:
             notes.append(f"OS/2 fsType {fs_type}: {', '.join(bits)}; web embedding may need a licence")
     notes.append("hint read from the file, not legal advice")
     return status, "; ".join(notes), facts
+
+
+def dropped_fonts(project: Path, now: list[Path]) -> tuple[list[str], str | None]:
+    """-> (the fonts the previous fontcheck report lists that this run leaves out, None), or ([], why that report could not be read).
+    A font is dropped when it is a font file inside the project that still exists and is not among `now` (the fonts of this run). A font
+    under assets/fonts/ is always in `now`, one taken away no longer exists, and one outside the project (the report keeps only its
+    file name, and the kit never holds it) cannot be told from a file of that name inside it, so none of these is judged. No earlier
+    report means nothing dropped."""
+    prev = project / "assets" / "_checks" / "fontcheck.json"
+    if not prev.is_file():
+        return [], None
+    try:
+        listed = json.loads(prev.read_text(encoding="utf-8"))["fonts"]
+        if not isinstance(listed, list) or not all(isinstance(f, str) for f in listed):
+            raise ValueError("`fonts` is not a list of file names")
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return [], f"the earlier report {rel(project, prev)} cannot be read as a fontcheck report ({type(e).__name__}: {e})"
+    out = []
+    for name in dict.fromkeys(listed):
+        p = (project / name).resolve()
+        if p.is_relative_to(project) and p.suffix.lower() in FONT_EXT and p.is_file() and p not in now:
+            out.append(name)
+    return out, None
 
 
 def platform_report(font_path: Path, chars: str) -> tuple[dict | None, str | None]:
@@ -161,6 +211,7 @@ def main() -> int:
     for p in paths:
         if not p.is_file() or p.suffix.lower() not in FONT_EXT:
             fail(EXIT_USAGE, f"{p}: not a font file (.ttf .otf .woff .woff2)")
+    dropped, unread = dropped_fonts(project, paths)   # read before this run writes its own report over it
     rep = Report("fontcheck", project, [p for p in paths if p.is_relative_to(project)], renderer="chromium (platform report)" if not a.no_platform else "no platform report (--no-platform)")
     rep.extra = {"languages": codes, "fonts": [rel(project, p) if p.is_relative_to(project) else p.name for p in paths], "language_files": [f"scripts/data/languages/{c}.json" for c in codes]}
     families: dict[str, list[str]] = {}
@@ -171,7 +222,11 @@ def main() -> int:
         except Exception as e:  # fontTools raises several types for unreadable fonts
             rep.add(f"font:{shown}", "fail", "readable font file", detail=f"cannot read {shown}: {e}")
             continue
-        identity = face(font, p.stem)
+        try:
+            identity = face(font, p.stem)
+        except Exception as e:  # fontTools decodes a table on first use: a name, OS/2, head or fvar table that cannot be read shows here
+            rep.add(f"font:{shown}", "fail", "readable font file", detail=f"cannot read {shown}: {type(e).__name__}: {e}")
+            continue
         families.setdefault(identity["family"], []).append(shown)
         cmap = font.getBestCmap()
         all_required = ""
@@ -211,6 +266,12 @@ def main() -> int:
     if len(families) > MAX_FAMILIES:
         rep.add("budget:families", "warn", f"font budget (default: at most {MAX_FAMILIES} families, owner-adjustable)",
                 detail=f"{len(families)} families: {', '.join(families)}")
+    if unread:
+        rep.add("fonts:earlier", "info", "fonts an earlier run checked", detail=f"not compared: {unread}")
+    elif dropped:
+        rep.add("fonts:dropped", "warn", "fonts an earlier run checked and this one leaves out",
+                detail=f"the earlier report lists {', '.join(dropped)}, which this run does not name, so the report no longer covers "
+                       f"{'it' if len(dropped) == 1 else 'them'}: name every font in one run, or kit build leaves it out", dropped=dropped)
     return rep.finish()
 
 

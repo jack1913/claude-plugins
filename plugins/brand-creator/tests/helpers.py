@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "boardlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "printlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "adaptlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "pagelib"))
+sys.path.insert(0, str(ROOT / "scripts" / "masterslib"))
 
 
 # Off macOS there is no sips: a downscale of a PNG master names the explicit Pillow opt-in, an `emit tauri` its .icns writer.
@@ -383,7 +384,7 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
                     pages: tuple[str, ...] = ("start", "pricing"), hero: str = "Ledger", choices: tuple | None = None) -> str:
     """The site board template as a finished page that must pass board-lint: the variant article repeated once per name and every [[fill: ...]] marker outside an HTML comment replaced with stand-in
     text. `first` is the first board of its stage, which does without the two blocks a later one needs (What changed, Weak points); `stage` is the data-site-stage; `checks` maps a variant name to the
-    check line of its card (pass or fail, default pass), `colds` to its cold line (ship or fix, default ship), `layouts` to its layout id (default walkthrough), `from_refs` to its Takes from line
+    check line of its card (pass or fail, default pass), `colds` to its cold line (ship, fix or owner, default ship), `layouts` to its layout id (default walkthrough), `from_refs` to its Takes from line
     (default SITE_FROM_REFS) and `reflex` to its reflex line (default "no hits"). The folders, the stills, the reports and the cold reviews of the variants are the test's to make.
     At the pages stage (`stage` "pages") the page cards, the choices and the questions of the pages come from the three comments of the template (see fill_site_pages_board): `pages` are the page ids, `hero`
     the data-hero, `choices` the choice items; `names` is not used."""
@@ -401,7 +402,7 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
         b = b.replace("[[fill: layout id]]", (layouts or {}).get(name, "walkthrough"))
         b = re.sub(r'(data-field="from-refs">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + (from_refs or {}).get(name, SITE_FROM_REFS), b)
         b = re.sub(r'(data-field="reflex">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + (reflex or {}).get(name, "no hits"), b)
-        return re.sub(r"\[\[fill: ship or fix\]\]", (colds or {}).get(name, "ship"), b)
+        return re.sub(r"\[\[fill: ship, fix or owner\]\]", (colds or {}).get(name, "ship"), b)
 
     page = template.replace(block, named(block, names[0]) if names else "", 1).replace(marker.group(0), "".join(named(block, n) for n in names[1:]), 1)
     for word, name in zip(("one", "two", "three"), names):
@@ -445,7 +446,7 @@ def fill_site_pages_board(template: str, pages: tuple[str, ...] = ("start", "pri
                           colds: dict | None = None, layouts: dict | None = None, from_refs: dict | None = None, choices: tuple | None = None, brand: str = "Acme") -> str:
     """The site board template at the pages stage as a finished page that must pass board-lint: the "variants" section becomes the pages section of the template's second comment (one article per id of
     `pages`), the choices section of its first comment goes in before My call, the questions of its third comment replace question 1, and <body> says data-site-stage="pages" and data-hero. `checks` maps a
-    page id to its check line (pass or fail, default pass); `layouts` to its layout id (default walkthrough); `colds` to its cold line (ship or fix): a page not in `colds` has no cold line (it is optional on
+    page id to its check line (pass or fail, default pass); `layouts` to its layout id (default walkthrough); `colds` to its cold line (ship, fix or owner): a page not in `colds` has no cold line (it is optional on
     a page); `from_refs` to its Takes from line (default the hero's structure; None leaves the line out); `choices` is a tuple of (id, tag, text, data-source, data-pages or None) like SITE_CHOICES. The folders,
     the stills, the reports and the cold reviews of the pages are the test's to make."""
     import re
@@ -465,7 +466,7 @@ def fill_site_pages_board(template: str, pages: tuple[str, ...] = ("start", "pri
         else:
             b = re.sub(r'(data-field="from-refs">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + text, b)
         if pid in (colds or {}):
-            b = b.replace('data-cold="[[fill: ship or fix]]"', f'data-cold="{colds[pid]}"').replace("<b>[[fill: ship or fix]]</b>", f"<b>{colds[pid]}</b>")
+            b = b.replace('data-cold="[[fill: ship, fix or owner]]"', f'data-cold="{colds[pid]}"').replace("<b>[[fill: ship, fix or owner]]</b>", f"<b>{colds[pid]}</b>")
             b = re.sub(r"\[\[fill: OPTIONAL: its first finding[^\]]*\]\]", "The first screen says what only this brand could say.", b)
         else:
             b, n = re.subn(r'        <p class="cold" data-cold=.*?</p>\n', "", b)
@@ -522,9 +523,10 @@ def page_check_report(p: Path, page: str, status: str = "pass", tells: tuple[str
     return out
 
 
-def capture_record(p: Path, page: str) -> Path:
+def capture_record(p: Path, page: str, *, frames: bool = False) -> Path:
     """The stills and the record `brand-creator capture <page>` writes beside a page (<the page's folder>/shots/), made by hand so that no browser is needed: the four first-screen stills and the full
-    one, each its own bytes, and capture.json in the shape scripts/CONTRACT.md gives it, its inputs the page and the built tokens' stylesheet. -> the path of capture.json."""
+    one, each its own bytes, and capture.json in the shape scripts/CONTRACT.md gives it, its inputs the page and the built tokens' stylesheet. `frames` adds what `capture <page> --frames` writes too: the three
+    key frames (frame-1440-0.png, -50 and -100, each its own bytes) and the `frames` list of capture.json. -> the path of capture.json."""
     import hashlib
     import json as _json
 
@@ -544,22 +546,32 @@ def capture_record(p: Path, page: str) -> Path:
     full = picture("full", 16)
     (shots / "1440-light-full.png").write_bytes(full)
     inputs = [{"path": x, "sha256": sha256_file(p / x)} for x in sorted((page, "assets/tokens/tokens.css")) if (p / x).is_file()]
+    kept = []
+    for percent, ms in ((0, 0), (50, 300), (100, 600)) if frames else ():
+        data = picture(f"frame-{percent}")
+        (shots / f"frame-1440-{percent}.png").write_bytes(data)
+        kept.append({"percent": percent, "ms": ms, "file": f"frame-1440-{percent}.png", "sha256": sha256_bytes(data)})
     out = shots / "capture.json"
     out.write_text(_json.dumps({"schema": 1, "tool": "capture", "source": {"page": page}, "date": "2026-10-17", "views": views,
-                                "full": {"file": "1440-light-full.png", "sha256": sha256_bytes(full), "height": 16, "cut": False}, "inputs": inputs, "problems": []}, indent=2) + "\n", encoding="utf-8")
+                                "full": {"file": "1440-light-full.png", "sha256": sha256_bytes(full), "height": 16, "cut": False}, **({"frames": kept} if kept else {}),
+                                "inputs": inputs, "problems": []}, indent=2) + "\n", encoding="utf-8")
     return out
 
 
 def cold_review_record(p: Path, page: str, verdict: str = "ship", *, by: str = "in-thread", findings: tuple[str, ...] = ("The first screen says what only this brand could say.",),
-                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = ()) -> Path:
+                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = (), rules: bool = False, frames: bool = False) -> Path:
     """The cold-review.md a reader of a page's four stills, brief/BRIEF.md and FACTS.md alone leaves beside the page: the verdict first, `by:`, the `inputs:` with the sha256 of each file as it is now, then the
-    findings as numbered lines (the prompt fragment of references/prompt-fragments.md, Review). `leave_out` drops listed inputs and `add` lists more files of the project, for a test that breaks the rule.
+    findings as numbered lines (the prompt fragment of references/prompt-fragments.md, Review). `leave_out` drops listed inputs and `add` lists more files of the project, for a test that breaks the rule;
+    `rules` adds the seventh input, the G4 rules part of BRAND-STATE.md as `- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as it is now (what `brand-creator state --part g4-rules` prints);
+    `frames` adds the three key frames of the page (`shots/frame-1440-0.png`, `-50` and `-100`), which `capture_record(..., frames=True)` wrote.
     Call it after capture_record: the stills must be there. -> the review's path."""
-    from _common import sha256_file
+    from _common import part_sha256, sha256_file
     folder = (p / page).parent
     base = folder.relative_to(p).as_posix()
     files = [f for f in [f"{base}/shots/{v}.png" for v in ("1440-light", "1440-dark", "390-light", "390-dark")] + ["brief/BRIEF.md", "FACTS.md"] if f not in leave_out] + list(add)
-    body = [f"verdict: {verdict}", f"by: {by}", "inputs:"] + [f"- {f} sha256:{sha256_file(p / f)}" for f in files] + [""] + [f"{i}. {t}" for i, t in enumerate(findings, 1)]
+    files += [f"{base}/shots/frame-1440-{n}.png" for n in (0, 50, 100)] if frames else []
+    listed = [f"- {f} sha256:{sha256_file(p / f)}" for f in files] + ([f"- BRAND-STATE.md#g4-rules sha256:{part_sha256(p / 'BRAND-STATE.md', 'g4-rules')}"] if rules else [])
+    body = [f"verdict: {verdict}", f"by: {by}", "inputs:"] + listed + [""] + [f"{i}. {t}" for i, t in enumerate(findings, 1)]
     out = folder / "cold-review.md"
     out.write_text("\n".join(body) + "\n", encoding="utf-8")
     return out
@@ -573,3 +585,26 @@ def symlink_or_skip(link: Path, target: Path) -> None:
         link.symlink_to(target, target_is_directory=target.is_dir())
     except (OSError, NotImplementedError) as e:
         pytest.skip(f"NOT VERIFIED: this OS cannot make a symbolic link here ({type(e).__name__}: {e}), so the symbolic-link refusals did not run")
+
+
+FAKE_OWNED = ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md")   # the five scaffolded owner files (kitcopy.OWNED_FILES, written out)
+
+
+def make_fake_kit(folder: Path, generated: dict[str, bytes], owner: dict[str, bytes], version: str = "1.1", sort: dict | None = None) -> None:
+    """A kit folder with no brand project behind it: the files of `generated` and `owner`, the five scaffolded owner files (b"<name>" when `owner` does not hold them),
+    and a kit.json that kitcopy.problems accepts, hashing every generated file and every owner file; `sort` is written as its `sort` key when given (a kit from before the key has none).
+    For the copy judge only; it has no SKILL.md unless `generated` holds one."""
+    import hashlib
+    owner = {**{rel: rel.encode() for rel in FAKE_OWNED}, **owner}
+    for rel, data in {**generated, **owner}.items():
+        f = folder / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+    sha = lambda b: hashlib.sha256(b).hexdigest()   # noqa: E731
+    doc = {"schema": 1, "kit": folder.name, "version": version, "edition": version.split(".")[0], "plugin_version": "0.11.0", "content_sha": "0" * 64,
+           "generated": {rel: sha(data) for rel, data in sorted(generated.items())}, "owned": {rel: sha(data) for rel, data in sorted(owner.items())},
+           "fonts": {"copied": [], "not_copied": []},
+           "sources": {k: None for k in ("state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages")}, "reference_pages": []}
+    if sort is not None:
+        doc["sort"] = sort
+    (folder / "kit.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")

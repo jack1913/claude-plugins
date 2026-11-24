@@ -48,6 +48,7 @@ INSTALL = {
               "linux": "not available: Apple emitters need macOS and Xcode (no cross-platform fallback)",
               "windows": "not available: Apple emitters need macOS and Xcode (no cross-platform fallback)"},
     "rg": {"macos": "brew install ripgrep", "linux": "apt install ripgrep", "windows": "winget install BurntSushi.ripgrep.MSVC"},
+    "rsync": {"macos": "preinstalled", "linux": "apt install rsync", "windows": "not available: copy the round folder by hand, leaving out shots/, cold-review.md and capture.json"},
     "gh": {"macos": "brew install gh", "linux": "apt install gh", "windows": "winget install GitHub.cli"},
     "dig": {"macos": "preinstalled", "linux": "apt install dnsutils", "windows": "not needed"},
 }
@@ -218,7 +219,8 @@ def collect(group: str, data: str | None) -> list[dict]:
     parts = GROUPS[group].split("+")
     items = [chk_python(), chk_uv(), chk_claude()]
     if "render" in parts:
-        items += [chk_node(), chk_npm(), chk_resvg(), chk_chromium(data), chk_downscale()]
+        items += [chk_node(), chk_npm(), chk_resvg(), chk_chromium(data), chk_downscale(),
+                  chk_tool("rsync", "copying a round to the next (leaves the old stills, cold review and capture.json out)", ("--version",), "rsync", optional=True)]
     if "print" in parts:
         items += [chk_tool("gs", "print PDFs (outlines the text; a PDF/X-4 candidate with --icc)", ("--version",), "gs"),
                   chk_tool("pdfinfo", "print-check (reads MediaBox, TrimBox and BleedBox back) and book-pdf", ("-v",), "pdfinfo"),

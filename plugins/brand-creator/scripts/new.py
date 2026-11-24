@@ -5,8 +5,9 @@
 # ///
 """brand-creator new <slug>: scaffold a brand project from templates/.
 
-Creates <root>/<slug>/BRAND-STATE.md, FACTS.md, DECISIONS.md and brief/BRIEF.md. Every other folder is created when its phase
-starts (rounds/, research/, tokens/, assets/, history/ ...). Refuses to touch an existing project.
+Creates <root>/<slug>/BRAND-STATE.md, FACTS.md, DECISIONS.md, brief/BRIEF.md and .gitignore (it keeps the full-page site captures out of
+git). Every other folder is created when its phase starts (rounds/, research/, tokens/, assets/, history/ ...). Refuses to touch an
+existing project: a folder that holds anything, an existing .gitignore included, is refused before anything is written.
 Root: --root, else the plugin's projects_root setting (CLAUDE_PLUGIN_OPTION_PROJECTS_ROOT), else the current folder.
 """
 import json
@@ -19,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from _common import (EXIT_FAIL, EXIT_USAGE, Parser, fail, main_guard, plugin_root, plugin_version, today)  # noqa: E402
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
-TEMPLATES = {"BRAND-STATE.md": "BRAND-STATE.md", "FACTS.md": "FACTS.md", "BRIEF.md": "brief/BRIEF.md", "DECISIONS.md": "DECISIONS.md"}
+TEMPLATES = {"BRAND-STATE.md": "BRAND-STATE.md", "FACTS.md": "FACTS.md", "BRIEF.md": "brief/BRIEF.md", "DECISIONS.md": "DECISIONS.md",
+             "gitignore": ".gitignore"}   # templates/gitignore has no dot: a dotfile in a plugin is easily left out of a copy
 
 
 def render(text: str, values: dict, name: str) -> str:

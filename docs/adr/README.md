@@ -11,5 +11,8 @@ Why the marketplace works the way it does. A plugin's own decisions live in that
 | [ADR-0005](ADR-0005-release-tags-need-a-passing-ci-verdict.md) | A release tag is accepted only on a commit where its plugin's CI verdict and `docs` passed (tag rulesets) | accepted |
 | [ADR-0006](ADR-0006-main-and-release-tags-cannot-be-rewritten.md) | A release tag can be neither moved nor deleted, and `main` neither deleted nor force-pushed (rulesets) | accepted |
 | [ADR-0007](ADR-0007-secret-scanning-and-dependabot-alerts.md) | GitHub refuses a push that carries a secret, and Dependabot reports vulnerable dependencies; alerts are fixed by a push or dismissed with a reason | accepted |
+| [ADR-0008](ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md) | CI runs quick checks only, never on macOS; brand-creator's full suite runs on the maintainer's machine before each release tag | accepted |
+| [ADR-0009](ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md) | brand-creator's release run can run on GitHub's runners, macOS included, started by hand | accepted |
+| [ADR-0010](ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md) | Private terms are kept out by a pre-push scan on the machine that holds them; no test, CI job or release run needs a private file | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).

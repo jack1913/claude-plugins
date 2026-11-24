@@ -103,6 +103,14 @@ def test_prereq_without_sips_warns_and_does_not_block(tmp_path):
     assert items["sips"]["status"] == "WARN" and "downscale check" in items["sips"]["blocks"] + items["sips"]["note"]
 
 
+def test_prereq_without_rsync_warns_and_names_what_it_is_for(tmp_path):
+    """rsync is optional (a round is copied to the next without its stills): without it the item is a WARN that says so, and the scope is not blocked."""
+    env = bare_path(tmp_path, BASE, fake_claude="2.1.302")
+    r = run_prereq(["--for", "quick", "--json", "--data", str(data_dir() or tmp_path)], env)
+    items = {i["id"]: i for i in json.loads(r.stdout)["items"]}
+    assert items["rsync"]["status"] == "WARN" and "copying a round to the next" in items["rsync"]["blocks"], items["rsync"]
+
+
 def test_prereq_print_scope_names_ghostscript(tmp_path):
     env = bare_path(tmp_path, ["python3", "uv", "bash", "env"], fake_claude="2.1.302")
     r = run_prereq(["--for", "print"], env)

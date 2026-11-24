@@ -71,14 +71,31 @@ Generalised from prompts that worked; use them as written or close to it.
   variant's proof and give its exit code and failing rows; Read each variant's `strip.png` and `reduced.png` before saying
   what moves; check that each card's proof line says what its report says and that `board-lint` passes its `motion:*` rows.
 - A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the
-  board, the references or the reasons. It writes `rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix`
+  board, the references or the reasons. It may also be given the approved G4 rules as text in the prompt (the output of
+  `brand-creator state --part g4-rules`: the G4 record and the recorded rule lines, never the rest of `BRAND-STATE.md`);
+  its `inputs:` list then ends with `- BRAND-STATE.md#g4-rules sha256:<hex>`, the first line of that output. For a page that
+  animates when it loads it may also be given the three key frames of the first screen (`shots/frame-1440-0.png`, `-50` and `-100`:
+  the start, the middle and the end of the longest animation that runs on load, each listed in `inputs:`); it reads the motion
+  from them (does the entrance carry the idea, does anything stay on screen after it ends) and does not guess it from the end
+  stills. It writes
+  `rounds/r<N>/<name>/cold-review.md`: `verdict: ship`, `verdict: fix` or `verdict: owner`
   first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), an `inputs:`
   list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the
   visitor most first, each short enough to sit on a single line. The findings ask: does the first screen say what only
   this brand could say; does it serve the visitor's job in BRIEF and put the job's own action in reach; does any part
-  read as a tell from `page-tells.json`; does every number and status word match FACTS or sit in a labelled sample. A
-  review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the
+  read as one of the generic tells (an eyebrow over a heading; an arrow glued to a link or button label; a run of middle
+  dots between items; a stock label on the hero's second action; a hero that carries too much text; a product mock-up made
+  of styled boxes, a drawn screen of a product, not an illustration or a drawn object; three equal tiles in a row; a box left outside its place once the page has settled, which a still can
+  show as a sheet past the edge of its card; a form or form control drawn rotated, as on a tilted sheet: forms are never tilted); does every number and status word match FACTS or sit in a labelled sample.
+  With the G4 rules in the prompt it also asks whether anything on the page breaks one, and a page that does what a rule
+  says (a dark still that equals the light one, when a rule says so) is right, not a finding.
+  A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the
   finding notes that the owner would have to supply it, and does not fault the page for leaving it out.
+  `owner` says that what is left is a choice only the owner can make, and then each finding is a question to the owner, not a
+  fault ("Do you want X or Y?"). A variant is read at most twice, the second time after the fixes. The prompt of the second
+  review says so in one line of its own, which stands outside this fragment, so a first call built from the fragment never carries it (the exact line is
+  in [fleet.md](fleet.md); a line of the prompt, not an input, and not the first review's findings); the prompt of the first has no such line. When the prompt says this is the second review, put what you would only
+  list for another round of fixes as a question to the owner, and use `fix` only for a fault that is plainly there.
 
 **Implementation and safety**
 

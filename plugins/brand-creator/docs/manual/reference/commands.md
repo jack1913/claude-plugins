@@ -2,11 +2,13 @@
 
 Everything brand-creator adds to Claude Code. A command is what you type in the Claude Code chat, starting with `/`.
 "You only" means it runs only when you type it; "you or Claude" means Claude can also start it when your request
-matches. [Glossary](glossary.md) explains words like tier, brief, board and round.
+matches; "Claude only" means it is not in the `/` menu: you ask in your own words and Claude starts it.
+[Glossary](glossary.md) explains words like tier, brief, board and round.
 
 You don't need most of this page. To start, say what you want, such as "a logo for my bakery". To pick up again later,
 open Claude Code in your project's folder and say "go on with my brand". `/brand-creator:status` shows where you are
-and what comes next.
+and what comes next. There is no command to start a project or to launch: say it in words
+([Start a brand](#start-a-brand), [Launch checklist](#launch-checklist)). To review, type `/brand-creator:check --review`.
 
 ## Commands and skills
 
@@ -15,22 +17,21 @@ angle brackets stand for what you fill in. So `/brand-creator:round` and `/brand
 
 | Command | Starts | What it does | Arguments |
 | --- | --- | --- | --- |
-| `/brand-creator:brand-creator` | you or Claude | Starts or continues a brand project and runs it one decision at a time | — |
-| `/brand-creator:brand-naming` | you or Claude | Finds a name, or screens one you have; screening, not clearance | — |
-| `/brand-creator:brand-assets` | you or Claude | Makes favicons, app icons, social images and other platform files from a logo you already have | — |
-| `/brand-creator:brand-book` | you or Claude | Builds, updates, reviews and exports the brand book | — |
+| `/brand-creator:brand-creator` | you or Claude | Starts or continues a brand project and runs it one decision at a time. It also starts a new project from your words, and hands you the launch checklist when you ask to launch | — |
+| `/brand-creator:brand-naming` | Claude only | Finds a name, or screens one you have; screening, not clearance | — |
+| `/brand-creator:brand-assets` | Claude only | Makes favicons, app icons, social images and other platform files from a logo you already have | — |
+| `/brand-creator:brand-book` | Claude only | Builds, updates, reviews and exports the brand book | — |
 | `/brand-creator:setup` | you only | Installs the tools brand-creator needs, after showing what it will download and getting your yes | `[--force]` |
-| `/brand-creator:new` | you only | Starts a new brand project and asks up to three quick questions | `[slug]` |
 | `/brand-creator:round` | you only | Builds your next board and stops for your decision: the style board first, then directions and refinements (and, in Standard and Full, a motion round), then the boards for your website if your brief lists one | `[style\|pick\|refine\|motion\|site-refs\|site] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
-| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values or checks one page against your brand | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...]` |
-| `/brand-creator:review` | you only | Reviews the latest work and gives you one list to approve | `[board\|book\|pack\|all] [panel]` |
+| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values, checks one page against your brand, or reviews the latest work and gives you one list to approve | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...] \| --review [board\|book\|pack\|all] [panel] \| --panel` |
 | `/brand-creator:brand-adopt` | you only | Looks at where your brand belongs in your product's code, and changes it only when you ask | `[survey\|apply\|review\|status] [repository label]` |
-| `/brand-creator:launch` | you only | Writes your launch checklist and hands it over one step at a time | `[--name <candidate>]` |
 
-Each command has a how-to page:
+Rows marked Claude only are not in the `/` menu. Ask for them in your own words, such as "name ideas for my bakery",
+and Claude starts them. If Claude does not pick one up, name it: say "use the brand-naming skill", "use the brand-assets
+skill" or "use the brand-book skill". Each command has a how-to page:
 
-- [Start a brand](../use/start-a-brand.md): `brand-creator`, `new`, `status`, `setup`
+- [Start a brand](../use/start-a-brand.md): `brand-creator`, `status`, `setup`
 - [Pick and refine a direction](../use/pick-and-refine-a-direction.md): `round`, `motion`
 - [Get reference pages for your site](../use/get-reference-pages-for-your-site.md): `round site-refs`, `round site`
 - [Name your brand](../use/name-your-brand.md): `brand-naming`
@@ -38,21 +39,22 @@ Each command has a how-to page:
 - [Make the brand book](../use/make-the-brand-book.md): `brand-book`
 - [Use your brand kit](../use/use-your-brand-kit.md): `kit`, and `brand-adopt status` for the copies of your kit
 - [Apply the brand to your product](../use/apply-the-brand-to-your-product.md): `brand-adopt`, and a redesign
-- [Launch your brand](../use/launch-your-brand.md): `launch`
-- [Check your project](../use/check-your-project.md): `check`, `review`
+- [Launch your brand](../use/launch-your-brand.md): asking to launch
+- [Check your project](../use/check-your-project.md): `check`, `check --review`
 - [Check a page against your brand](../use/check-a-page.md): `check --page`
 
 ## Workflows
 
-An agent is a separate helper Claude starts for one job, and a workflow runs several agents at once. You don't type
-these names: Claude starts each one from the command in the second column, and only after your yes, once it has told
-you how many agents, which models, how big and roughly what it costs. Each agent costs about what the same step would
-cost in your own session. Details: [Agents and workflows](agents-and-workflows.md).
+An agent is a separate helper Claude starts for one job, and a workflow runs several agents at once. These four appear in
+the `/` menu, but they are meant to be started by brand-creator, not typed: Claude starts each one from the step in the
+second column, and only after your yes, once it has told you how many agents, which models, how big and roughly what it
+costs in tokens. That figure comes from measured runs, or Claude says "not measured". If you type one yourself, you see its
+phases and a "Yes, run it / No" prompt, without that cost estimate. Details: [Agents and workflows](agents-and-workflows.md).
 
 | Workflow | How it starts | What it does |
 | --- | --- | --- |
 | `/brand-creator:directions` | Claude, from the `brand-creator` skill, after your yes | One designer per direction, then one judge that advises. Ends before you pick |
-| `/brand-creator:review-panel` | Claude, when you type `/brand-creator:review panel`, after your yes | One read-only reviewer per angle, then one judge. Ends with one list for you to approve |
+| `/brand-creator:review-panel` | Claude, when you type `/brand-creator:check --review panel`, after your yes | One read-only reviewer per angle, then one judge. Ends with one list for you to approve |
 | `/brand-creator:naming` | Claude, from the `brand-naming` skill, after your yes | Name hunters, a screener and a judge. Ends before you pick a name |
 | `/brand-creator:adopt` | Claude, when you type `/brand-creator:brand-adopt` and ask to apply the brand, after your yes | One implementer per repository on your branch, then an independent review. Never commits |
 
@@ -79,13 +81,20 @@ own, none can start another agent, and you don't need to start one yourself.
 | --- | --- | --- |
 | `--force` | Installs again even when the tools are already there | Off |
 
-## new
+## Start a brand
 
-> /brand-creator:new my-bakery
+> A logo and a look for my bakery
+>
+> Start a brand called Acme
 
-| Argument | What it does | Default |
+There is no command for this. Say what you need, and Claude starts the process and asks up to three quick questions.
+
+| You say | What it does | Default |
 | --- | --- | --- |
-| `slug` | A short name for the project's folder, such as `my-bakery` | `brand-<date>` when you give none or the name is still open |
+| A name for the brand | The project's folder is named from it, such as `./my-bakery/` | `brand-<date>` when you give none or the name is still open |
+
+If a project is already open in the folder, Claude says so and asks whether to pick it up or start a separate one next
+to it.
 
 ## round
 
@@ -95,7 +104,7 @@ own, none can start another agent, and you don't need to start one yourself.
 
 | Argument | What it does | Default |
 | --- | --- | --- |
-| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` and `site` are the two rounds for your website, below | Worked out from your project |
+| `style`, `pick`, `refine`, `motion`, `site-refs`, `site` or `masters` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` and `site` are the two rounds for your website, below | Worked out from your project |
 | text | The question this round should answer | Worked out from your project |
 
 The two rounds for your website need the Standard or Full tier, a site in your brief, and your OK on your brand's
@@ -108,8 +117,17 @@ ask for them in your own words.
 - **`site`**, after you pick references or say "skip the references", builds two or three versions of the first screen
   of your home page; typed again after your pick, it builds your other pages and marks each choice as a brand rule or an
   example. It never builds or publishes your real site, and marks a choice as a rule only when you decided it.
+- **Sharing a first-screen version.** While you try the versions, you can ask Claude to share one. Claude makes one
+  self-contained copy of it and, only with your yes to private claude.ai pages (the `review_surface`
+  [setting](settings.md)), publishes the copy as a private page and gives you its address. Without your yes, the version
+  stays on your computer.
 
 Steps: [Get reference pages for your site](../use/get-reference-pages-for-your-site.md).
+
+- **`masters`** builds your ads and your deck as masters: two or three directions in every size you need, each file
+  checked (nothing past the edge, no text running into another, the deck's PDF and PowerPoint file). After you approve,
+  with your answer on how the deck looks in PowerPoint, Claude copies them into `assets/masters/` with a README. Standard and
+  Full, after your brand's rules. Steps: [Make your ads and decks](../use/make-your-ads-and-decks.md).
 
 ## motion
 
@@ -132,24 +150,26 @@ in motion/motion.json`.
 > /brand-creator:check "Old Name"
 >
 > /brand-creator:check --page pages/index.html
+>
+> /brand-creator:check --review panel
 
 | Argument | What it does | Default |
 | --- | --- | --- |
 | `--page <page>` | Checks one page against your brand instead of the project: a page in your project, a page of a site built elsewhere on your computer, or a page your own computer serves while someone works on the site (a local address, such as `http://localhost:3000/`). A page on the internet is refused. For other screen widths, in pixels, ask in words, such as "only 390 and 1440" | Off: the project's checks run |
 | an old value or phrase | Also searches the whole project for leftovers of it. Repeat for each one | Off: only the checks run |
+| `--review [board\|book\|pack\|all]` | Reviews the latest work, or what you name, against the project's own rules and checks, and gives you one list to approve. Nothing is fixed before you approve | Off: the project's checks run |
+| `--refresh` | First runs again each report that went out of date and can be made again without a decision of yours: the check of each of your pages, the contrast, the book check, the kit check and the board check. It says each one and how it ended, then checks as usual. A report that writes your files or needs your yes (the adapter files, the applied skill, the kit, the book, the packs) is named, with the command to run, and left alone. Ask in words ("check and refresh the stale reports") | Off: a report that is out of date is "not verified" |
+| `panel`, after `--review`, or `--panel` | Also offers a review panel. A panel that uses extra agents starts only after you see the size and cost and say yes | Off |
+
+`--review` takes at most one of `board`, `book`, `pack` or `all`, and then `panel`. `--panel` is the same as `--review panel`.
+With either, any other word, before or after, is refused with a one-line usage message; it is never searched for as an old
+value. A bare `panel` without `--review` is refused too, with "did you mean --review panel?". To search for the word panel
+itself, put it in quotes. `--page` and `--review` together are refused: run them one after the other. A refused command runs
+nothing.
 
 With `--page`, Claude opens the page at several sizes, from a phone to a wide screen, in light and dark, and lists what
 breaks your brand, each with its fix, plus warnings about what makes the page look like any template. It never changes
 your page, sends nothing online and starts no extra agents; [Page check](page-check.md) has every rule.
-
-## review
-
-> /brand-creator:review panel
-
-| Argument | What it does | Default |
-| --- | --- | --- |
-| `board`, `book`, `pack` or `all` | What to review | The latest work |
-| `panel` | Also offers a review panel. A panel that uses extra agents starts only after you see the size and cost and say yes | Off |
 
 ## kit
 
@@ -164,9 +184,37 @@ a program reads). Any tier can have a kit, but putting it into your product need
 | You say | Claude runs | What it does | What it never does |
 | --- | --- | --- | --- |
 | "Write the brand kit" | `kit build` | Shows what it would write. After your go, it writes the kit into a hidden folder of your project, `.claude/skills/<your brand>-brand/`. Asked again after your brand changed, it writes the next version | Writes nothing before your go, and nothing outside your project. Never overwrites the files that are yours, and never deletes a file |
-| "Check the kit" | `kit check` | Says whether the kit is whole: the made-for-you files are as Claude built them, every link inside it works, your own pages are filled in with their rules and examples marked, and the version numbers agree. If your brand changed since the last build, it says "not verified" | Changes nothing in the kit |
-| "Is my website's copy of the kit current?" | `kit status` | Compares the copy in each of your product's code folders with your kit, file by file and exactly, and says `current`, `not installed` or `not current`, with the list of files to copy | Writes and copies nothing, in your product or your project: the kit goes in with `/brand-creator:brand-adopt`. It refuses your home folder itself, Claude's own settings folder (`~/.claude`) and your brand project |
+| "Check the kit" (add "and list every problem" to see each untagged line and each value without a source, not only the first six) | `kit check` (`kit check --all`) | Says whether the kit is whole: the made-for-you files are as Claude built them, every link inside it works, your own pages are filled in with their rules and examples marked, and the version numbers agree. If your brand changed since the last build, it says "not verified" | Changes nothing in the kit |
+| "Is my website's copy of the kit current?" | `kit status` | Compares the copy in each of your product's code folders with your kit, file by file and exactly, and says `current`, `not installed` or `not current`, with the list of files to copy. It also names each rule that the product's copy of `golden-rules.md` sorts differently from yours | Writes and copies nothing, in your product or your project: the kit goes in with its own `install.py`, which `/brand-creator:brand-adopt` runs. It refuses your home folder itself, Claude's own settings folder (`~/.claude`) and your brand project |
+| "Install the kit in my website's code" (no Claude needed) | `python3 .claude/skills/<your brand>-brand/install.py <folder> [--yes]` | Says what it would copy into that code; with `--yes` copies it, kit.json last. A file of yours there is updated only where that code never changed it | Never deletes, saves into the code's history, or installs into Claude's own settings folder or your brand project. Never writes through a shortcut (a link) |
 | "Test my brand kit" | a test build, then the page check | Builds a first screen and one more part of a page from the kit alone, in a temporary folder outside your project, then checks both against your brand | Starts only when you ask, and uses no extra agents |
+
+## cleanup
+
+> Clean the old rounds
+
+Old rounds pile up in your project's `rounds/` folder. This is a `brand-creator` command, not a slash command: you ask in
+your own words, and Claude runs it, usually offering before the first push of a project you share. It removes whole round
+folders and nothing inside a round you keep. Your project needs git, with the rounds committed: that is how any removed
+round can come back.
+
+| You say | Claude runs | What it does | What it never does |
+| --- | --- | --- | --- |
+| "Clean the old rounds" | `cleanup` | Shows a plan and writes it to `qa/<date>-cleanup-plan.txt`: which rounds stay and why (the latest of each stage, the latest pick board, any round something you keep points at, any it cannot place), which go, how big they are, and whether `history/` holds a frozen copy. Each plan has a short code | Removes nothing |
+| "Yes, remove them" | `cleanup --record-yes` then `cleanup --yes` | Writes your yes and your words into `DECISIONS.md`, tied to the plan's code, then removes those round folders through git. The removal is staged, and the restore line and a suggested commit message are printed | Commits, and removes anything that is not committed as it is; the work stays recoverable. `history/`, `site/` and `assets/` are never touched, except the check reports of a removed round |
+| "Keep round 3 too" | `cleanup --keep r3` | Makes a new plan with that round kept; it needs its own yes | Reuses an earlier yes for a plan that changed |
+| "Make history/ smaller" | `cleanup --history` | Shows a plan for your frozen rounds in `history/`: what each keeps (what its boards show, the scripts that built it and its notes) and what goes, with sizes, in `qa/<date>-cleanup-plan-history.txt`. After your yes (`--record-yes`, then `--yes`) it removes those files through git and rewrites the checksum list | Commits, or touches a frozen round that was edited by hand: it refuses and names the files |
+
+It refuses, naming each file, while any file of a round to remove is changed, new, deleted or hidden from git, or a round
+holds a link. Your yes counts once: a second removal of the same plan after you restore the rounds needs a second yes.
+Recording your yes touches `DECISIONS.md`, which the check of a site's pages board reads, so Claude then runs
+`/brand-creator:check --refresh`.
+
+Limits: the plan finds a round something points at by reading the files of your project as text (paths, links and file
+names). A path a script builds from parts, a picture file that names a round, or a document outside your project that no
+list names is not seen, so a round still in use can be proposed for removal. Compare the plan with what you would keep by
+hand before you say yes, and check the first site or book you open after it. Nothing was run against a real brand project
+before release. Where it comes up: [Get reference pages for your site](../use/get-reference-pages-for-your-site.md), step 3.
 
 ## brand-adopt
 
@@ -190,10 +238,13 @@ code before and after the change, without changing it, and notes what your site 
 such as where links go and the names of form fields. The review fails anything gone that you gave no reason for, and
 only you decide that something may go. Steps: [Apply the brand to your product](../use/apply-the-brand-to-your-product.md).
 
-## launch
+## Launch checklist
 
-> /brand-creator:launch --name Loaf
+> Help me launch
 
-| Argument | What it does | Default |
+There is no command for this. Ask to launch, or for the launch checklist, and Claude writes `LAUNCH.md` and hands it over
+one step at a time. You do each step; Claude buys, files and registers nothing.
+
+| You say | What it does | Default |
 | --- | --- | --- |
-| `--name <candidate>` | Which candidate name the checklist is for, when naming screened several | The project's name |
+| A candidate name, such as "the launch checklist for Loaf" | Which candidate name the checklist is for, when naming screened several | The project's name |

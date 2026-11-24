@@ -41,14 +41,23 @@
     up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why, the words board-lint uses for a variant). From G3 to G4 an undecided motion is an info row. Quick decides it at G4: no row
   * Once G4 is recorded, tokens/primitives.tokens.json is compared with the plugin's starter (templates/tokens/primitives.tokens.json): a token still holding the starter's value
     is a `tokens:starter` warning, never a failure, unless the owner kept it in $extensions["brand-creator"]["starter-kept"] (a dated decision and a list of paths). Before G4: no row
+  * masters:behind-site (info, only when it has something to say): G4p recorded after G4m, or assets/masters/masters.json with no G4m once G4p is recorded: the masters
+    were approved before the site, and a masters round would bring them to the site's language. The owner decides; it never fails.
   * The approved pages of the site round, when G4p is recorded or site/site.json exists (a project with neither gets no site: row). site:record: G4p is recorded and site/site.json exists (G4p
     without it fails and says to run `site approve`; the record without G4p fails too), and sitedata.validate_site finds nothing (a page edited after it was approved fails, with the command that
     approves it again). site:pages: every page the record lists has a current page-check report of that very page (assets/_checks/<pagecheck.report_tool>.json, target.page equal to its path):
     a failing report fails the row; a missing, stale or no-verdict one is "not verified" and names `brand-creator page-check site/<id>/index.html`. site:stills: every page has a
     site/<id>/shots/capture.json that is the capture of that page and current, whose four first-screen stills are the files it lists; otherwise "not verified", naming `brand-creator capture site/<id>/index.html`
+  * --refresh: before checking, re-run each stale report that is a pure re-run of a check, with the arguments the report itself records and the project's own
+    defaults: the page-check of each project page (rounds/ and site/ too), then contrast, book-lint, kit check and board-lint (after the page-checks: a board reads their reports).
+    Each re-run and its result is printed; a re-run that fails is said so, never hidden. A stale report that is not a pure re-run (a pack of files, the adapters, the
+    applied skill, the kit, the book, a page-check of a built site or an address, the tokens) is named and left to its own command, which `check` names. The exit code is the check's.
 A check that cannot be established is "not verified" (exit 3), never "pass". A failing gate is exit 1.
 """
 import json
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -73,7 +82,7 @@ import motionspec  # noqa: E402
 import motionboard  # noqa: E402
 import siteboard  # noqa: E402
 import sitedata  # noqa: E402
-from pagecheck import report_tool  # noqa: E402
+from pagecheck import SCHEMES as PAGE_SCHEMES, report_tool  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail  # noqa: E402
 
 APPROVED_PROOF = "motion/proof.json"   # the proof of the approved move: finish.sh proves it, and frames takes the stills the book replays of it
@@ -383,6 +392,21 @@ def site_verdict(rep: Report, rid: str, label: str, results: list[tuple[str, str
         rep.add(rid, "pass", label, detail=passing)
 
 
+def masters_behind_site_row(project: Path, rep: Report) -> None:
+    """masters:behind-site (info, only when it has something to say): the site was approved (G4p) after the masters (G4m), or approved masters are in
+    assets/masters/ with no G4m at all. A masters round would bring them to the site's language; the owner decides."""
+    g4p, g4m = gate_recorded(project, "G4p"), gate_recorded(project, "G4m")
+    if not g4p:
+        return
+    date = lambda rec: rec[:10] if re.match(r"\d{4}-\d{2}-\d{2}", rec) else ""   # noqa: E731
+    if g4m and date(g4m) and date(g4p) and date(g4m) < date(g4p):
+        rep.add("masters:behind-site", "info", "the masters speak the site's language",
+                detail=f"the masters were approved before the site (G4m {date(g4m)}, G4p {date(g4p)}): a masters round would bring them to the site's language")
+    elif not g4m and (project / "assets" / "masters" / "masters.json").is_file():
+        rep.add("masters:behind-site", "info", "the masters speak the site's language",
+                detail=f"assets/masters/ holds masters with no G4m, and the site was approved (G4p {date(g4p) or g4p}): a masters round would bring them to the site's language")
+
+
 def site_rows(project: Path, rep: Report) -> None:
     """The approved pages of the site round (scripts/CONTRACT.md "check and the approved pages"). Rows only when G4p is recorded or site/site.json exists: a project with neither gets none.
     site:record: G4p recorded and site/site.json there (G4p without it fails: run `site approve`; the record without G4p fails too), and sitedata.validate_site finds nothing (a page edited after approval fails).
@@ -421,14 +445,119 @@ def site_rows(project: Path, rep: Report) -> None:
                  f"{len(pages)} page(s) have current stills: {', '.join(ids)}")
 
 
+def read_stale_reports(project: Path) -> list[tuple[str, dict, Path]]:
+    """Every report under assets/_checks/ whose inputs changed since it was made: (its tool name, the report, its file). A report that cannot be read as one is left to `check`, which fails it."""
+    out: list[tuple[str, dict, Path]] = []
+    for f in sorted((project / "assets" / "_checks").rglob("*.json")):
+        tool = f.relative_to(project / "assets" / "_checks").with_suffix("").as_posix()
+        if tool == "check":
+            continue
+        try:
+            doc = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(doc, dict) and isinstance(doc.get("inputs"), list) and stale_inputs(project, doc):
+                out.append((tool, doc, f))
+        except (OSError, ValueError, AttributeError, KeyError, TypeError):
+            continue
+    return out
+
+
+GONE = "is gone, so there is nothing to re-run and check does not judge that report"   # a page-check, board-lint or book-lint whose file was removed
+
+
+def refresh_command(project: Path, tool: str, doc: dict) -> tuple[list[str] | None, str]:
+    """-> (the words of the command that makes this stale report current, or None), and why not when None. Only a pure re-run of a check qualifies, its arguments taken from what
+    the report records (or the project's defaults): never from a guess, and never a command that writes files the owner reads or needs the owner's options or yes."""
+    if tool.startswith("page-check/"):
+        # what the run was asked (page_check.py `run`); a 0.8.0 report keeps the same keys at its top level, and one from before 0.8.0 records no widths_from (re-run with the rules' widths)
+        run = doc["run"] if isinstance(doc.get("run"), dict) else doc
+        target = run.get("target")
+        if not (isinstance(target, dict) and target.get("kind") == "project" and isinstance(target.get("page"), str)):
+            return None, "its page is a built site or an address, which only the owner's own command names (--from, --url)"
+        page = target["page"]
+        if not (project / page).is_file():
+            return None, f"{page} {GONE}"
+        words = ["page-check", page]
+        # only what was given on the command line is passed on: widths from qa/rules.json are read from it again (an edit of page.widths is what made the report stale),
+        # and a report that does not record where they came from is re-run with the rules' widths and both schemes
+        widths, schemes = run.get("widths"), run.get("schemes")
+        if run.get("widths_from") == "flag" and isinstance(widths, list) and widths:
+            words += ["--widths", ",".join(str(w) for w in widths)]
+        if run.get("schemes_from") == "flag" and isinstance(schemes, list) and schemes and schemes != list(PAGE_SCHEMES):
+            words += ["--schemes", ",".join(str(x) for x in schemes)]
+        return words, ""
+    if tool == "board-lint":
+        page = doc.get("page")
+        if isinstance(page, str) and (project / page).is_file():
+            return ["board-lint", page], ""
+        return None, f"the board it linted {GONE}"
+    if tool == "contrast":
+        skipped_marks = any(isinstance(r, dict) and r.get("id") == "touching:skipped-on-purpose" for r in doc.get("results") or [])   # it was run with --skip-marks
+        return ["contrast"] + (["--cvd"] if isinstance(doc.get("cvd"), dict) else []) + (["--skip-marks"] if skipped_marks else []), ""
+    if tool == "book-lint":
+        book = doc.get("book_file")
+        if isinstance(book, str) and (project / book).is_file():
+            return ["book-lint", book] + (["--self-consistency"] if doc.get("self_consistency") else []) + (["--allow-variants"] if doc.get("allow_variants") else []), ""
+        return None, f"the book it linted {GONE}"
+    if tool == "kit-check":
+        return ["kit", "check"], ""   # it reads the kit and writes only its own report; a kit that is out of date fails its kit:sources row, which names `kit build --yes`
+    if tool == "staleness":
+        return None, "it is made current by `brand-creator staleness --write`, which writes the staleness file"
+    return None, "it is not a pure re-run of a check: it writes files, or needs the owner's options or yes"
+
+
+def run_refresh(project: Path, words: list[str]) -> bool:
+    """Run `brand-creator <words>` for the project and print it and its result. -> True when it wrote its report (exit 0, 1 or 3); False for a run that did not (exit 2 or any other)."""
+    exe = str(plugin_root() / "bin" / "brand-creator")
+    data = os.environ.get("BRAND_CREATOR_DATA", "")
+    try:
+        cp = subprocess.run([exe] + (["--data", data] if data else []) + words + ["--project", str(project)], capture_output=True, text=True, cwd=project, timeout=1800)
+    except subprocess.TimeoutExpired:
+        print(f"refresh: brand-creator {' '.join(words)} -> timed out after 1800 s  [FAILED]", flush=True)
+        print(f"refresh: re-run failed, so that report stays stale and check says so below; run `brand-creator {' '.join(words)}` by hand to see why", file=sys.stderr, flush=True)
+        return False
+    lines = [ln for ln in (cp.stdout + "\n" + cp.stderr).splitlines() if ln.strip()]
+    verdict = next((ln for ln in reversed(lines) if ln.startswith("error: ") or ": PASS" in ln or ": FAIL" in ln or ": NOT-VERIFIED" in ln), lines[-1] if lines else "no output")
+    wrote = cp.returncode in (0, 1, 3) and any(ln.startswith("report: ") for ln in lines)
+    recorded = not wrote and any(ln.startswith("failure recorded in ") for ln in lines)   # the tool failed after opening its report: the report is current and says fail
+    print(f"refresh: brand-creator {' '.join(words)} -> exit {cp.returncode}: {verdict}" + ("" if wrote else "  [FAILED: the report records the failure]" if recorded else "  [FAILED: no report was written]"), flush=True)
+    if not wrote:
+        print(f"refresh: re-run failed, so check says so below; run `brand-creator {' '.join(words)}` by hand to see why", file=sys.stderr, flush=True)
+    return wrote
+
+
+def refresh_reports(project: Path) -> None:
+    """check --refresh: re-run the stale reports that are pure re-runs, the page-checks first (a board's lint reads their reports, so its staleness is read again after them), and name the rest."""
+    done: set[str] = set()
+    named: set[str] = set()
+    for phase in (lambda t: t.startswith("page-check/"), lambda t: t != "board-lint" and not t.startswith("page-check/"), lambda t: t == "board-lint"):
+        for tool, doc, _f in read_stale_reports(project):
+            if not phase(tool) or tool in done or tool in named:
+                continue
+            words, why = refresh_command(project, tool, doc)
+            if words is None:
+                named.add(tool)
+                print(f"refresh: {tool} is stale and is not re-run: {why}" + ("" if why.endswith(GONE) else "; check names the command"), flush=True)
+            elif tool == "contrast" and "tokens" in {t for t, _d, _p in read_stale_reports(project)}:
+                named.add(tool)
+                print("refresh: contrast is stale and is not re-run: the built tokens are stale too and contrast would judge them; run `brand-creator tokens` first", flush=True)
+            else:
+                done.add(tool)
+                run_refresh(project, words)
+    if not done and not named:
+        print("refresh: no stale report", flush=True)
+
+
 def main() -> int:
     ap = Parser(prog="brand-creator check", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_project_arg(ap)
     ap.add_argument("--cascade", action="append", default=[], metavar="OLD", help="old value or phrase that must no longer appear (repeatable)")
     ap.add_argument("--ignore-case", action="store_true", help="case-insensitive cascade search")
     ap.add_argument("--also", action="append", default=[], metavar="PATH", help="a document or folder outside the project to search too (read only; also from tools/cascade.json and FAMILY.md parent_docs)")
+    ap.add_argument("--refresh", action="store_true", help="first re-run each stale report that is a pure re-run of a check (page-check, contrast, book-lint, kit check, board-lint); the others are named, never re-run")
     a = ap.parse_args()
     project = find_project(a.project)
+    if a.refresh:
+        refresh_reports(project)
     rep = Report("check", project)
     renderer = str(read_state(project).get("renderer", "") or "resvg")
     rep.renderer = renderer
@@ -597,6 +726,7 @@ def main() -> int:
     adapt_gates.rows(project, rep)
     starter_rows(project, rep)   # tokens:starter, from G4 on
     site_rows(project, rep)   # site:record, site:pages, site:stills: only when G4p is recorded or site/site.json exists
+    masters_behind_site_row(project, rep)   # masters:behind-site: info, when the site was approved after the masters
     bprobs = band_problems(project)
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):
         rep.add("manifest:bands", "fail" if bprobs else "pass", "slots follow the size-band rule (or carry an exemption)",

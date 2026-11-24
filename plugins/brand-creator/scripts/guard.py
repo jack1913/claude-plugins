@@ -28,7 +28,8 @@ Protects finished work inside a brand project, and nothing else:
     blocked like deletes and writes (the latest round stays writable).
   * `bash -c`, `sh -c`, `zsh -c` and `eval` strings are tokenised again and checked like any command. `xargs` with a
     deleter or `mv`, and `git clean`, `git restore`, `git reset --hard`, `git checkout -- <path>|.`, `git rm` are
-    checked against the folder they run in (or their path arguments) as deletes, because rounds are not committed.
+    checked against the folder they run in (or their path arguments) as deletes, because a round may hold work that is not committed;
+    `brand-creator cleanup` is the way to remove committed old rounds (the guard does not inspect `brand-creator` commands; cleanup refuses anything uncommitted).
 
 This is best-effort: an interpreter one-liner can still write a file. The real gate is history/MANIFEST.sha256,
 verified by `brand-creator check`.

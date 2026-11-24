@@ -110,7 +110,7 @@ def test_brand_md_has_the_four_layers_and_the_frontmatter_of_the_architecture(pa
     assert heads == ["Strategy", "Voice", "Visual", "Governance"]
     assert "every tool has a published spare-parts list" in t and "| light | dark |" in t and "#007d71 | #4cd7c8" in t
     assert "Accessibility commitments" in t and "16.15:1" in t       # ink on paper: (0.0102 + .05) over (.9335 + .05) by hand is 16.15
-    for arch, want in (("family-member", ("master", "endorsed")), ("product-in-family", ("product", "endorsed"))):
+    for arch, want in (("family-member", ("master", "endorsed")), ("product-in-family", ("product", "endorsed")), ("family-parent", ("master", "branded-house"))):
         assert bc("state", "--set", f"architecture={arch}", project=pack).returncode == 0
         assert bc("adapters", "--brand-md", project=pack).returncode == 0
         fm = front((pack / "BRAND.md").read_text())
@@ -1073,3 +1073,15 @@ def test_an_action_under_4_5_to_1_does_not_make_the_adapters_fail_while_contrast
     assert rep["status"] == "pass" and row(pack, "design-md:lint", "adapters")["status"] == "pass"
     assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
     assert "action-on-bg" not in (pack / "DESIGN.md").read_text()
+
+
+def test_internal_context_in_brand_state_reaches_no_adapter_applied_skill_or_kit(pack):
+    marker = "INTERNAL-MARKER the program does not make the bank transfer"
+    mutate(pack / "BRAND-STATE.md", "## Internal context\n", f"## Internal context\n\n- {marker}\n")      # the template carries the section
+    assert marker in (pack / "BRAND-STATE.md").read_text()
+    generate(pack)
+    assert bc("kit", "build", "--yes", project=pack).returncode == 0
+    files = [pack / "BRAND.md", pack / "DESIGN.md"] + [f for f in (pack / ".claude" / "skills" / "acme-brand").rglob("*") if f.is_file()]
+    assert len(files) > 3
+    for f in files:
+        assert "INTERNAL-MARKER" not in f.read_text(encoding="utf-8", errors="ignore"), f

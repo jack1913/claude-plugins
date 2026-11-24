@@ -22,7 +22,7 @@ One self-contained document that says what the brand is, shows it at the sizes i
 guide (the Quick chapters: idea, mark, colour, files, changing, plus wordmark when there is one), built by `book` like any book, and the Quick
 path ends with it and G5. Standard and Full: the whole book. The book is a view of the project's data, not a second copy
 of it: tokens, the manifest, BRAND-STATE.md, FACTS.md and the check reports are read, never retyped.
-The order of work, and the self-review as a checklist, are in [the brand-book skill](../../../brand-book/SKILL.md); `/brand-creator:review`
+The order of work, and the self-review as a checklist, are in [the brand-book skill](../../../brand-book/SKILL.md); `/brand-creator:check --review`
 runs the same self-review.
 
 ## Inputs
@@ -91,6 +91,7 @@ Run the lint, then read the book as a stranger would. Each item has a check or a
 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows (verbatim) and the owner's source; judgement |
 | The system has not drifted back into a rejected direction | read the history chapter against the Directions table; judgement |
 | Required chapters are present for the tier | `book-lint` `chapters:required` |
+| An item the owner cannot fill yet is written `Open: <what it waits for>`, never a `[[fill: ...]]` left or an invented answer | `book-lint` `book:open-items` (info, lists them) |
 | Components show their focus state | read the components chapter; judgement |
 | No label is under the minimum size | `book-lint --self-consistency` `self:font-size` |
 | The book reads at 390 px | `brand-creator shot book.html`, read the 390 slices |
@@ -104,10 +105,21 @@ it after the owner has seen it). The losing options and every switcher leave the
 `removed-<date>/`; the decision is recorded under Collapsed in BRAND-STATE.md. Rebuild the tokens and the book afterwards. Variants live only
 while undecided: `book-lint` fails any left in the book, and `book --allow-variants` exists only for a review build.
 
+A late tier change (`state --set tier=full` on a Standard project) prints the chapters of the new tier's book the project has no file
+for and the inventory it lacks. Write each missing chapter from `templates/book/` (`book --init`); what the owner cannot give yet
+(no inventory, repository, handles or mailbox) is an open item, `Open: <what it waits for>` as a list item or paragraph, never a
+guess: `book-lint` lists it in the info row `book:open-items`, and each one is asked for again when the owner has the fact.
+
 The cover shows the edition and APPROVED (or the word `labels.<language>.APPROVED` gives in `book/book.json`, for the book's first
 content language) only when G5 is recorded for that edition (`state --record G5` writes `approved_edition`). A generated book follows
 BRAND-STATE.md when rebuilt. A hand-authored book is patched to show the stamp before G5 is recorded. After approval an edition is not
 edited in place: `patch --new-edition` or `collapse --new-edition` opens the next one, which needs its own G5.
+
+Adding or removing a semantic token or a declared contrast pair changes the counts the book computes (`roles`, `pairs`; the colour
+chapter quotes both with `{{count:roles}}` and `{{count:pairs}}`). Until the book is rebuilt (or patched, for a hand-authored one),
+`book-lint` fails `counts:data` ("roles: the book says 7, the data say 8"). When that edition was approved, the rebuild or patch
+changes an approved edition: open the next one first
+(`state --set edition=<N+1>` for a generated book, `patch --new-edition` for a hand-authored one) and record G5 for it.
 
 ## Adapters and the applied skill (opt-in at G5)
 
@@ -139,16 +151,23 @@ decks and other templates) go into `assets/masters/` first, and only approved on
    `applied-skill`: that command leaves a project with a kit to `kit build`.
 2. The owner's files are written once from `templates/kit/` and never overwritten or moved: `EXTENDING.md`, `voice.md`, `visual.md`,
    `golden-rules.md` and `recipes/web-page.md`. Fill the three with a `[[fill: ...]]` marker with the owner: `voice.md` from the tone
-   chapter of the book and the FACTS voice rows, `visual.md` from the book, `golden-rules.md` citing rule ids from `rules.json`.
+   chapter of the book and the FACTS voice rows, `visual.md` from the book, `golden-rules.md` citing rule ids from `rules.json`, sorted under `## Fixed`, `## Defaults` and
+   `## Examples`. Propose the sort; the owner decides it line by line, because it says what binds every product. A rule left
+   unsorted reads as fixed.
 3. `kit build --yes` again records the owner's text and moves the version on (until then `kit check` warns that owner files changed
    since the last build), then `kit check` until it passes. A fresh kit fails `kit:fill` until those three files are filled; it also
    fails a hand-edited generated file and a dead link, and says "not verified" when the brand changed after the kit was built.
-4. A brand change goes into the project (tokens, logo, rules, facts), then `kit build --yes` again, then `kit check`. A generated
+4. A brand change goes into the project (tokens, logo, rules, facts), then `kit check` first: its `kit:behind` row names the owner
+   files nobody touched since the last build, which the change leaves behind (`voice.md`, `visual.md`, `golden-rules.md`,
+   recipes). Show the owner those files; build only after they have read or edited them, because the build records them as they
+   are and clears the warning. Then `kit build --yes` again, then `kit check`. A generated
    file edited by hand, or a file put into `brand/`, `snippets/` or `reference-pages/`, stops the build (exit 1); `--replace` moves
    it to `removed-<date>/` and builds. An edit of an owner file moves the kit's version at the next build.
 5. To put the kit in a repository: `adoption add --repo <label> --kit`, then [the brand-adopt skill](../../../brand-adopt/SKILL.md)
-   copies it on the owner's branch and `kit status --repo <path>` must say `current`. The scripts never write outside the project, and
-   the kit is never copied into `~/.claude/skills` or any global folder, and never committed.
+   runs the kit's own `install.py` on the owner's branch and `kit status --repo <path>` must say `current`. The plugin's scripts never
+   write outside the project (`install.py` is a file of the kit, run by a person or the implementer; ADR-0014), and the kit is never
+   copied into `~/.claude/skills` or any global folder, and never committed. A developer with a copy of the brand project can run
+   `python3 .claude/skills/<slug>-brand/install.py <repository folder> [--yes]` without the plugin.
 
 ### Kit test (optional)
 

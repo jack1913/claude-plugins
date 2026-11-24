@@ -34,7 +34,9 @@ says otherwise.
     runs long.
 11. **Plain-language hand-offs**, one action at a time, with its reason.
 12. **Screenshots are messages.** When the owner sends one, read it and name what you see before replying.
-13. **Durable docs.** Decisions are written down where the next session finds them (BRAND-STATE.md, decisions/).
+13. **Builders live in the project.** Every script that builds a page, a board or a picture lives in `rounds/r<N>/_build/` (or
+    `tools/`), never in the session scratchpad, which a restart wipes.
+14. **Durable docs.** Decisions are written down where the next session finds them (BRAND-STATE.md, decisions/).
 
 ## Asking and deciding
 
@@ -45,6 +47,11 @@ says otherwise.
 - State defaults for minor points as "unless you say otherwise" in the same message instead of asking each.
 - When an instruction can be read narrowly or broadly, do the narrow reading and ask one question about the broader
   one. Never widen scope silently.
+- One numbered list per turn. When a board carries questions, the chat repeats them with the board's numbers and adds any
+  other question after them with the next numbers, never a second "1." (an answer such as "2a" must have one meaning).
+- An answer is context, not copy. What the owner says in answer to a question (how the product works inside, what it does
+  not do yet) becomes a `FACTS.md` row only when the owner says it may be said publicly; when unsure, ask. Otherwise it goes
+  under `## Internal context` in `BRAND-STATE.md`, which no page, board, book, adapter or kit uses as a claim.
 - Copy choices (headline, lede, tagline) are offered as 2-4 concrete text options with previews and one Recommended;
   never as an open question.
 

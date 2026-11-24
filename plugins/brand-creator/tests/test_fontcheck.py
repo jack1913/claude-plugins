@@ -130,6 +130,88 @@ def test_a_named_font_is_checked_together_with_the_fonts_under_assets_fonts(proj
     assert {"licence:assets/fonts/a.ttf", "licence:assets/masters/deck/b.ttf"} <= set(results(proj))
 
 
+# ---------------------------------------------------------------- a run that drops a font an earlier run checked
+
+ADVICE = "name every font in one run, or kit build leaves it out"
+
+
+def run_named(proj, *fonts):
+    """fontcheck with each of `fonts` named by --font (and the fonts under assets/fonts/ as always); the run must end 0."""
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for f in fonts:
+        args += ["--font", str(f)]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return r
+
+
+def test_a_run_that_leaves_out_a_font_an_earlier_run_checked_warns_naming_it(proj):
+    # the per-font trap: each run rewrites the one report, so the font of the run before drops out of it and kit build leaves it out
+    deck = proj / "assets" / "masters" / "deck"
+    deck.mkdir(parents=True)
+    a, b = font_variant(deck / "a.ttf", static=True), font_variant(deck / "b.ttf", static=True)
+    run_named(proj, a)
+    assert "fonts:dropped" not in results(proj)   # the first run has no earlier report to compare with
+    r = run_named(proj, b)
+    row = results(proj)["fonts:dropped"]
+    assert row["status"] == "warn" and row["dropped"] == ["assets/masters/deck/a.ttf"]
+    assert "assets/masters/deck/a.ttf" in row["detail"] and ADVICE in row["detail"] and "b.ttf" not in row["detail"]
+    assert "[WARN] fonts:dropped" in r.stdout
+    assert report(proj, "fontcheck")["fonts"] == ["assets/masters/deck/b.ttf"]   # no merge: the report holds this run's fonts only
+    assert report(proj, "fontcheck")["status"] == "pass"                          # a warning, never a failure
+    # a run that names both is silent, and so is the one that follows it with the same two
+    run_named(proj, a, b)
+    assert "fonts:dropped" not in results(proj)
+    assert report(proj, "fontcheck")["fonts"] == ["assets/masters/deck/a.ttf", "assets/masters/deck/b.ttf"]
+    run_named(proj, b, a)
+    assert "fonts:dropped" not in results(proj)
+    # a font taken away since is not dropped, it is gone
+    a.unlink()
+    run_named(proj, b)
+    assert "fonts:dropped" not in results(proj)
+
+
+def test_a_font_of_a_master_left_out_of_the_next_run_warns_and_the_fonts_under_assets_fonts_never_do(proj):
+    brand = proj / "assets" / "fonts"
+    brand.mkdir(parents=True)
+    font_variant(brand / "a.ttf", static=True)
+    deck = proj / "assets" / "masters" / "deck"
+    deck.mkdir(parents=True)
+    b = font_variant(deck / "b.ttf", static=True)
+    run_named(proj, b)
+    assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf", "assets/masters/deck/b.ttf"]
+    run_named(proj)   # no --font: assets/fonts/ again, the master's font left out
+    assert results(proj)["fonts:dropped"]["dropped"] == ["assets/masters/deck/b.ttf"]
+    assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf"]
+    run_named(proj)   # the run after it has nothing left to drop
+    assert "fonts:dropped" not in results(proj)
+
+
+def test_a_font_outside_the_project_is_recorded_by_name_and_never_counted_as_dropped(proj, tmp_path):
+    # the report keeps only the file name of a font outside the project, which the kit never holds: there is nothing to compare
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    x, y = font_variant(outside / "x.ttf", static=True), font_variant(outside / "y.ttf", static=True)
+    run_named(proj, x)
+    assert report(proj, "fontcheck")["fonts"] == ["x.ttf"]
+    run_named(proj, y)
+    assert "fonts:dropped" not in results(proj)
+
+
+def test_an_earlier_report_that_cannot_be_read_is_said_and_the_run_goes_on(proj):
+    run_named(proj, TEST_FONT)
+    path = proj / "assets" / "_checks" / "fontcheck.json"
+    path.write_text("{ not json", encoding="utf-8")
+    run_named(proj, TEST_FONT)
+    row = results(proj)["fonts:earlier"]
+    assert row["status"] == "info" and "not compared" in row["detail"] and "fonts:dropped" not in results(proj)
+    run_named(proj, TEST_FONT)   # the report just written reads fine, so the row is gone
+    assert "fonts:earlier" not in results(proj)
+    path.write_text(json.dumps({"tool": "fontcheck", "fonts": "assets/fonts/a.ttf"}), encoding="utf-8")   # `fonts` that is no list
+    run_named(proj, TEST_FONT)
+    assert "not compared" in results(proj)["fonts:earlier"]["detail"]
+
+
 # ---------------------------------------------------------------- licence hint and budget
 
 def test_licence_hint_reads_the_name_table(proj, tmp_path):
@@ -148,6 +230,8 @@ def test_the_licence_row_names_the_family_weight_and_style_of_the_file(proj):
     assert r.returncode == 0, r.stdout + r.stderr
     lic = results(proj)[f"licence:{TEST_FONT.name}"]
     assert (lic["family"], lic["weight"], lic["style"]) == ("Inter", 400, "normal")
+    assert lic["weight_range"] == [100, 900]                                               # its fvar `wght` axis: the fixture is a variable font
+    assert lic["slant_range"] is None                                                      # and it has no `slnt` axis
     assert lic["status"] == "info" and lic["recognised"] == "SIL Open Font License (OFL)"  # the status and the facts are as before
 
 
@@ -207,6 +291,99 @@ def test_the_licence_row_takes_the_family_weight_and_style_from_the_next_table_w
         "no-os2": ("Inter", 400, "italic"),
         "Brand-Sans": ("Brand-Sans", 400, "normal"),
     }
+
+
+RANGE_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+for name, low, high in (("r-part", 400.5, 700.5), ("r-point", 400, 400), ("r-wide", 0, 2000), ("r-thin", 400.2, 400.8)):
+    f = TTFont(src)
+    axis = next(a for a in f["fvar"].axes if a.axisTag == "wght")
+    axis.minValue, axis.defaultValue, axis.maxValue = low, low, high
+    f.save(f"{out}/{name}.ttf")
+f = TTFont(src)
+f["fvar"].axes = [a for a in f["fvar"].axes if a.axisTag != "wght"]      # a variable font with no weight axis
+f.save(f"{out}/r-none.ttf")
+"""
+
+
+def test_the_licence_row_holds_the_weight_range_of_a_variable_font_and_none_for_a_static_one(proj, tmp_path):
+    """The `wght` axis of the fvar table as CSS takes a range: whole numbers from 1 to 1000 inside the axis, the lowest below the highest. A static font, a variable font with no
+    weight axis and an axis that gives no such range have none, and the kit then declares the one weight."""
+    from helpers import font_variant, fonttools
+    made = fonttools(RANGE_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    font_variant(tmp_path / "r-static.ttf", static=True)
+    names = ["r-part", "r-point", "r-wide", "r-thin", "r-none", "r-static"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    assert {n: res[f"licence:{n}.ttf"]["weight_range"] for n in names} == {
+        "r-part": [401, 700], "r-point": None, "r-wide": [1, 1000], "r-thin": None, "r-none": None, "r-static": None}
+
+
+SLANT_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+for name, low, high in (("s-usual", -10, 0), ("s-back", 0, 10), ("s-both", -12, 12), ("s-part", -9.5, 0), ("s-point", 0, 0), ("s-thin", -0.8, -0.2), ("s-wide", -120, 120)):
+    f = TTFont(src)                                                  # only fvar is decoded here: every other table is saved as the bytes it had
+    axis = next(a for a in f["fvar"].axes if a.axisTag == "opsz")    # the fixture has no slant axis: its optical-size axis takes the tag
+    axis.axisTag = "slnt"
+    axis.minValue, axis.defaultValue, axis.maxValue = low, min(max(0, low), high), high
+    f["fvar"].instances = []                                         # a named instance holds its coordinates by axis tag
+    f.save(f"{out}/{name}.ttf")
+"""
+
+
+def test_the_licence_row_holds_the_slant_range_of_a_variable_font_and_none_for_one_that_does_not_slant(proj, tmp_path):
+    """The `slnt` axis of the fvar table as CSS takes an oblique range: the axis counts clockwise slant as negative and CSS as positive, so the range is the axis with its sign
+    turned, in whole degrees from -90 to 90 inside the axis, the lowest below the highest. A font with no slant axis, a static font and an axis that gives no such range have none,
+    and the kit then declares the style alone."""
+    from helpers import font_variant, fonttools
+    made = fonttools(SLANT_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    font_variant(tmp_path / "s-static.ttf", static=True)
+    names = ["s-usual", "s-back", "s-both", "s-part", "s-point", "s-thin", "s-wide", "s-static"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    assert {n: res[f"licence:{n}.ttf"]["slant_range"] for n in names} == {
+        "s-usual": [0, 10], "s-back": [-10, 0], "s-both": [-12, 12], "s-part": [0, 9], "s-point": None, "s-thin": None, "s-wide": [-90, 90], "s-static": None}
+    assert fc(proj, "--lang", "pl").returncode == 0
+    assert results(proj)[f"licence:{TEST_FONT.name}"]["slant_range"] is None               # the fixture as it is: weight and optical size, no slant axis
+
+
+BROKEN_FVAR = """
+import sys
+from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables.DefaultTable import DefaultTable
+f = TTFont(sys.argv[2])
+table = DefaultTable("fvar")
+table.data = b"abc"                                  # too short to be an fvar table
+f["fvar"] = table
+f.save(sys.argv[1] + "/r-broken.ttf")
+"""
+
+
+def test_a_font_whose_fvar_table_cannot_be_read_fails_its_own_row_and_the_others_keep_theirs(proj, tmp_path):
+    """fontTools decodes a table on first use, so a malformed fvar shows when the weight range is read. It is one unreadable font: the run goes on, the report keeps the
+    rows of every other font, and the kit can still copy them."""
+    from helpers import fonttools
+    made = fonttools(BROKEN_FVAR, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    r = fc(proj, "--lang", "pl", "--font", str(tmp_path / "r-broken.ttf"))                 # the good test font and the broken one in one run
+    assert r.returncode == 1, r.stdout + r.stderr
+    res = results(proj)
+    assert res["font:r-broken.ttf"]["status"] == "fail" and res["font:r-broken.ttf"]["detail"].startswith("cannot read r-broken.ttf: ")
+    assert "licence:r-broken.ttf" not in res and res[f"licence:{TEST_FONT.name}"]["weight_range"] == [100, 900]
 
 
 WEIGHT_VARIANTS = """

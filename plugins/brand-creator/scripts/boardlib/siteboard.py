@@ -4,7 +4,7 @@ The board is an ordinary round (rounds/rN/board.html, N 2 or more), from templat
 (refs_gate_rows: site-refs:tier, site-refs:brief, site-refs:g4, site-refs:research, site-refs:cliches-file) and the reading of brief/BRIEF.md that decides whether the project has a
 site at all (brief_lists_site). The sections and the group count are board_lint's own, with the other kinds of board. The rows of the page itself are here too: owner_rows (owner-sites:items: the sites the owner named) and
 group_rows (group:<name>:name, :idea, :references, :layout and, one per reference, :shot:<k>). The site board (data-board="site", templates/site-board.html) has its rows here too: the gates of
-the site round (site_gate_rows: site:tier, site:brief, site:g4, site:g4w) and, at the hero stage, one card per variant (variant_rows: site:variants, site:files, site:layout, site:fields) and the proof each variant brings: the page-check report of its page (site:check), the tells in it (site:tells) and the stills `capture` took (site:stills).
+the site round (site_gate_rows: site:tier, site:brief, site:g4, site:g4w) and, at the hero stage, one card per variant (variant_rows: site:variants, site:files, site:layout, site:fields: What it is, Takes from, Cost, and the card's Idea line) and the proof each variant brings: the page-check report of its page (site:check), the tells in it (site:tells) and the stills `capture` took (site:stills).
 
 A screenshot on the board is checked against the captures. group_rows reads every research/site-refs/<name>/capture.json (written by `brand-creator capture --url`): a screenshot whose bytes are a
 thumbnail or a view listed there, for the address the reference links to, passes; one that matches no capture is a warning, never a failure, and never silent (a screenshot the owner sent has no
@@ -15,7 +15,7 @@ line of the template ("(site, app icon, ...)"), the owner's own words not yet wr
 
 Three more kinds of row close the card of a hero variant (reflex_rows, refs_rows, cold_rows). The reflex test of the card (data-field="reflex") is the one a style board's direction has, read by boardlib/reflex.py against the ids of page-tells.json and ai-defaults.json and the items of research/site-cliches.md:
 site:<name>:reflex (the line is there: a card with no reflex line fails, as a direction does) and site:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded for each card, site:<name>:reflex-measured (a tell page-check measured that the line does not argue) and site:reflex-shared across the cards. site:refs holds each card's "Takes from" to what the owner picked in G4w (a group of the references
-board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first, `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now), at most five findings, and the card's cold line saying the same verdict.
+board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first (ship, fix or owner), `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now; optionally the G4 rules part and the three key frames `capture --frames` takes), at most five findings, and the card's cold line saying the same verdict.
 
 The pages stage (data-site-stage="pages", pages_rows) is read after the owner picked a hero: site:hero-first (an earlier round holds a hero board, and <body data-hero> names one of its variant cards), site:pages (one card per page,
 data-site-page, a page id equal to <body data-page> and to the folder rounds/rN/<id>/), the rows of a hero card that fit a page (site:files, site:layout, site:fields, site:check, site:tells, site:stills, and site:cold for a page that has a
@@ -120,6 +120,7 @@ SKIPPED = "skipped by owner"        # what G4w says when the owner skipped the w
 DISLIKES = re.compile(r"\bdislikes?\b", re.I)   # "picked <groups>; likes <...>; dislikes <...>": what stands from the word dislikes on is what the owner turned away from, never a pick
 RECORD_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\s*")   # `state --record` writes "<date> <decision>"
 FIELDS = (("what-it-is", "What it is"), ("from-refs", "Takes from"), ("cost", "Cost"))
+IDEA = ("idea", "Idea")             # a hero card's one memorable idea, in one line: a card without it fails site:fields, a page card too (a warning in 0.7.0, and on a page card in 0.8.0; the owner's O1 of group 4)
 TELL_ROW = re.compile(r"^tell:([a-z0-9-]+)$")    # the row page-check gives a generic tell of skills/brand-creator/references/page-tells.json (pagecheck.tell_rows): a warning when it found one
 VIEWS = ("1440-light", "1440-dark", "390-light", "390-dark")   # the four first-screen stills `capture <page>` takes, and the four a card shows
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -131,9 +132,10 @@ def stage_of(root: Node | None) -> str | None:
     return marker.attrs.get("data-site-stage", "").strip() if marker is not None else None
 
 
-def is_first(project: Path, rnd: int, stage: str | None) -> bool:
-    """Whether the board of round `rnd` is the first site board of its stage in the project: no earlier round holds a site board that declares the same stage."""
-    for n, d in list_rounds(project):
+def is_first(project: Path, rnd: int, stage: str | None, rounds: list[tuple[int, Path]] | None = None) -> bool:
+    """Whether the board of round `rnd` is the first site board of its stage in the project: no earlier round holds a site board that declares the same stage.
+    `rounds` (default: every round folder of the project) is the list of rounds to look in: `brand-creator cleanup` asks the same question of the rounds it keeps."""
+    for n, d in (list_rounds(project) if rounds is None else rounds):
         if n < rnd:
             root = read_page(d / "board.html")
             if page_kind(root) == "site" and stage_of(root) == stage:
@@ -141,9 +143,9 @@ def is_first(project: Path, rnd: int, stage: str | None) -> bool:
     return True
 
 
-def references_board(project: Path, rnd: int) -> tuple[int, Path] | None:
-    """(the round, its board) of the latest website references board before round `rnd` that counts (boardpage.is_site_refs_board), or None."""
-    found = [(n, d / "board.html") for n, d in list_rounds(project) if n < rnd and is_site_refs_board(read_page(d / "board.html"), n)]
+def references_board(project: Path, rnd: int, rounds: list[tuple[int, Path]] | None = None) -> tuple[int, Path] | None:
+    """(the round, its board) of the latest website references board before round `rnd` that counts (boardpage.is_site_refs_board), or None. `rounds`: as in is_first."""
+    found = [(n, d / "board.html") for n, d in (list_rounds(project) if rounds is None else rounds) if n < rnd and is_site_refs_board(read_page(d / "board.html"), n)]
     return found[-1] if found else None
 
 
@@ -311,20 +313,35 @@ def layout_problems(v: SiteVariant, known: dict[str, dict]) -> tuple[list[str], 
     return failures, warnings
 
 
+def _field_problem(v: SiteVariant, fid: str, label: str, hint: str = "") -> str | None:
+    """The one rule of a card field: some text, no placeholder and no [[fill: ...]] marker left. -> the problem, or None. `hint` ends the missing-field message, inside its brackets."""
+    nodes = list(v.card.find_all(data_field=fid))
+    if not any(n.nonempty() for n in nodes):
+        return f'{v.name}: {label} is missing or empty (data-field="{fid}" inside the card{hint})'
+    if FILL in " ".join(n.text() for n in nodes):
+        return f"{v.name}: {label} still holds a [[fill: ...]] marker"
+    return None
+
+
 def field_problems(v: SiteVariant, optional: tuple[str, ...] = ()) -> list[str]:
     """What it is, Takes from and Cost are filled in: some text, no placeholder and no [[fill: ...]] marker left. A field named in `optional` (Takes from, on a page card) may be left out of the card, but a
     line that is there is filled in."""
     out = []
     for fid, label in FIELDS:
-        nodes = list(v.card.find_all(data_field=fid))
-        text = " ".join(n.text() for n in nodes)
-        if not nodes and fid in optional:
+        if fid in optional and not list(v.card.find_all(data_field=fid)):
             continue
-        if not any(n.nonempty() for n in nodes):
-            out.append(f'{v.name}: {label} is missing or empty (data-field="{fid}" inside the card)')
-        elif FILL in text:
-            out.append(f"{v.name}: {label} still holds a [[fill: ...]] marker")
+        problem = _field_problem(v, fid, label)
+        if problem:
+            out.append(problem)
     return out
+
+
+def idea_problems(v: SiteVariant) -> list[str]:
+    """The Idea line of a hero or page card (data-field="idea"): some text, no placeholder and no [[fill: ...]] marker left, by the rule of every field (_field_problem). Each problem fails site:fields (in 0.7.0 it was a warning, so a
+    board made before the line existed still linted)."""
+    fid, label = IDEA
+    problem = _field_problem(v, fid, label, (": the one idea of this page in the brand's world, in one line" if v.noun == "page" else ": the one memorable idea of this hero, in one line"))
+    return [problem] if problem else []
 
 
 # ---------------------------------------------------------------- the proof of each variant: page-check, its tells, and the stills
@@ -568,11 +585,14 @@ MAX_FINDINGS = 5                  # a cold review gives at most this many findin
 REFLEX_LABEL = "the card has a reflex line"   # site:<name>:reflex: the required field; the row of a style board's direction says "required field"
 REFLEX_SOURCES = "page-tells.json, ai-defaults.json or research/site-cliches.md"   # where the name of a hit may come from, as a reflex row says it
 NO_CLICHE_FILE = "page-tells.json and ai-defaults.json (the project has no research/site-cliches.md, so no cliché of the category's sites can be named)"
-COLD_VERDICT = re.compile(r"verdict[ \t]*:[ \t]*(ship|fix)", re.I)       # the first non-empty line of cold-review.md
+COLD_VERDICTS = ("ship", "fix", "owner")                                  # `owner`: what is left is a choice only the owner can make, its findings are questions to them (at most two reviews are run per variant per board; the lint cannot count them)
+COLD_VERDICT = re.compile(r"verdict[ \t]*:[ \t]*(" + "|".join(COLD_VERDICTS) + ")", re.I)   # the first non-empty line of cold-review.md
 COLD_BY = re.compile(r"^by[ \t]*:[ \t]*\S", re.I | re.M)                  # "by: in-thread", or "by: agent"
 COLD_INPUTS = re.compile(r"inputs[ \t]*:", re.I)                          # the line that opens the list of what the review was made from
 COLD_ITEM = re.compile(r"[-*][ \t]+(\S+)[ \t]+sha256:([0-9a-f]{64})", re.I)   # "- <path> sha256:<hex>"
 COLD_FINDING = re.compile(r"\s*\d+[.)]\s+\S")                             # a numbered line is a finding
+COLD_RULES = f"{STATE_FILE}#g4-rules"                                     # the one part of BRAND-STATE.md a cold review may list, as a seventh input (_common.PART_READERS)
+FRAME_NAMES = ("frame-1440-0", "frame-1440-50", "frame-1440-100")        # the key frames of the first screen `capture <page> --frames` takes (shots/<name>.png): a cold review lists all three or none
 
 
 def reflex_line(v: SiteVariant) -> str | None:
@@ -735,10 +755,45 @@ def cold_inputs(lines: list[str]) -> tuple[list[tuple[str, str]] | None, list[st
     return listed, bad
 
 
+def cold_listed(project: Path, v: SiteVariant) -> list[str]:
+    """The paths the cold-review.md of the card lists as inputs (cold_problems judges the review itself; an unreadable or absent file lists none)."""
+    try:
+        lines = (Path(project) / v.dir / COLD_FILE).read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except OSError:
+        return []
+    listed, _ = cold_inputs(lines)
+    return [p for p, _ in listed or []]
+
+
+def cold_lists_rules(project: Path, v: SiteVariant) -> bool:
+    """True when the cold-review.md of the card lists the G4 rules part of BRAND-STATE.md as an input."""
+    return COLD_RULES in cold_listed(project, v)
+
+
+def cold_frame_paths(v: SiteVariant) -> list[str]:
+    """The three key frames of the card's page as a cold review lists them: the project paths of shots/frame-1440-0.png, -50 and -100."""
+    return [f"{v.shots}/{name}.png" for name in FRAME_NAMES]
+
+
+def frame_record_problems(project: Path, v: SiteVariant, wanted: dict[str, str]) -> list[str]:
+    """The key frames a cold review lists (`wanted`: project path -> sha256) against what capture.json lists for the page now (its `frames`): a frame it does not list, or lists with another sha256 (the page was
+    captured again without --frames, or the frames are from an earlier run), is a problem. An unreadable capture.json lists none (site:stills says why it is unusable)."""
+    try:
+        frames = json.loads((Path(project) / v.capture).read_text(encoding="utf-8")).get("frames")
+    except (OSError, ValueError, AttributeError):
+        frames = None
+    got = {f"{v.shots}/{e['file']}": e.get("sha256") for e in frames if isinstance(e, dict) and isinstance(e.get("file"), str)} if isinstance(frames, list) else {}
+    off = [p for p, sha in wanted.items() if got.get(p) != sha]
+    return [f"{v.name}: the key frames {v.dir}/{COLD_FILE} lists are not the ones {v.capture} lists now ({', '.join(off)}): run `brand-creator capture {v.page} --frames`, then review again"] if off else []
+
+
 def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: str = "variant") -> tuple[list[str], str | None]:
     """site:cold for one card -> (the problems, the verdict when the file gives one). rounds/rN/<name>/cold-review.md exists (`required`; a page card of the pages stage may go without, and then must not claim a verdict);
-    its first non-empty line is `verdict: ship` or `verdict: fix`; it has a `by:` line; its `inputs:` list is exactly the four stills of the variant (`noun` "page" on a pages board: of the page), brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
-    the file now; it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
+    its first non-empty line is `verdict: ship`, `verdict: fix` or `verdict: owner` (`owner` passes like `ship`: what is left is a choice only the owner can make, and the findings are questions to them); it has a `by:` line; its `inputs:` list is exactly the four stills of the variant (`noun` "page" on a pages board: of the page), brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
+    the file now, and may add one seventh input, the G4 rules part of BRAND-STATE.md (`- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as `_common.stale_inputs` reads it: a change of a rule or of
+    the G4 record makes the review stale, a change elsewhere in BRAND-STATE.md does not; the whole file is never an input), and may add the three key frames of the page's first screen (`shots/frame-1440-0.png`, `-50` and `-100`, from
+    `brand-creator capture <page> --frames`: all three or none, each equal to the file now and to what capture.json lists for it); it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes, and so does an `owner` shown as `owner`; at most two reviews are run per variant per board (the first, and one after the fixes), a rule of the
+    round the lint cannot count."""
     path = f"{v.dir}/{COLD_FILE}"
     cold_lines = [n for n in v.card.walk() if "data-cold" in n.attrs]
     f = Path(project) / path
@@ -756,7 +811,7 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
     m = COLD_VERDICT.fullmatch(first)
     verdict = m.group(1).lower() if m else None
     if verdict is None:
-        problems.append(f"{v.name}: {path} must start with its verdict, `verdict: ship` or `verdict: fix`" + (f" (its first line is {one_line(first, 60)!r})" if first else " (the file is empty)"))
+        problems.append(f"{v.name}: {path} must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner`" + (f" (its first line is {one_line(first, 60)!r})" if first else " (the file is empty)"))
     if not COLD_BY.search(text):
         problems.append(f"{v.name}: {path} has no `by:` line (`by: in-thread`, or `by: agent` after the fleet gate)")
     expected = [f"{v.shots}/{view}.png" for view in VIEWS] + [BRIEF_FILE, FACTS_FILE]
@@ -770,30 +825,44 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
             said.append(f"{len(bad)} line(s) are not `- <path> sha256:<hex>` ({'; '.join(bad[:2])})")
         if [e for e in expected if e not in paths]:
             said.append(f"it does not list {', '.join(e for e in expected if e not in paths)}")
-        if [p for p in dict.fromkeys(paths) if p not in expected]:
-            said.append(f"it lists {', '.join(p for p in dict.fromkeys(paths) if p not in expected)}, which a cold review does not read")
+        frames = cold_frame_paths(v)
+        extra = [p for p in dict.fromkeys(paths) if p not in expected and p != COLD_RULES and p not in frames]
+        in_list = [p for p in frames if p in paths]
+        if in_list and len(in_list) != len(frames):
+            said.append(f"it lists {len(in_list)} of the {len(frames)} key frames ({', '.join(in_list)}): list all three, or none")
+        if extra:
+            said.append(f"it lists {', '.join(extra)}, which a cold review does not read" + (f" (of {STATE_FILE} it takes the G4 rules alone: list {COLD_RULES})" if STATE_FILE in extra else ""))
         if len(paths) != len(set(paths)):
             said.append("a file is listed twice")
         if said:
-            problems.append(f"{v.name}: the inputs of {path} must be exactly the four stills of the {noun}, {BRIEF_FILE} and {FACTS_FILE} ({'; '.join(said)})")
+            problems.append(f"{v.name}: the inputs of {path} must be exactly the four stills of the {noun}, {BRIEF_FILE} and {FACTS_FILE} ({'; '.join(said)}); "
+                            f"a seventh input may be the G4 rules, `- {COLD_RULES} sha256:<hex>` (`brand-creator state --part g4-rules` prints it); "
+                            f"the three key frames of `brand-creator capture {v.page} --frames` may be added ({', '.join(cold_frame_paths(v))})")
         changed = []
         for p, sha in dict.fromkeys(listed):
-            if p in expected:
+            if p in expected or p in frames:
                 now = sha256_file(Path(project) / p) if (Path(project) / p).is_file() else None
                 if now != sha:
                     changed.append(p + (" (missing)" if now is None else ""))
         if changed:
             what = "the page or its stills" if any(c.startswith(v.shots) for c in changed) else f"{BRIEF_FILE} or {FACTS_FILE}"
             problems.append(f"{v.name}: {what} changed after the cold review: review again ({path} lists another sha256 for {', '.join(changed)})")
+        if len(in_list) == len(frames):   # a frame that changed is said above; one that is as it was must still be what capture.json lists
+            problems += frame_record_problems(project, v, {p: sha for p, sha in dict.fromkeys(listed) if p in frames and p not in {c.removesuffix(" (missing)") for c in changed}})
+        rules = next((sha for p, sha in listed if p == COLD_RULES), None)
+        if rules is not None:
+            for why in stale_inputs(Path(project), {"inputs": [{"path": STATE_FILE, "part": "g4-rules", "sha256": rules}]}):   # the rule `check` applies to a part input: changed, gone, or unreadable (and why)
+                problems.append(f"{v.name}: the G4 rules of {STATE_FILE} changed after the cold review: review again ({path} lists another sha256 for {COLD_RULES})" if why.endswith(" changed")
+                                else f"{v.name}: {path} lists {COLD_RULES}, which cannot be checked: {why}")
     findings = [ln for ln in lines if COLD_FINDING.match(ln)]
     if len(findings) > MAX_FINDINGS:
         problems.append(f"{v.name}: {path} gives {len(findings)} findings, at most {MAX_FINDINGS}, the costliest to the visitor first")
     if len(cold_lines) != 1:
-        problems.append(f'{v.name}: the card needs one cold line (data-cold="ship" or "fix"), it has {len(cold_lines)}')
+        problems.append(f'{v.name}: the card needs one cold line (data-cold="ship", "fix" or "owner"), it has {len(cold_lines)}')
     else:
         claimed = cold_lines[0].attrs["data-cold"].strip()
-        if claimed not in ("ship", "fix"):
-            problems.append(f'{v.name}: data-cold must be "ship" or "fix", got {claimed!r}')
+        if claimed not in COLD_VERDICTS:
+            problems.append(f'{v.name}: data-cold must be "ship", "fix" or "owner", got {claimed!r}')
         elif verdict is not None and claimed != verdict:
             problems.append(f'{v.name}: the card says data-cold="{claimed}" and {path} says verdict: {verdict}')
     return problems, verdict
@@ -816,21 +885,36 @@ def cold_rows(rep: Report, project: Path, variants: list[SiteVariant], required:
     else:
         rep.add("site:cold", "pass", label, detail="; ".join(f"{v.name}: {verdict}" for v, _, verdict in results if verdict))
     rep.inputs += [Path(project) / v.dir / COLD_FILE for v in variants] + [Path(project) / FACTS_FILE]
+    if any(cold_lists_rules(project, v) for v in variants):   # a review that stands on the G4 rules goes stale with them, and so does the report
+        rep.inputs.append(PartInput(Path(project) / STATE_FILE, "g4-rules"))
+    rep.inputs += [Path(project) / p for v in variants for p in cold_listed(project, v) if p in cold_frame_paths(v)]   # a review that lists key frames goes stale with them (a capture made again)
 
 
-def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = ()) -> None:
-    """site:files, site:layout and site:fields for the cards of a hero board (noun "variant") or of a pages board (noun "page"; `optional` names the fields a card may leave out). Each is one result for the whole
-    board and names the cards it fails; without a card they are not verified (`count_row` says why there is none)."""
+def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = (), idea: bool = False) -> None:
+    """site:files, site:layout and site:fields for the cards of a hero board (noun "variant", `idea`: each card also states its one idea) or of a pages board (noun "page"; `optional` names the
+    fields a card may leave out). Each is one result for the whole board and names the cards it fails; without a card they are not verified (`count_row` says why there is none). On a board
+    of an earlier round, which the guard keeps read only (`guard.round_is_open`), a missing Idea line only warns: the line is newer than some approved boards and cannot be added there."""
+    from guard import round_is_open   # the hook's own rule for which rounds may still be written
     known = load_layouts()
     layouts = [layout_problems(v, known) for v in variants]
     failures, warnings = [p for f, _ in layouts for p in f], [p for _, w in layouts for p in w]
+    ideas = [p for v in variants for p in idea_problems(v)] if idea else []
+    frozen = bool(ideas) and not round_is_open(Path(project), rnd)
+    if frozen:
+        ideas = [f"{x} (rounds/r{rnd}/ is an earlier round and read only, so this only warns)" for x in ideas]
     rows = (("site:files", f"each {noun} has its folder and page, and the page declares its layout and its id", [p for v in variants for p in files_problems(project, v, page_rel, rnd)],
              "folder, index.html, a <body> with data-layout and data-page, the live link of the card"),
             ("site:layout", "each page records a layout reference (or its own), and the card says the same", failures,
              "; ".join(f"{v.name}: {v.layout}" for v in variants)),
-            ("site:fields", ("each card says what it is, what it takes from the references and what it costs" if not optional else "each card says what it is and what it costs, and what it takes from, where a card has the line"), [p for v in variants for p in field_problems(v, optional)],
-             "What it is, Takes from and Cost are filled in on every card" if not optional else "What it is and Cost are filled in on every card (and Takes from where a card has the line)"))
+            ("site:fields", ("each card says what it is, what it takes from the references and what it costs" if not optional else "each card says what it is and what it costs, and what it takes from, where a card has the line")
+             + (", and states its one idea" if idea else ""), [p for v in variants for p in field_problems(v, optional)],
+             ("What it is, Takes from and Cost are filled in on every card" if not optional else "What it is and Cost are filled in on every card (and Takes from where a card has the line)") + (", and every card has its Idea line" if idea else "")))
     for rid, label, found, ok in rows:
+        if rid == "site:fields" and frozen and not found:   # only the Idea line is missing, on a board that can no longer change
+            rep.add(rid, "warn", label, detail=shown(ideas))
+            continue
+        if rid == "site:fields":
+            found = found + ideas   # the Idea line fails the row like any other field
         if not variants:
             rep.add(rid, "skipped", label, detail=f"not verified: there is no {noun} card to look at ({count_row} says why)")
         elif rid == "site:layout" and warnings and not found:   # a layout of its own is allowed, with a warning
@@ -849,7 +933,7 @@ def variant_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path, f
     rep.add("site:variants", "fail" if problems else "pass", "the variants: their number, and a word for each",
             detail=shown(problems) if problems else f"{len(named)} variant(s): {', '.join(n for n, _ in named)}" + (f" (the first hero board: {lo} or {hi})" if first else ""))
     variants = [SiteVariant(project, rnd, nm, card) for nm, card in named]
-    card_rows(rep, project, page_rel, rnd, variants)
+    card_rows(rep, project, page_rel, rnd, variants, idea=True)
     verdicts = proof_rows(rep, project, page, variants)
     reflex_rows(rep, project, variants, verdicts)
     refs_rows(rep, project, rnd, variants)
@@ -1087,10 +1171,10 @@ def page_cards(root: Node) -> list[Node]:
     return [n for n in root.walk() if PAGE_ATTR in n.attrs]
 
 
-def hero_boards(project: Path, rnd: int) -> list[tuple[int, Path, Node]]:
-    """(the round, its board, its page) of every site board at the hero stage in a round before `rnd`, the latest first."""
+def hero_boards(project: Path, rnd: int, rounds: list[tuple[int, Path]] | None = None) -> list[tuple[int, Path, Node]]:
+    """(the round, its board, its page) of every site board at the hero stage in a round before `rnd`, the latest first. `rounds`: as in is_first."""
     found = []
-    for n, d in list_rounds(project):
+    for n, d in (list_rounds(project) if rounds is None else rounds):
         if n < rnd:
             root = read_page(d / "board.html")
             if root is not None and page_kind(root) == "site" and stage_of(root) == "hero":
@@ -1220,7 +1304,7 @@ def pages_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path) -> 
     problems += [x for x in (id_problem(v) for v in pages) if x]
     rep.add("site:pages", "fail" if problems else "pass", "the pages: at least one, a page id for each",
             detail=shown(problems) if problems else f"{len(pages)} page(s): {', '.join(v.name for v in pages)}")
-    card_rows(rep, project, page_rel, rnd, pages, noun="page", count_row="site:pages", optional=("from-refs",))
+    card_rows(rep, project, page_rel, rnd, pages, noun="page", count_row="site:pages", optional=("from-refs",), idea=True)
     proof_rows(rep, project, page, pages, noun="page", count_row="site:pages")
     cold_rows(rep, project, pages, required=False, noun="page", count_row="site:pages")
     choices_rows(rep, project, root, [v.name for v in pages])

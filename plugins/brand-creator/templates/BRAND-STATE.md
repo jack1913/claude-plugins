@@ -12,6 +12,7 @@ content_languages: ""          # language set code(s) the brand's own text is wr
 renderer: resvg                # off macOS, after the owner agrees: resvg (opted in YYYY-MM-DD)
 review_surface: auto           # auto (not answered yet: boards stay local until the owner answers the one upload question) | artifact | local
 review_url: ""                 # the one stable review page (Artifact URL or local path)
+tryout_url: ""                 # the private page a shared try-out of the site round is on (only with the owner's yes); never the review page
 site_research: auto            # online research for website references: auto (not asked yet) | online | links-only | none
 incumbent: none                # none, or one line about today's mark or site; a set value makes the "today" board section required
 inventory: ""                  # path to INVENTORY.md, or: none (no target repo). Required before the first board in the Full tier or product-in-family.
@@ -32,6 +33,7 @@ gates:                         # date + decision, written by: brand-creator stat
   G4: ""                       # system rules
   G4w: ""                      # website references pick (or "skipped by owner"); the site round waits for it
   G4p: ""                      # the site's reference pages approved (site approve needs it)
+  G4m: ""                      # the masters approved: ads and decks (masters approve needs it), with the owner's PowerPoint answer
   G5: ""                       # pack and book
   G6: ""                       # adoption
   G7: ""                       # outward actions
@@ -96,6 +98,11 @@ One line per edition event, written by `brand-creator patch` and `brand-creator 
 ## Collapsed
 
 One line per decision that closed a choice, written by `brand-creator collapse`.
+
+## Internal context
+
+What the owner told you in answer to a question and has not said may be said in public. Context for you only: no page, board,
+book, adapter or kit uses it as a claim. A line moves to `FACTS.md` when the owner says it may be said.
 
 ## Notes
 

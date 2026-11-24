@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
+import socket
 import sys
 from pathlib import Path
 
@@ -10,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import FIXTURES, ROOT, android_sdk, bc, data_dir, install_fixture, make_project, own_data  # noqa: E402
+import tiering  # noqa: E402
 
 NOT_VERIFIED: list[tuple[str, str]] = []
 REQUIRE_ALL = os.environ.get("BRAND_CREATOR_REQUIRE_ALL") == "1"
@@ -28,8 +31,11 @@ def pytest_configure(config):
                  ("requires_rg", "needs ripgrep (rg) on PATH"),
                  ("requires_design_lint", "needs @google/design.md installed in BRAND_CREATOR_DATA by `brand-creator setup`"),
                  ("requires_pdftotext", "needs poppler's pdftotext on PATH"),
-                 ("requires_network", "talks to real services; deselected unless BRAND_CREATOR_LIVE=1 (manual live smoke)")):
+                 ("requires_network", "talks to real services; deselected unless BRAND_CREATOR_LIVE=1 (manual live smoke)"),
+                 ("costs_money", "spends money on a paid API (OpenRouter image generation, a billed run); deselected unless BRAND_CREATOR_PAID=1")):
         config.addinivalue_line("markers", f"{m}: {d}")
+    if not PAID:
+        block_paid_services()
     if not config.pluginmanager.hasplugin("timeout"):   # run without tests/requirements.txt: no time limit, and the mark is still known
         config.addinivalue_line("markers", "timeout(seconds): the most a test may run (pytest-timeout, from tests/requirements.txt)")
 
@@ -40,6 +46,38 @@ DEFAULT_TIMEOUT = 300   # seconds a test may run before pytest-timeout stops it 
 LIVE = os.environ.get("BRAND_CREATOR_LIVE") == "1"
 DESELECTED_LIVE: list[str] = []
 
+# The paid-service fail-safe. Generated images run through OpenRouter and cost money, so no test may reach it by accident: unless
+# BRAND_CREATOR_PAID=1, tests marked costs_money are deselected, the keys and the design-canvas host (which holds the OpenRouter key and
+# generates the images) are taken out of the environment of every test and every program a test starts, and a name lookup of a paid host
+# from this process fails loudly. tests/run-all.sh takes the same variables out of the node and smoke parts.
+PAID = os.environ.get("BRAND_CREATOR_PAID") == "1"
+PAID_HOSTS = ("openrouter.ai",)
+PAID_ENV = re.compile(r"^(OPENROUTER_|USE_LLM_DESIGN_)")
+DESELECTED_PAID: list[str] = []
+
+# The fast tier (tests/tiering.py): `tests/run-all.sh --fast` sets BRAND_CREATOR_FAST=1 and every test tests/durations.json measured at a second or
+# more is deselected, loudly.
+FAST = os.environ.get("BRAND_CREATOR_FAST") == "1"
+DURATIONS = tiering.load()
+DESELECTED_SLOW: list[str] = []
+
+
+class PaidServiceBlocked(OSError):
+    pass
+
+
+def block_paid_services() -> None:
+    for k in [k for k in os.environ if PAID_ENV.match(k)]:
+        del os.environ[k]
+    real = socket.getaddrinfo
+
+    def guarded(host, *a, **kw):
+        h = (host.decode() if isinstance(host, bytes) else str(host or "")).lower().rstrip(".")
+        if any(h == p or h.endswith("." + p) for p in PAID_HOSTS):
+            raise PaidServiceBlocked(f"{h} is a paid service: tests never reach it unless BRAND_CREATOR_PAID=1 (and the test is marked costs_money)")
+        return real(host, *a, **kw)
+    socket.getaddrinfo = guarded
+
 
 def pytest_collection_modifyitems(config, items):
     """Every test gets a time limit (DEFAULT_TIMEOUT unless it carries its own), so a hung test fails by name instead of
@@ -49,15 +87,17 @@ def pytest_collection_modifyitems(config, items):
         for it in items:
             if it.get_closest_marker("timeout") is None:
                 it.add_marker(pytest.mark.timeout(DEFAULT_TIMEOUT))
-    if LIVE:
-        return
     keep = []
     for it in items:
-        if it.get_closest_marker("requires_network"):
+        if not PAID and it.get_closest_marker("costs_money"):
+            DESELECTED_PAID.append(it.nodeid)
+        elif not LIVE and it.get_closest_marker("requires_network"):
             DESELECTED_LIVE.append(it.nodeid)
+        elif FAST and tiering.is_slow(it.nodeid, DURATIONS):
+            DESELECTED_SLOW.append(it.nodeid)
         else:
             keep.append(it)
-    if DESELECTED_LIVE:
+    if len(keep) != len(items):
         config.hook.pytest_deselected(items=[i for i in items if i not in keep])
         items[:] = keep
 
@@ -105,6 +145,8 @@ def pytest_sessionfinish(session):
     if out is not None:
         out["bc_not_verified"] = NOT_VERIFIED
         out["bc_deselected_live"] = DESELECTED_LIVE
+        out["bc_deselected_paid"] = DESELECTED_PAID
+        out["bc_deselected_slow"] = DESELECTED_SLOW
 
 
 @pytest.hookimpl(optionalhook=True)
@@ -115,9 +157,21 @@ def pytest_testnodedown(node, error):
     for nid in out.get("bc_deselected_live", []):
         if nid not in DESELECTED_LIVE:
             DESELECTED_LIVE.append(nid)
+    for nid in out.get("bc_deselected_paid", []):
+        if nid not in DESELECTED_PAID:
+            DESELECTED_PAID.append(nid)
+    for nid in out.get("bc_deselected_slow", []):
+        if nid not in DESELECTED_SLOW:
+            DESELECTED_SLOW.append(nid)
 
 
 def pytest_terminal_summary(terminalreporter):
+    if DESELECTED_SLOW:
+        terminalreporter.write_sep("!", f"FAST TIER: {len(DESELECTED_SLOW)} slow test(s) were not run", yellow=True, bold=True)
+        terminalreporter.write_line(f"  each took {tiering.LIMIT:g} s or more in the last measured run (tests/durations.json); "
+                                    "a release runs them all: tests/run-all.sh without --fast.")
+    if DESELECTED_PAID:
+        terminalreporter.write_line(f"{len(DESELECTED_PAID)} paid test(s) deselected on purpose (they spend money; run with BRAND_CREATOR_PAID=1).")
     if DESELECTED_LIVE:
         terminalreporter.write_line(f"{len(DESELECTED_LIVE)} live-network test(s) deselected on purpose (manual; run with BRAND_CREATOR_LIVE=1).")
     if NOT_VERIFIED:

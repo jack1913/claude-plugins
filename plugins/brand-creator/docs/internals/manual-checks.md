@@ -9,10 +9,10 @@ proven.
 | Check | Last run | Result |
 |---|---|---|
 | [Behaviour evals](#behaviour-evals-claude-plugin-eval) | 2026-10-18, sonnet, one run per case, no baseline | first pass 8 of 17 (0.76); final sweep 15 of 17; the two failures fixed, one re-run alone and passed, one re-graded offline; full suite not re-run since |
-| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94); the brand-creator description changed after this run, so brand-creator needs a re-run |
+| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-11-03, Haiku 5.5 and Sonnet 5.5, one worker, brand-creator and brand-book; brand-naming and brand-assets last on 2026-10-21 | sonnet passes 120 of 124 queries, haiku 112 of 124; precision 0.98 for brand-creator on both (a sibling case), 1.00 for brand-book; the brand-creator text changed with this run and the table is the text as it ships |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
-| [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-25 | private to the author; cannot run for anyone else, CI skips it |
+| [Private terms](#private-terms) | no longer a check here since 2026-11-18 | a pre-push scan on the machine that holds private brand projects |
 | [Hook guard in subagents](#hook-guard-applies-to-subagent-tool-calls) | 2026-10-20, Claude Code 2.1.305, a haiku subagent, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Hook guard in the main thread](#hook-guard-in-a-real-main-thread-session) | 2026-10-20, Claude Code 2.1.305, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Live name screening](#live-name-screening) | never run as a release check | |
@@ -23,11 +23,13 @@ proven.
 | [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | 2026-11-01, Claude Code 2.1.316, Opus 5.5, frontend-design 1.1.1, one brief on a real brand, the owner's hand-made kit as B | A 15 failures and 2 warnings, B 1 failure and 4 warnings; blind pick B, then A, then C |
 | [The kit in a product repository session](#the-kit-in-a-product-repository-session) | never run | |
 | [LAUNCH.md links](#launchmd-links-open-the-register-pages) | never run | |
-| [Book, adoption, review and launch skills in a real session](#the-book-adoption-review-and-launch-skills-in-a-real-session) | never run | |
+| [Book, adoption, review and launch steps in a real session](#the-book-adoption-review-and-launch-steps-in-a-real-session) | never run | |
+| [The slimmed `/` menu](#the-slimmed--menu) | never run | |
 | [Permission rule for the fallback form](#permission-rule-for-the-fallback-form) | never run | |
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
+| [Release run](#release-run) | 2026-11-20, 0.15.2, the touched test files only (the owner's call), commit 511565d | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -64,34 +66,53 @@ shows (`description` and `when_to_use` joined) with `--description`, because the
 them, and every other worker scores a miss (a first run with 8 workers fired on about 1 positive in 8 and was thrown away).
 The runner reports no cost: one probe call cost $0.0038 on Haiku 5.5 and $0.071 on Sonnet 5.5 before caching.
 
-**Last run:** 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker, listing text as of the 0.3.0 work.
-brand-book was run again the same day, after its listing text changed (below).
+**Sibling run.** The runner lists only the skill under test, so a query that belongs to a sibling has nothing to lose to. For those,
+put the sibling's listing text in the scratch folder as a fixed `.claude/commands/<sibling>.md`: Claude choosing it counts as the
+skill under test not firing, as in a session that lists both.
+
+**Last run:** 2026-11-03, Haiku 5.5 and Sonnet 5.5, one worker, for `brand-creator` (81 queries, 48 positives) and `brand-book`
+(43, 25 positives), the two whose lists or listing text changed since 2026-10-21. The runner reports no cost; at the probe prices
+above, the four rounds below and the re-runs of the failures came to about 37 USD before caching, nearly all of it Sonnet.
 
 | Skill | Sonnet: pass, precision, recall | Haiku: pass, precision, recall |
 |---|---|---|
-| brand-creator | 47/48, 1.00, 0.96 | 46/48, 1.00, 0.93 |
-| brand-naming | 27/27, 1.00, 1.00 | 24/27, 1.00, 0.79 |
-| brand-assets | 26/26, 1.00, 1.00 | 25/26, 1.00, 0.93 |
-| brand-book | 27/27, 1.00, 1.00 | 25/27, 0.94, 0.94 |
+| brand-creator | 78/81, 0.98, 0.96 | 74/81, 0.98, 0.88 (three runs per query) |
+| brand-book | 42/43, 1.00, 0.96 | 38/43, 1.00, 0.80 (one run) |
+| brand-naming | 27/27, 1.00, 1.00 (2026-10-21) | 24/27, 1.00, 0.79 (2026-10-21) |
+| brand-assets | 26/26, 1.00, 1.00 (2026-10-21) | 25/26, 1.00, 0.93 (2026-10-21) |
 
-Missed on both models: brand-creator "The refined round didn't work for me; go back to the direction I liked and deepen that
-one" (no brand word and no project folder in the query).
+**brand-creator, four rounds.** The first, on the text of the slimmed menu, gave 76/81 on Sonnet and 71/81 on Haiku (one run
+each). Sonnet missed the launch hand-offs asked with no brand word ("Pay for the trademark filing", "Register the Instagram handle
+for me", "What do I need to do before the brand goes public?"); Haiku also missed the Polish ones and both queries for the
+website's references. Two longer texts (78/81 on Sonnet each) were over the docs standard's listing target of 1,024 characters,
+so the text as it ships is the fourth: it names launch steps "before the brand goes public, trademark fees too" and "pick site
+references", and gains the Polish triggers "przed publikacją marki" and "znak towarowy". To stay at 1,021 characters, the
+description lost "for a company, product or person and runs it" and "with" (the `when_to_use` names who), and says "Identity
+work" for "Identity creation" and "its" for "the brand's own"; the `when_to_use` lost "a look," and "even casual asks" before
+its examples, "work on" and "for", and says "when" for "whenever", "like" for "such as" and "a BRAND-STATE.md folder" for "a
+folder with BRAND-STATE.md" (checked against a word diff of the committed text). The table row is that text.
 
-brand-book, before its listing text changed: Sonnet 24/27 (0.93, 0.88), Haiku 23/27 (0.93, 0.81). Both missed "Write the tone
-of voice chapter for our brand guidelines" and "The guidelines still show both lockup options; we chose the stacked one, clean
-it up", and both fired on "Potrzebuję księgi znaku dla nowej marki kawiarni" (a book for a brand that does not exist yet is the
-orchestrator's; the runner shows only the skill under test, so this sibling case has no brand-creator to lose to). The new text
-names the optional chapters, the clean-up after a choice, and says such a book starts with brand-creator. Haiku still misses
-the lockup clean-up and still fires on the Polish query. Fourteen held-out queries, written for this re-run by an agent that
-did not see the new text, passed 14 of 14 on Sonnet (13 with the old text) and 11 of 14 on Haiku (9): Haiku missed a clean-up
-after choosing an accent colour, a tone of voice chapter rewrite in Polish and a new history chapter. They were added to the
-eval set afterwards, so brand-book now has 41 queries; the next run covers them all.
+**brand-book** kept its text. Of its five Haiku misses, four missed again in three re-runs each: the lockup clean-up, taking
+the olive accent out, a new history chapter, and the Polish tone of voice rewrite (1 of 3); a Polish approval passed 2 of 3.
+Sonnet missed only the Polish tone of voice rewrite (1 of 3 in re-runs). A text with "rozdział wytycznych marki" among its
+Polish triggers passed 43/43 on Sonnet once, but it was 1,051 characters, over the target, so it did not ship.
 
-**Changed since this run.** The `brand-creator` description changed after the run above: it now names the brand's website
-references and reference pages and says it is not for building production websites. Three positives (two English, one
-Polish) and two negatives about the site steps were added to `evals/trigger-evals.json`, so brand-creator now has 53
-queries. None of them has run, and the 48 above ran against the old text. The next run covers all 53 with the new
-description. The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
+Known misses, left as they are:
+
+- "The refined round didn't work for me; go back to the direction I liked and deepen that one": missed by both models since
+  2026-10-21; no brand word and no project folder in the query.
+- "Register the Instagram handle for me": Sonnet 0 of 1, Haiku 0 of 3. Nothing in it says a brand project exists, and a text
+  that took every request about a social handle would fire outside brand work.
+- `brand-creator` fires on "Zrób przegląd księgi znaku", a review of a book that exists, which is `brand-book`'s. In the sibling
+  run `brand-book` took it on Sonnet 3 of 3, and also "Give me feedback on the brand book before I approve it": the miss is the
+  runner showing one skill alone.
+- Haiku only: "We're rebranding our accounting firm; the current logo is from 2009. Where do we start?", the Polish query for
+  the website's references, the Polish review of the direction boards (both with the `BRAND-STATE.md` cue) and "zarejestruj znak
+  towarowy za mnie" (1 of 3). Sonnet passes all four.
+
+Open: in the sibling run, "I have a logo already but no guidelines. Can you build the brand rules around it?" went to
+`brand-book` 3 of 3 on Sonnet. A logo with no brand project is `brand-creator`'s (it starts the project with the logo as the
+mark), and the `brand-book` text does not say so; deciding it changes a description, so it waits for the next text change.
 
 ## Workflow trials
 
@@ -114,17 +135,16 @@ fails on any skip other than the macOS-only ones.
 
 **Last run:** 2026-10-18, Debian 13 image (Python 3.13, Node 24): passed with only the macOS-only NOT VERIFIED skips.
 
-## Anonymisation denylist
+## Private terms
 
-**Why manual.** `tests/test_static.py::test_anonymisation` scans every shipped file for client and brand names, real colour
-values and owner quotes from the projects this plugin was distilled from. The denylist itself is private to the author and is
-never shipped, so the test skips (with a NOT VERIFIED banner) for everyone else and in CI.
+Not a manual check any more. Until 2026-11-18 a test, `test_anonymisation`, scanned every shipped file against the
+author's private denylist, and a release run had to set it. The scan is now a pre-push hook on the machine that holds
+private brand projects, and no test, CI job or release run needs a private file
+([ADR-0010](../../../../docs/adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md),
+[Private terms](development.md#private-terms)). Release records below, up to 0.12.1, name the denylist.
 
-**Steps** (the author only): `BRAND_CREATOR_DENYLIST=<private denylist.json> tests/run-all.sh` before every release; the test
-must pass, not skip.
-
-**Last run:** in the author's own suite runs; last 2026-10-25, on the test, CI and docs changes after 0.4.2 (before that
-2026-10-24, the 0.3.1 to 0.4.2 release runs), with the terms and palettes of the client projects since 0.1.0 added to the list.
+**Last run of the old test:** 2026-11-10, in the 0.11.2 release run; before that 2026-10-25, with the terms and palettes of
+the client projects since 0.1.0 in the list.
 
 ## Hook guard applies to subagent tool calls
 
@@ -260,14 +280,30 @@ without an account. A register that moved its page is fixed in `trademark_links(
 
 **Last run:** never.
 
-## The book, adoption, review and launch skills in a real session
+## The book, adoption, review and launch steps in a real session
 
 **Why manual.** The skills are checked for structure, links, the RULES line and their safety wording, not for what a model does with them.
 In a Claude Code session with the plugin enabled: ask for "the brand book" in the Acme smoke project and confirm `brand-book` loads (and that "a slide
 deck" or "a style guide for my code" does not load it); run `/brand-creator:brand-adopt survey` against a copy of `tests/fixtures/target-repo/` and then
 ask for the apply: confirm it asks which branch, records G6, makes no commit unasked, and that the review quotes `cmp` and the repository's own test
-command; run `/brand-creator:review panel` and confirm it states the fleet size, models and cost and waits for a yes; run `/brand-creator:launch` and
-say "buy the domain for me": confirm the answer is a hand-off with a click path and that nothing outward is opened.
+command; run `/brand-creator:check --review panel` and confirm it states the fleet size, models and cost and waits for a yes; say "help me launch" in a
+project and then "buy the domain for me": confirm the answer is a hand-off with a click path and that nothing outward is opened.
+
+**Last run:** never.
+
+## The slimmed `/` menu
+
+**Why manual.** The tests check each skill's frontmatter and each workflow's text, not what Claude Code lists or what it does with a skill marked
+`user-invocable: false`. In a fresh session with the plugin enabled, type `/brand-creator:` and confirm the menu lists `brand-creator`, `setup`, `status`,
+`check`, `round` and `brand-adopt` as skills, plus the four workflows (`directions`, `naming`, `review-panel`, `adopt`), and no `new`, `launch`, `review`,
+`brand-naming`, `brand-assets` or `brand-book`. Then say "name ideas for my bakery", "favicons from my logo.svg" and "generate the brand book" in
+three sessions and confirm the matching hidden skill loads each time; then say "use the brand-naming skill" (and the same for `brand-assets` and
+`brand-book`) and confirm each loads by that name, which is the fallback the manual gives. Say "start a brand called acme" in an empty folder and
+confirm `brand-creator` runs its first questions, offers `./acme/` in the current folder, and puts no folder question in the question call (and in
+a folder that holds a `BRAND-STATE.md`, that it asks whether to resume or start a separate project); say "put it in ~/brands/acme-rebrand" and
+confirm the folder is `acme-rebrand` under `~/brands`. Type `/brand-creator:check --review board extra`, `/brand-creator:check "Old Name" --review`, `/brand-creator:check acme --panel`,
+`/brand-creator:check panel` and `/brand-creator:check --page index.html --review` and confirm each is refused in one line and runs nothing. Type
+`/brand-creator:directions` and confirm the run prompt shows the phases and `Yes, run it / No`, and that No runs nothing.
 
 **Last run:** never.
 
@@ -367,15 +403,162 @@ what fails; until then the [platform support](../manual/reference/platform-suppo
 
 **Last run:** never.
 
+## Release run
+
+**Why manual.** CI runs only quick checks on a push, never on macOS and never the Docker image
+([ADR-0008](../../../../docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). The full suite
+runs here, before every release tag: on macOS, where the Apple-tool tests (`sips`, `iconutil`, `actool`, `assetutil`, the
+`.icon` pipeline) and the Acme smoke with `emit apple` run, and in the Linux Docker image, where the off-macOS paths run.
+There are two ways to make it, and the record says which ([ADR-0009](../../../../docs/adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)).
+
+**Steps on GitHub, from any machine.** With the release commit on `main`, start the release run and wait for its verdict:
+
+```bash
+gh workflow run brand-creator-release.yml --ref main
+gh run list --workflow brand-creator-release.yml --commit "$(git rev-parse HEAD)" --json databaseId,status,conclusion
+```
+
+It passes when the run's conclusion is `success`: every `macos` job passed with no skip (pytest in three shares, then
+node:test and the smoke), and every `linux` job ended with `LINUX RUN OK`. Record the version, the commit, the date and
+the run's number here before tagging.
+
+**Steps on a Mac.** On a Mac with Xcode 26 or later and Docker, on the release commit with a clean tree, from the repository root:
+
+```bash
+BRAND_CREATOR_DATA=<set-up data dir> plugins/brand-creator/tests/run-all.sh --smoke
+cd plugins/brand-creator
+BRAND_CREATOR_TEST_PARTS=pytest,node tests/docker/run.sh
+BRAND_CREATOR_TEST_PARTS=smoke tests/docker/run.sh --no-build
+```
+
+It passes when the Mac's pytest reports no failure and no skip at all (no NOT VERIFIED banner), node reports `fail 0`,
+both `SMOKE PASSED` and `QUICK SMOKE PASSED` are printed (the two Acme halves print one each), and each Docker run ends
+with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before tagging.
+
+**Last run:** 2026-11-20, brand-creator 0.15.2, on a Mac (macOS 27.3), on the release commit's tree (commit 511565d; only this
+record differs): as for 0.15.1, by the owner's decision only the test files the release touches ran: `tests/test_emit_apple.py`,
+`tests/test_icon_ground.py`, `tests/test_emit_platforms.py`, `tests/test_static.py`, `tests/test_skills.py` and
+`tests/test_evals.py`, 342 passed and nothing skipped, in 3 minutes. The change is `emit apple`'s cards alone (macOS only);
+the rendered store frame and DMG background were looked at (the drawn wordmark, square corners with every radius token 0).
+
+The 0.15.1 run: 2026-11-20, brand-creator 0.15.1, on a Mac (macOS 27.3), on the release commit's tree (commit ca15d31; only this
+record differs): by the owner's decision ("this is a small fix") only the test files the release touches ran, not the full
+suite on macOS and Linux: `tests/test_emit_apple.py`, `tests/test_icon_ground.py`, `tests/test_emit_platforms.py`,
+`tests/test_static.py`, `tests/test_skills.py` and `tests/test_evals.py`, 339 passed and nothing skipped, in 4 minutes.
+The change is `emit apple` alone (it follows `icons.ground`), which runs only on macOS.
+
+The 0.15.0 run: 2026-11-20, brand-creator 0.15.0, on a Mac (macOS 27.3) and in the Linux Docker image, on the release
+commit's tree (commit 0975abc; only this record differs). The Mac: pytest 3574 passed and nothing skipped, node 249 pass
+and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`; 36 minutes. Docker: `LINUX RUN OK`
+for pytest (3523 passed, 51 expected skips) and node (249 pass), then `LINUX RUN OK` for the smoke; 25 minutes.
+
+Two attempts came before it. On commit 5eff9b1 the Linux pytest failed `test_skills.py::test_the_phase_map_points_at_the_website_steps`:
+the new `family-parent` value took the top of the orchestrator's SKILL.md to 19982 characters, over its 19850 budget;
+0975abc shortens the line. The first Mac run of 0975abc, side by side with the Docker run, failed three tests on their
+timeouts only (`test_print.py::test_social_posts_are_byte_stable_on_a_second_run`, `test_adoption_wiring.py::test_a_rendered_page_adds_its_wiring_and_a_server_that_is_gone_is_not_verified`
+and `test_finish_chain.py::test_the_standard_chain_runs_profiles_print_posts_book_and_press_kit_in_order_through_to_check`,
+pytest taking 28 minutes); alone on the idle machine the three passed in 17, 8 and 535 seconds, and the Mac run above ran alone.
+
+The 0.14.1 run: 2026-11-20, brand-creator 0.14.1, on GitHub: run 44732405569 of `brand-creator-release.yml` on commit
+ed02cc5 (the release commit 47ade40 and one change to a test). It passed on its second attempt. The four `macos` jobs
+(`macos-26` on Apple silicon, Xcode 26.6): pytest 3561 passed and nothing skipped (1357, 833 and 1371 in the three
+shares), node 249 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`. The two `linux`
+jobs printed `LINUX RUN OK`: pytest 3510 passed with 51 expected skips, node 249 pass and the smoke. The first attempt
+took 32 minutes; the longest job, node and the smoke on macOS, took 31.
+
+Two failures came before it, both on macOS only:
+
+- `capture --frames: a motion a script starts when the page loads` (`tests/node/capture-frames.test.mjs`) failed in both
+  attempts of run 44708967327, on the release commit 47ade40: the still was taken while the heading was on its way. The
+  test page starts its motion 300 ms after it loads and `capture` pauses 300 ms before its still, so a page timer that
+  fires about 15 ms late gives this failure (seen on Linux with a timer set 15 ms later). The test now asks for
+  `--wait 600` (ed02cc5) and passed in this run.
+- `tar: Write error`, from the copy of the worked brand in `evals/_shared/fixture.sh` (`fx_copy_acme`, one `tar` piped
+  into another), failed one test of `tests/test_evals.py` in the first attempt of run 44708967327 and another in the
+  first attempt of this run; each passed when its job ran again. It did not come back in 2000 copies on Linux under
+  load; its cause was not found.
+
+The 0.14.0 run: 2026-11-20, brand-creator 0.14.0, on GitHub: run 44686304119 of `brand-creator-release.yml` on the release
+commit ec0cf6f. The four `macos` jobs (`macos-26` on Apple silicon, Xcode 26.6): pytest 3555 passed and nothing skipped
+(1357, 833 and 1365 in the three shares), node 249 pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and
+`QUICK SMOKE PASSED`. The two `linux` jobs printed `LINUX RUN OK`: pytest 3504 passed with 51 expected skips, node 249
+pass and the smoke. 27 minutes in all; the longest job, node and the smoke on macOS, took 27.
+
+The 0.13.0 run: 2026-11-18, brand-creator 0.13.0, on GitHub: run 44341529604 of `brand-creator-release.yml` on the release
+commit 8a6894b, the workflow's first run. The four `macos` jobs (`macos-26` on Apple silicon, Xcode 26.6): pytest 3552
+passed and nothing skipped (1357, 831 and 1364 in the three shares), node 249 pass and 0 fail, both halves of the Acme
+smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`. The two `linux` jobs printed `LINUX RUN OK`: pytest 3501 passed with 51
+expected skips, node 249 pass and the smoke. 30 minutes in all; the longest job, node and the smoke on macOS, took 29.
+No private file was set ([Private terms](#private-terms)).
+
+The 0.12.1 run: 2026-11-18, brand-creator 0.12.1, macOS 27.3, on the release commit's tree (commit b87587f; only this record
+differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3525 passed and nothing skipped (the anonymisation test ran), node 249
+pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 32
+minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3474
+passed, 51 expected skips), node (249 pass) and the smoke, in 31 minutes; the two runs shared the machine.
+
+The 0.12.0 run: 2026-11-17, brand-creator 0.12.0, macOS 27.3, on the release commit's tree (commit 893626e; only this record
+differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3522 passed and nothing skipped (the anonymisation test ran), node 249
+pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 24
+minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3471
+passed, 51 expected skips), node (249 pass) and the smoke, in 17.5 minutes. A pytest run before it found
+`test_evals.py::test_the_real_loader_accepts_every_case` failing on Claude Code 2.1.326, which words the summary of
+case files it cannot load differently ("Couldn't load N case files"); the test now accepts both wordings.
+
+The 0.11.2 run: 2026-11-10, brand-creator 0.11.2, macOS 27.3, on the release commit's tree (commit bb62161; only this record
+differs), with `BRAND_CREATOR_DENYLIST` set: pytest 3491 passed and nothing skipped (the anonymisation test ran), node 249
+pass and 0 fail, both halves of the Acme smoke `SMOKE PASSED` and `QUICK SMOKE PASSED`, the three side by side; 24
+minutes in all. The Linux Docker run of the same tree, the denylist mounted, printed `LINUX RUN OK` for pytest (3440
+passed, 51 expected skips), node (249 pass) and the smoke, in 19 minutes on 12 workers. The first Mac run, on commit
+779f4a4, failed `test_anonymisation`: the first scan with the denylist since 0.9 found the pilot brand's name in 12 shipped
+files (in the releases since 0.10.0) and other private terms in one dev spec. Commit bb62161 takes them out; the
+releases already published keep them (the owner's call: fix forward).
+
+The 0.11.1 run: 2026-11-09, brand-creator 0.11.1, macOS 27.3, on the release commit's tree (commit a1fb2fc; only this record
+differs): pytest 3471 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
+Linux ran only the tests the release touches, by the owner's decision (a full Linux run takes about 20 minutes): in the
+Docker image, after `setup --yes`, `tests/test_kit.py`, `tests/test_kitcopy.py`, `tests/test_site_board.py` and
+`tests/test_static.py` gave 513 passed and 2 expected skips (the denylist, no `claude` CLI). The full Linux run, the
+smoke included, was not run for this release.
+
+The 0.11.0 run: 2026-11-09, brand-creator 0.11.0, macOS 27.3, on the release commit's tree (commit bdde6d0; only this record
+differs): pytest 3463 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
+The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3412 passed, 52 expected skips), node (249 pass)
+and the smoke. That tree carries the final review's fix pass to `install.py`; the run before it (commit 4f472d4: 3454 and
+3403 passed) is replaced by this one. The first Mac run, one commit before that, failed one test: the manual's `install.py` example showed a personal
+path (a home folder on a Mac), which `test_no_personal_paths_or_email_addresses_in_shipped_files` refuses; the example now names
+`<the shop's folder>`. Calibration on a scratch copy of the pilot brand: the kit's `SKILL.md` went from 3,812 words to 1,739
+(`brand.md` 2,114, `checklist.md` 1,430); `kit check` failed only on the e-mail signature master's `{{logo_url}}` placeholder,
+the pilot brand's own fix; `install.py` into a scratch git repository planned, copied and read current, warned about the
+hand-made `pilot` skill, updated an owner file the repository never changed, copied a recipe the owner added, and kept one
+the repository had changed. After the fix pass, the rebuilt kit's `install.py` updated that copy from version 4.5 to 4.6,
+kept the repository's changed file, warned again and read current.
+
+The 0.10.0 run (2026-11-08): pytest 3400 passed and 1 skipped on the Mac, 3349 passed and 52 expected skips on Linux. An
+earlier Linux run, after the code review's fixes, failed one test: `cleanup --history` asked git for a decomposed Polish
+file name in its precomposed spelling, which Linux does not store; it now asks with the disk's spelling. Calibration on a
+scratch copy of the pilot brand: `cleanup --history` took `history/` from 308 MB to 21 MB (6124 files), with 0 files lost by
+any frozen board in the browser; `masters check` on its approved ads, deck PDF and PowerPoint deck passed, with one warning
+(a text box above slide 12) and the PowerPoint render left to the owner.
+
+The 0.9.0 run (2026-11-06) failed its first Linux log check on a cleanup test that skipped itself off macOS with a plain
+`pytest.skip`; it carries `requires_macos` since.
+
+The 0.7.0 run (2026-11-04) had one failure on its first `run-all.sh --smoke`,
+`test_social_cards_show_the_drawn_wordmark_and_the_dark_header_its_dark_file` (`emit social` exited 3 under the full parallel
+load), which did not come back in five reruns or in this run; its cause was not found.
+
 ## CI first run
 
 **Why manual.** `.github/workflows/brand-creator.yml` (at the root of the claude-plugins monorepo) runs only once the repository is pushed, and its action versions were not checked
 online.
 
-**Steps.** After the first push, read each job's log: each of the three Linux jobs (pytest, node, smoke) must end with the Docker run's `LINUX RUN OK` line, the validate
-job must run (not skip) `claude plugin validate --strict`, the macos (pytest) job must run the Apple-tool tests with
-`BRAND_CREATOR_REQUIRE_ALL=1`, each macOS smoke job must print the `SMOKE PASSED` line of its half, and the `brand-creator`
-verdict must pass. Record the run URL and the result.
+**Steps.** After the first push, read the validate job's log: it must run (not skip) `claude plugin validate --strict`
+and the quick tests with no skip, and the `brand-creator` verdict must pass. Record the run URL and the result. The
+workflow had macOS jobs until 0.7.0 and the three Linux Docker jobs until 0.9.0; both now run by hand
+([Release run](#release-run)). The quick-check workflow first ran on 2026-11-06, run 42287154008 (started by hand, after
+the account could not start Actions jobs for the push) on commit 9473ac1: `validate` passed in a minute, and the
+verdict passed.
 
 **Last run:** 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96: every job passed and
 printed its line (`LINUX RUN OK`, each half's `SMOKE PASSED (part ...)`, `Validation passed`), and the verdict read

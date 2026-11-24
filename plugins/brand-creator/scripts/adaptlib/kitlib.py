@@ -1,8 +1,9 @@
 """The brand kit as data: where it sits, what it holds, which version it is, and what it was made from.
 
 The kit is the per-brand applied skill's folder (`.claude/skills/<slug>-brand/`) with more in it: the brand's own files copied in byte for byte at their
-project paths under `brand/`, and `kit.json`, which records the sha256 of every generated file. SKILL.md is still written by `adapt.applied_skill_md`; here it
-is asked for with the kit's paths and a "## The kit" section. See scripts/CONTRACT.md ("kit").
+project paths under `brand/`, and `kit.json`, which records the sha256 of every generated file. SKILL.md is still written by `adapt.applied_skill_md`, from the kit's
+own template (templates/applied-skill/kit-SKILL.md: the steps of `how_md`, the "## The kit" section, the owner's rules, the "never" list and the `map_md` map), and so is
+brand.md (kit-brand.md: the colour, type, layout, mark, motion and claims sections the applied skill of a project without a kit holds). See scripts/CONTRACT.md ("kit").
 
 Shared by `brand-creator kit` (scripts/kit.py) and `brand-creator check`. It sits beside adapt.py, outside scripts/lib/, for the same reason: a change here must
 not make every pack stale (lib/stale.py hashes scripts/lib/*.py). Standard library only. No clock and no random numbers: the same inputs give the same bytes.
@@ -32,6 +33,15 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
+from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CHECKLIST_MD, CURRENT, INSTALL_PY, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
+                     NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_ADDED, OWNED_CHANGED, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
+                     STATUS_SHOWN, TOP_KEYS, WHY_BYTES, WHY_LINK, WHY_MISSING, _EDITION, _SHA, _VERSION, KitError, folder_state, font_problems,
+                     generated_files_in, installed_version, is_owner_path, is_sha, json_object, not_current_text, owned_problems, owner_paths, owner_sorted,
+                     paths_in, plain_file, problems, read_plain, recorded_path, reference_page_problems,
+                     SORT_FILE, TAG_EXAMPLE, WEIGHTS, _BULLET, _NUMBERED, _PLACEHOLDER_ID, _RULE_TAG, _THEMATIC_BREAK, needs_tag, outside_fences, rule_tags, sort_of)
+from kitcopy import compare as _compare  # noqa: E402
+
+_json_object, _plain_file, _read_plain, _generated_files_in = json_object, plain_file, read_plain, generated_files_in   # the names these had before kitcopy
 import adapt
 import bookdata
 import motionspec
@@ -39,12 +49,6 @@ import qa_rules
 from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, CliError, Report, confine, fail, plugin_root, plugin_version, sha256_bytes, sha256_file,
                      stale_inputs)
 
-KIT_FILE = "kit.json"
-SCHEMA = 1
-SKILL_FILE = "SKILL.md"
-GENERATED_DIRS = ("brand", "snippets", "reference-pages")   # a file in one of these that the kit did not write is a foreign file
-FINDER_FILE = ".DS_Store"                                   # what Finder puts into a folder it opened: a file with exactly this name is no foreign file, in any generated folder, and `kit_paths` leaves it out of the whole kit
-PREFIX = "brand/"                                           # where the project's files sit inside the kit: project path = PREFIX + path
 TOKENS_JSON = "assets/tokens/tokens.json"
 TOKENS_CSS = "assets/tokens/tokens.css"
 FACTS_FILE = "FACTS.md"
@@ -69,14 +73,10 @@ DARK_TWIN = "-dark"                                         # assets/logo/<name>
 NO_FONTCHECK = "no current fontcheck report: run `brand-creator fontcheck`, then `kit build`"
 MOTION_SPEC = "motion/SPEC.md"                              # the motion hand-off text: copied when it exists
 MOTION_PROOF = "motion/proof.json"                          # when the brand moves, the page of each of its page cases is copied
-RULES_JSON = "rules.json"                                   # the G4 rules with ids, the size rule and bands, the contrast pairs, the forbidden words, the page block
-FACTS_JSON = "facts.json"                                   # the public FACTS.md rows
-ROOT_FILES = (SKILL_FILE, KIT_FILE, RULES_JSON, FACTS_JSON)  # the generated files that sit at the top of the kit folder, outside the generated folders
 DATA_SCHEMA = 1                                             # the schema of rules.json and facts.json (their own, not kit.json's)
 RULE_WORDS = 6                                              # a G4 rule's id is the slug of its first six words
 PROPOSAL = "plugin proposal"                                # rules.json downscale.from when qa/rules.json does not set the numbers
 ON_GROUND_CSS = "snippets/on-ground.css"                    # one scope per ground the owner named, written from the `grounds` of tokens.json
-OWNED_FILES = ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md")   # the five owner files the build scaffolds once from templates/kit/ (kit.json `owned` always lists them); any other file of the owner's travels too
 UNJUDGED_OWNED = ("EXTENDING.md", "voice.md")               # the owner's Markdown files `kit:tags` and `kit:numbers` leave alone: a guide full of tag syntax, and prose; every other owner .md is judged
 MASTERS_DIR = "assets/masters"                              # the masters the owner approved (ad, deck and other templates with their pictures, PDFs, PPTX and fonts): copied into the kit at their project path
 OWNER_TEMPLATES = "templates/kit"                          # where the scaffolds are, below the plugin folder
@@ -85,23 +85,6 @@ GROUNDS_HEAD = ("/* generated by brand-creator from the grounds in assets/tokens
                 'colours are the base variables; put data-ground="<name>" on an element that sits on another ground */')
 
 # The keys kit.json may hold. Each task that adds a key adds it here, so that `load` can refuse every other one.
-TOP_KEYS = ("schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages")
-SOURCE_KEYS = ("state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages")
-OPTIONAL_SOURCE_KEYS = ("masters",)                          # present only when the project has files under assets/masters/, so that a kit.json without masters is the bytes it always was
-ALL_SOURCE_KEYS = SOURCE_KEYS + OPTIONAL_SOURCE_KEYS
-FONT_KEYS = ("copied", "not_copied")
-FONT_COPIED_KEYS = ("file", "licence", "licence_files")
-FONT_NOT_COPIED_KEYS = ("file", "reason")
-PAGE_KEYS = ("id", "page", "source_sha", "page_check_inputs_sha", "capture_inputs_sha")   # one entry of kit.json `reference_pages`
-
-_SHA = re.compile(r"[0-9a-f]{64}")
-_VERSION = re.compile(r"[1-9][0-9]*\.[1-9][0-9]*")
-_EDITION = re.compile(r"[1-9][0-9]*")
-
-
-def is_sha(value) -> bool:
-    """True for a sha256 as the kit writes it: a string of 64 lower-case hex characters."""
-    return isinstance(value, str) and bool(_SHA.fullmatch(value))
 
 
 def version_line(version: str) -> str:
@@ -143,113 +126,6 @@ def load(project: Path) -> dict:
     return doc
 
 
-def problems(doc) -> list[str]:
-    """What is wrong with a kit.json document, each as a sentence that names the key; [] when it is a kit.json this version reads."""
-    if not isinstance(doc, dict):
-        return ["the document must be a JSON object"]
-    bad = [f"{k}: unknown key (allowed: {', '.join(TOP_KEYS)})" for k in doc if k not in TOP_KEYS]
-    bad += [f"{k}: missing" for k in TOP_KEYS if k not in doc]
-    if "schema" in doc and (type(doc["schema"]) is not int or doc["schema"] != SCHEMA):
-        bad.append(f"schema: unknown schema {json.dumps(doc['schema'])} (this version reads {SCHEMA})")
-    for k, rx in (("version", _VERSION), ("edition", _EDITION), ("content_sha", _SHA)):
-        if k in doc and not (isinstance(doc[k], str) and rx.fullmatch(doc[k])):
-            bad.append(f"{k}: must be a string like {'1.3' if k == 'version' else '1' if k == 'edition' else 'a sha256'}, got {json.dumps(doc[k])}")
-    for k in ("kit", "plugin_version"):
-        if k in doc and not (isinstance(doc[k], str) and doc[k].strip()):
-            bad.append(f"{k}: must be a non-empty string")
-    gen = doc.get("generated")
-    if "generated" in doc and not (isinstance(gen, dict) and all(isinstance(p, str) and isinstance(s, str) and _SHA.fullmatch(s) for p, s in gen.items())):
-        bad.append("generated: must be an object of path in the kit -> sha256")
-    if "owned" in doc:
-        bad += owned_problems(doc["owned"])
-    if "fonts" in doc:
-        bad += font_problems(doc["fonts"])
-    if "reference_pages" in doc:
-        bad += reference_page_problems(doc["reference_pages"])
-    src = doc.get("sources")
-    if "sources" in doc:
-        if not isinstance(src, dict):
-            bad.append("sources: must be an object")
-        else:
-            bad += [f"sources.{k}: unknown key (allowed: {', '.join(ALL_SOURCE_KEYS)})" for k in src if k not in ALL_SOURCE_KEYS]
-            bad += [f"sources.{k}: missing" for k in SOURCE_KEYS if k not in src]
-            bad += [f"sources.{k}: must be a sha256 or null" for k, v in src.items() if k in ALL_SOURCE_KEYS and not (v is None or (isinstance(v, str) and _SHA.fullmatch(v)))]
-    return bad
-
-
-def is_owner_path(rel) -> bool:
-    """True for a plain path in the kit folder that can be an owner file: no file at the top that the build writes (SKILL.md, kit.json, rules.json, facts.json), nothing below `brand/`, `snippets/` or
-    `reference-pages/`, no Finder `.DS_Store`, no absolute path and no path that climbs out or is not written plainly."""
-    return (isinstance(rel, str) and bool(rel) and posixpath.normpath(rel) == rel and not posixpath.isabs(rel) and rel not in (".", "..") and not rel.startswith("../")
-            and rel not in ROOT_FILES and rel.split("/")[0] not in GENERATED_DIRS and posixpath.basename(rel) != FINDER_FILE)
-
-
-def owned_problems(owned) -> list[str]:
-    """What is wrong with the `owned` key of a kit.json: {owner file: sha256 at the last build}, an entry for each of `OWNED_FILES` (the five the build scaffolds) and one for each other file of the owner's,
-    each a plain path (`is_owner_path`)."""
-    if not isinstance(owned, dict):
-        return ["owned: must be an object of owner file -> sha256"]
-    bad = [f"owned.{k}: not an owner file (a plain path in the kit folder, not kit.json or a file the build writes, not below {', '.join(GENERATED_DIRS)}, not .DS_Store)"
-           for k in owned if not is_owner_path(k)]
-    bad += [f"owned.{k}: missing" for k in OWNED_FILES if k not in owned]
-    bad += [f"owned.{k}: must be a sha256" for k, v in owned.items() if is_owner_path(k) and not (isinstance(v, str) and _SHA.fullmatch(v))]
-    return bad
-
-
-def font_problems(fonts) -> list[str]:
-    """What is wrong with the `fonts` key of a kit.json: {copied: [{file, licence, licence_files}], not_copied: [{file, reason}]}."""
-    if not isinstance(fonts, dict):
-        return ["fonts: must be an object with copied and not_copied"]
-    bad = [f"fonts.{k}: unknown key (allowed: {', '.join(FONT_KEYS)})" for k in fonts if k not in FONT_KEYS]
-    bad += [f"fonts.{k}: missing" for k in FONT_KEYS if k not in fonts]
-    for key, keys in (("copied", FONT_COPIED_KEYS), ("not_copied", FONT_NOT_COPIED_KEYS)):
-        items = fonts.get(key)
-        if key not in fonts:
-            continue
-        if not isinstance(items, list):
-            bad.append(f"fonts.{key}: must be a list")
-            continue
-        for i, item in enumerate(items):
-            where = f"fonts.{key}[{i}]"
-            if not isinstance(item, dict):
-                bad.append(f"{where}: must be an object")
-                continue
-            bad += [f"{where}.{k}: unknown key (allowed: {', '.join(keys)})" for k in item if k not in keys]
-            bad += [f"{where}.{k}: missing" for k in keys if k not in item]
-            bad += [f"{where}.{k}: must be a string" for k in keys if k in item and k != "licence_files" and not isinstance(item[k], str)]
-            if "licence_files" in item and not (isinstance(item["licence_files"], list) and all(isinstance(f, str) for f in item["licence_files"])):
-                bad.append(f"{where}.licence_files: must be a list of paths in the kit")
-    return bad
-
-
-def reference_page_problems(items) -> list[str]:
-    """What is wrong with the `reference_pages` key of a kit.json: a list with an entry {id, page, source_sha, page_check_inputs_sha, capture_inputs_sha} for each approved reference page the kit holds
-    (`id` is a page id of `sitedata.SITE_PAGE_ID`, the folder name `site/<id>/` is read from; `page` is the kit path of its index.html, `brand/site/<id>/index.html`; the three others are sha256s)."""
-    if not isinstance(items, list):
-        return ["reference_pages: must be a list"]
-    bad, seen = [], []
-    for i, item in enumerate(items):
-        where = f"reference_pages[{i}]"
-        if not isinstance(item, dict):
-            bad.append(f"{where}: must be an object")
-            continue
-        bad += [f"{where}.{k}: unknown key (allowed: {', '.join(PAGE_KEYS)})" for k in item if k not in PAGE_KEYS]
-        bad += [f"{where}.{k}: missing" for k in PAGE_KEYS if k not in item]
-        pid = item.get("id")
-        if "id" in item:
-            import sitedata   # scripts/boardlib, on the path of `kit` and `check` (read here only, as `known_rule_ids` does): the one rule for what a page id is
-            if not (isinstance(pid, str) and sitedata.SITE_PAGE_ID.fullmatch(pid)):
-                bad.append(f"{where}.id: must be a page id")
-            elif pid in seen:
-                bad.append(f"{where}.id: {pid!r} is listed twice")
-            else:
-                seen.append(pid)
-        if "page" in item and item["page"] != f"{PREFIX}site/{pid}/index.html":
-            bad.append(f"{where}.page: must be {PREFIX}site/<id>/index.html of its id")
-        bad += [f"{where}.{k}: must be a sha256" for k in PAGE_KEYS[2:] if k in item and not is_sha(item[k])]
-    return bad
-
-
 # ---------------------------------------------------------------- what the kit is made from
 
 def drawings(rules: dict) -> list[str]:
@@ -286,6 +162,8 @@ def sources(project: Path) -> dict:
            "logos": h.hexdigest(), "fonts": fonts_source(project), "pages": pages_source(project)}
     if (masters := masters_source(project)) is not None:
         out["masters"] = masters
+    if (platform := platform_source(project)) is not None:
+        out["platform"] = platform
     return out
 
 
@@ -298,7 +176,7 @@ def input_paths(project: Path) -> list[Path]:
     """The files a `kit` report lists as inputs, each only when the project has it: the token files, the logo files and band drawings, qa/rules.json, FACTS.md, the motion files, the fonts, and what the
     approved reference pages and the masters are made from (`page_input_rels`, `masters_sources`)."""
     rels = [TOKENS_CSS, TOKENS_JSON, *source_paths(project), qa_rules.RULES_FILE, FACTS_FILE, *motion_sources(project), *font_sources(project), *page_input_rels(project),
-            *masters_sources(project)]
+            *masters_sources(project), *platform_sources(project)]
     return [project / r for r in rels if (project / r).is_file()]
 
 
@@ -373,8 +251,18 @@ def _why_not(rows: dict | None, row: dict | None, has_text: bool) -> str | None:
         return "OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt"
     if not (isinstance(row.get("family"), str) and row["family"].strip()):
         return "the fontcheck report has no family name: run `brand-creator fontcheck` again"
-    if type(row.get("weight")) is not int or not 1 <= row["weight"] <= 1000 or row.get("style") not in ("normal", "italic"):   # a weight CSS takes: a report from before fontcheck took 0 as 400 is no weight
+    if not _is_weight(row.get("weight")) or row.get("style") not in ("normal", "italic"):   # a weight CSS takes: a report from before fontcheck took 0 as 400 is no weight
         return "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"
+    if "weight_range" not in row:   # a report from before fontcheck read it: a variable font would be declared with one weight, and the browser would fake the bolder ones
+        return "the fontcheck report was written before fontcheck read the weight range of a variable font: run `brand-creator fontcheck` again"
+    rng = row["weight_range"]       # [lowest, highest] of a variable font; None for a static one
+    if rng is not None and not (isinstance(rng, list) and len(rng) == 2 and all(_is_weight(v) for v in rng) and rng[0] < rng[1]):   # a range CSS takes
+        return "the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again"
+    if "slant_range" not in row:    # a report from before fontcheck read it: a variable font that slants would be declared upright, and the browser would fake its italics
+        return "the fontcheck report was written before fontcheck read the slant range of a variable font: run `brand-creator fontcheck` again"
+    slant = row["slant_range"]      # [lowest, highest] in CSS degrees for a variable font with a slant axis; None for any other
+    if slant is not None and not (isinstance(slant, list) and len(slant) == 2 and all(_is_slant(v) for v in slant) and slant[0] < slant[1]):   # a range CSS takes
+        return "the fontcheck report holds a slant range for it that CSS does not take: run `brand-creator fontcheck` again"
     return None
 
 
@@ -383,14 +271,27 @@ def _css(text: str) -> str:
     return re.sub(r"[\x00-\x1f\x7f]", " ", text).replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _is_weight(value) -> bool:
+    return type(value) is int and 1 <= value <= 1000
+
+
+def _is_slant(value) -> bool:
+    return type(value) is int and -90 <= value <= 90
+
+
 def font_face(rel: str, row: dict) -> str:
     """The @font-face of one copied font (`rel` its project path): family, source (the path percent-encoded where a URL needs it), weight and style as the fontcheck
-    report reads them, nothing else."""
+    report reads them, and `font-display: swap` (text shows in a fallback font while the file loads). A variable font declares its weight range, `font-weight: <lowest>
+    <highest>`: with one weight the browser would hold the font at that weight and fake the bolder ones. One that slants declares its slant range too, `font-style:
+    oblique <lowest>deg <highest>deg`, unless the file calls itself italic: declared `normal`, its italics would be faked the same way."""
+    rng = row["weight_range"]       # [lowest, highest] of a variable font; None for a static one (`_why_not` refused a row without it)
+    slant = row["slant_range"]      # [lowest, highest] in CSS degrees of a variable font with a slant axis; None for any other (`_why_not` refused a row without it)
     return ("@font-face {\n"
             f'  font-family: "{_css(row["family"])}";\n'
             f'  src: url("../{quote(PREFIX + rel)}") format("{FONT_FORMATS[Path(rel).suffix.lower()]}");\n'
-            f"  font-weight: {row['weight']};\n"
-            f"  font-style: {row['style']};\n"
+            f"  font-weight: {f'{rng[0]} {rng[1]}' if rng else row['weight']};\n"
+            f"  font-style: {f'oblique {slant[0]}deg {slant[1]}deg' if slant and row['style'] == 'normal' else row['style']};\n"
+            "  font-display: swap;\n"
             "}\n")
 
 
@@ -576,13 +477,12 @@ def motion_source(project: Path) -> str | None:
 
 _FOLD = str.maketrans({"ł": "l", "Ł": "L", "ø": "o", "Ø": "O", "đ": "d", "Đ": "D", "ð": "d", "Ð": "D", "ħ": "h", "Ħ": "H", "ı": "i", "ß": "ss",
                        "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "þ": "th", "Þ": "TH"})   # letters NFKD does not take apart
-_RULE_MARK = re.compile(r"^\s*\(rule\)\s*", re.I)
 _RULE_FALLBACK = "rule"   # the id of a line with no ASCII letter or digit in it (a line in another script), numbered like any other repeat
 
 
 def rule_text(line: str) -> str:
     """The words of a G4 line without its "(rule)" marker, white space collapsed."""
-    return " ".join(_RULE_MARK.sub("", line).split())
+    return bookdata.rule_text(line)
 
 
 def rule_id(text: str) -> str:
@@ -814,10 +714,25 @@ def scaffold_text(project: Path, rel: str, text: str) -> str:
 
 
 LINK_AMONG_OWNER = "a link among your own files: never read through"   # why the build stops on a link among the owner's files
+MASTER_SCAFFOLDS = {"recipes/ad.md": ("ad",), "recipes/presentation.md": ("slide", "deck-html", "deck-pdf", "deck-pptx")}   # a recipe the build scaffolds once the approved masters hold one of its kinds
+
+
+def scaffolds(project: Path) -> tuple[str, ...]:
+    """The owner files the build scaffolds for this project: the five (`OWNED_FILES`), then each recipe of `MASTER_SCAFFOLDS` whose kinds meet an entry of
+    assets/masters/masters.json (written by `masters approve`). No masters.json: the five. A masters.json with a problem stops the run (exit 1), naming the first."""
+    manifest = project / MASTERS_DIR / "masters.json"
+    if not manifest.is_file():
+        return OWNED_FILES
+    import mastersdata   # scripts/boardlib: on the path of `kit` and `check`; read here only
+    m = mastersdata.load_manifest(manifest)
+    if m.problems:
+        fail(EXIT_FAIL, f"{MASTERS_DIR}/masters.json: {m.problems[0]}; fix it, or run `brand-creator masters approve` again")
+    kinds = {e.kind for e in m.entries}
+    return OWNED_FILES + tuple(rel for rel, wanted in MASTER_SCAFFOLDS.items() if kinds & set(wanted))
 
 
 def owner_plan(project: Path) -> dict:
-    """The owner's files: the five scaffolded ones (`OWNED_FILES`) and every other file of the kit folder that is no generated file, no kit.json and no Finder `.DS_Store` (`owner_paths`).
+    """The owner's files: the scaffolded ones (`scaffolds`: the five of `OWNED_FILES` and the master recipes) and every other file of the kit folder that is no generated file, no kit.json and no Finder `.DS_Store` (`owner_paths`).
     {"files": {path in the kit: the scaffold's bytes} of the five, "write": [paths of the five that are absent and will be scaffolded], "kept": [paths already there], "owned": {path in the kit: sha256},
     "links": [paths that are a link among the owner's files]}. `owned` is kit.json's key: the sha256 of the file as it is on disk, or, for one of the five that is absent, of the scaffold that will be written.
 
@@ -828,24 +743,25 @@ def owner_plan(project: Path) -> dict:
     written once the link is moved."""
     kd_rel, kd, root = kit_rel(project), kit_dir(project), plugin_root() / OWNER_TEMPLATES
     plan = {"files": {}, "write": [], "kept": [], "owned": {}, "links": []}
-    for rel in OWNED_FILES:
+    scaffolded = scaffolds(project)
+    for rel in scaffolded:
         t = root / rel
         if not t.is_file():
             fail(EXIT_CANNOT, f"the scaffold {OWNER_TEMPLATES}/{rel} is missing from the plugin: reinstall the plugin")
         plan["files"][rel] = scaffold_text(project, rel, t.read_text(encoding="utf-8")).encode("utf-8")
-    for rel in OWNED_FILES:
+    for rel in scaffolded:
         for parent in reversed(list(Path(rel).parents)[:-1]):                         # the folders between the kit folder and the file: recipes/ for recipes/web-page.md
             if os.path.lexists(d := kd / parent) and not d.is_symlink() and not os.path.isdir(d):   # a link is its own entry in "links", whatever it points at
                 fail(EXIT_FAIL, f"{kd_rel}/{rel} is not a file the build can write: {kd_rel}/{parent.as_posix()} is not a folder (it is a file). The build never moves or "
                                 f"replaces the owner's paths. Move it away yourself, then build again")
-    others = [rel for rel in owner_paths(kd) if rel not in OWNED_FILES]
-    for rel in [*OWNED_FILES, *others]:
+    others = [rel for rel in owner_paths(kd) if rel not in scaffolded]
+    for rel in [*scaffolded, *others]:
         f = kd / rel
         linked_folder = any((kd / parent).is_symlink() for parent in Path(rel).parents if parent != Path("."))   # recipes/ is a link: its own entry in "links"
         if f.is_symlink() or linked_folder:
             if f.is_symlink():
                 plan["links"].append(rel)
-            if rel in OWNED_FILES:                                                # the link goes aside, then the scaffold is written
+            if rel in scaffolded:                                                 # the link goes aside, then the scaffold is written
                 plan["write"].append(rel)
                 plan["owned"][rel] = sha256_bytes(plan["files"][rel])
             continue
@@ -1224,16 +1140,22 @@ def note_text(text: str, *, values: bool = False) -> str:
     return s
 
 
+CHOICES_LEAD = ("What was chosen for this page. A choice tagged `[rule: site:<id>]` is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. "
+                "A choice tagged `[example]` is an example, as the page itself is.")
+
+
 def notes_md(page: dict, site: dict, stills: list[tuple[str, str]]) -> str:
     """reference-pages/<id>/notes.md of one approved page (`page` and `site` as site/site.json holds them, `stills` the link texts and file names of `_capture_state`): the page id as its title; its
     layout with the words "structure only"; the approval; links to the page and to each still (percent-encoded where a URL needs it, from reference-pages/<id>/ to brand/site/<id>/); and
-    `## Choices`, one bullet for each choice that names this page (or every page), `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example."""
+    `## Choices`, one sentence on their weight (`CHOICES_LEAD`, only when there is a choice), then one bullet for each choice that names this page (or every page), `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example."""
     pid = page["id"]
     base = f"../../{PREFIX}{SITE_DIR}/{pid}"
     L = [f"# {note_text(pid, values=True)}", "", f"Layout: {note_text(page['layout'], values=True)} (structure only)", f"Approved: {note_text(site['approved'], values=True)}", "",
          f"Page: [index.html]({quote(base + '/index.html', safe='/')})",
          "Stills: " + ", ".join(f"[{label}]({quote(f'{base}/shots/{name}', safe='/')})" for label, name in stills), "", "## Choices", ""]
     choices = [c for c in site.get("choices", []) if isinstance(c, dict) and ("pages" not in c or pid in c["pages"])]
+    if choices:
+        L += [CHOICES_LEAD, ""]
     for c in choices:
         if c["tag"] == "rule":
             L.append(f"- {note_text(c['text'])} [rule: site:{c['id']}] (decided in {note_text(c['source'])})")
@@ -1430,6 +1352,52 @@ def masters_source(project: Path) -> str | None:
     return h.hexdigest()
 
 
+# ---------------------------------------------------------------- platform files: what emit web, social and profiles wrote goes into the kit
+# The files those emitters recorded in assets/manifest.json (the touch and PWA icons, the favicon, the manifest and head snippet, the Open Graph card and GitHub preview,
+# the README headers, the avatar and banners) are copied byte for byte to brand/<project path>. The proofs (_proof/) and card pages (_build/) are never in the manifest, so never
+# in the kit. A file that differs from what its emitter recorded (changed by hand, or gone) stops the build: the emitter is run again first.
+
+PLATFORM_EMITTERS = ("web", "social", "profiles")
+MANIFEST_FILE = "assets/manifest.json"
+
+
+def _platform_rows(project: Path) -> list[dict]:
+    """The manifest rows of emit web, social and profiles, sorted by path ([] without a manifest; an unreadable one is the same: `check` names it)."""
+    doc = _json_object(project / MANIFEST_FILE) or {}
+    rows = [a for a in doc.get("artefacts", []) if isinstance(a, dict) and a.get("emitter") in PLATFORM_EMITTERS and isinstance(a.get("path"), str)]
+    return sorted(rows, key=lambda a: a["path"])
+
+
+def platform_sources(project: Path) -> list[str]:
+    """The project paths of the platform files the manifest lists, sorted. It never stops a run."""
+    return [a["path"] for a in _platform_rows(project)]
+
+
+def platform_source(project: Path) -> str | None:
+    """One sha256 over `platform_sources` (the path and the file's sha256 of each, a missing file counted as missing); None when the manifest lists none."""
+    rels = platform_sources(project)
+    if not rels:
+        return None
+    h = hashlib.sha256()
+    for rel in rels:
+        h.update(f"{rel}\0{_sha_or_none(project, rel) or 'missing'}\n".encode())
+    return h.hexdigest()
+
+
+def platform_plan(project: Path) -> dict[str, bytes]:
+    """{path in the kit: bytes} of the platform files, each at brand/<project path>. A file that is gone or whose bytes are not the ones its emitter recorded stops the run (exit 1)."""
+    out: dict[str, bytes] = {}
+    for a in _platform_rows(project):
+        rel = a["path"]
+        f = confine(project, rel, what=f"emit {a['emitter']} file", read=True)
+        data = f.read_bytes() if f.is_file() else None
+        if data is None or sha256_bytes(data) != a.get("sha256"):
+            fail(EXIT_FAIL, f"{rel} is {'gone' if data is None else 'not the file'} `brand-creator emit {a['emitter']}` wrote{'' if data is None else ' (changed since)'}: "
+                            f"run `brand-creator emit {a['emitter']}` again, then `brand-creator kit build --yes`")
+        out[PREFIX + rel] = data
+    return out
+
+
 # ---------------------------------------------------------------- the plan
 
 def _project_file(project: Path, rel: str, what: str) -> bytes:
@@ -1454,20 +1422,110 @@ def _drawing(project: Path, drawing: str) -> bytes:
     return f.read_bytes()
 
 
-def section(version: str, rels: list[str], owned: tuple[str, ...] = OWNED_FILES) -> str:
-    """The kit section of SKILL.md (the template's {{kit}}): the version line, then the generated files, then the owner's. `rels` are the paths in the kit of the generated files
-    other than SKILL.md and kit.json, so a task that adds files to the plan needs no edit here. `owned` is the five scaffolded owner files (always the same set, whether the files are on disk
-    yet or not, so that the list of files in SKILL.md does not depend on what the owner has written; a file she adds is named nowhere in SKILL.md, though the version line moves when one is added,
-    changed or taken away)."""
-    L = ["## The kit", "", version_line(version), "",
-         "This folder is a brand kit. This skill is its core. The generated files below sit beside it, copied byte for byte from the brand project and locked by `kit.json`.", "",
-         "It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps.", "",
-         "Generated. Never edit these here: change the brand project and run `brand-creator kit build --yes` again.", ""]
-    L += [f"- `{r}`" for r in sorted(rels)]
-    if owned:
-        L += ["", "Yours to extend; how: `EXTENDING.md`. A build writes each of these once and never overwrites or moves it.", ""]
-        L += [f"- `{r}`" for r in owned]
-    return "\n".join(L)
+KIT_TEMPLATES = "templates/applied-skill"                   # the kit's own SKILL.md and brand.md templates (kit-SKILL.md, kit-brand.md), below the plugin folder
+MASTERS_README = PREFIX + "assets/masters/README.md"        # the list of the approved masters, as `masters approve` writes it (MASTERS_DIR is defined further down)
+
+
+def section(version: str) -> str:
+    """The kit section of SKILL.md (the template's {{kit}}): the version line and what the folder is. The files are listed in kit.json, never here."""
+    return "\n".join(["## The kit", "", version_line(version), "",
+                      "This folder is a brand kit and this skill is its core. `kit.json` lists every file with its hash. Never edit a generated file here: change the brand project "
+                      "and run `brand-creator kit build --yes` again. Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`; in a product "
+                      "repository, `install.py` updates one only while that repository has not changed it.", "",
+                      "It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use "
+                      "from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps."])
+
+
+def checklist_md(project: Path, rules: dict) -> bytes:
+    """checklist.md: the check before handing anything over, every item a `- [ ]` line, built only from `rules` (`rules_doc(project)`) and a few fixed lines the plugin
+    holds for every brand (the logo from its files, colours from the tokens, claims from facts.json, what was decided beyond the brand's decisions, golden-rules.md). A section with nothing in it
+    is left out."""
+    ds = rules["downscale"]
+    logo = ["The logo comes from its files in `" + PREFIX + "assets/logo/`, used as they are."]
+    for b in rules["bands"]:
+        who = f"the {b['name']} mark" if b["mark"] is None else f"{b['mark']} ({b['name']})"
+        logo.append(f"Up to {b['max_px']} px {who} uses `{b['drawing']}`." if b["max_px"] else f"At larger sizes {who} uses `{b['drawing']}`.")
+    logo.append(f"At {ds['accent_rule_max_size']} px and below the accent holds a solid {ds['accent_min_px']} x {ds['accent_min_px']} px square.")
+    colour = ["Every colour is a token role from `" + PREFIX + TOKENS_CSS + "`, in both themes where the material has them."]
+    for kind, floor in dict.fromkeys((p["kind"], p["min"]) for p in rules["pairs"]):
+        colour.append(f"Every {kind} pair reaches at least {floor:g}:1 (`{BRAND_MD}` lists the pairs and their ratios).")
+    page_rules = (rules.get("page") or {}).get("rules") or []
+    sections = [("Logo", logo), ("Colour", colour),
+                ("The owner's rules", [f"{r['text'].rstrip('.')} (`{r['id']}`)." for r in rules["g4"]]),
+                ("Words", [f"None of these: {', '.join(rules['forbidden'])}."] if rules["forbidden"] else []),
+                ("Page rules", [f"`{r['id']}`: {str(r['g4']).rstrip('.')}." for r in page_rules]),
+                ("Claims", ["Every number, feature, price, client and date is in `facts.json`; a missing one is left out, or is a visible placeholder.", "Sample data is labelled as sample data."]),
+                ("New things", ["Anything the brand has not decided was decided in line with the fixed parts, and the hand-over says what was decided.",
+                                "Every fixed rule in `golden-rules.md` holds, and each default that was left has a reason you can state."])]
+    L = [f"# {adapt.view(project)['name']} checklist", "",
+         "Go through it before you hand anything over. A \"no\" on a fixed line is fixed, never waved through; a \"no\" on a default is a choice with a reason you can state "
+         "(`golden-rules.md` says which rules are defaults; a rule it does not sort is fixed). Generated from `rules.json`: never edit it here."]
+    for title, items in sections:
+        if items:
+            L += ["", f"## {title}", "", *(f"- [ ] {i}" for i in items)]
+    return ("\n".join(L) + "\n").encode("utf-8")
+
+
+def _holds(files, prefix: str) -> bool:
+    return any(rel.startswith(prefix) for rel in files)
+
+
+# brand.md's words for a value the tokens lack, in line with SKILL.md: a missing role is built from the token colours, and what the brand has not decided is the maker's to decide and to state
+TOKEN_GAPS = {"missing": "missing", "then": "build it from the token colours, never from a new colour, and say what you chose",
+              "undefined": "choose one in line with these, and say what you chose"}
+HOW_LEAD = "This is the brand's own practice. Follow it, or use a better way of your own: the fixed parts hold either way."   # the steps have the Default weight
+
+
+def how_md(files) -> str:
+    """`## How to work`: one sentence that says the steps are the brand's practice (the Default weight of SKILL.md: follow them or use a better way), then numbered steps, the same for
+    every brand, each naming only files the kit holds (`files`: the paths the build writes, generated and scaffolded)."""
+    steps = ["Name what you are making and the moment it is for (a page, a post, an ad, a deck; a launch, a reminder, an error).",
+             "Read `golden-rules.md`: what every piece keeps, and what it may change.",
+             "Open the recipe for that material in `recipes/`, one file per kind of material. When none fits, work from `brand.md` and say what no recipe covers."]
+    if _holds(files, PREFIX + "assets/masters/"):
+        steps.append("Ads and decks start from an approved master: `" + MASTERS_README + "` lists them." if MASTERS_README in files
+                     else "Ads and decks start from an approved master in `" + PREFIX + "assets/masters/`.")
+    steps.append("Take colours, type, spacing and motion from the tokens (`" + PREFIX + TOKENS_CSS + "`). A new brand colour is never made up; a role the tokens lack "
+                 "(a state colour, a raised surface, a shadow) is built from the colours they have.")
+    if _holds(files, PREFIX + "assets/logo/"):
+        steps.append("Take the logo from its files in `" + PREFIX + "assets/logo/` as they are: never redrawn, recoloured or typed out."
+                     + (" `" + LOGO_HTML + "` places it in light and dark." if LOGO_HTML in files else ""))
+    steps += ["Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder marked as a sample, or leave the claim out, and tell whoever maintains the brand.",
+              "Anything else the brand has not decided (a layout, a use of colour, an animation, a line of copy) is yours to decide, in line with the fixed parts: say what you decided."]
+    if "checklist.md" in files:
+        steps.append("Before you hand anything over, go through `checklist.md`.")
+    return "\n".join(["## How to work", "", HOW_LEAD, "", *(f"{n}. {s}" for n, s in enumerate(steps, 1))])
+
+
+def own_entries(kd: Path) -> list[str]:
+    """The owner's files of the kit folder `kd` that no other row of the map names, as the map lists them: a folder at the top as `<folder>/` (`guides/`, `code/`), a file at the top as its name;
+    `recipes/` and the scaffolded files at the top have rows of their own. A link is no owner file (the build stops on it, or `--replace` moves it aside), so it is never named. Sorted."""
+    named = {"recipes", *(rel for rel in OWNED_FILES if "/" not in rel)}
+    tops = {rel.split("/")[0] + ("/" if "/" in rel else "") for rel in owner_paths(kd) if plain_file(kd, rel)}
+    return sorted(t for t in tops if t.rstrip("/") not in named)
+
+
+def map_md(files, own=()) -> str:
+    """`## Map`: where to look, one row per need, each only when the kit holds what it names (`files` as for `how_md`); `own` (`own_entries`) are the owner's other folders and files, one row
+    when there are any, so that what the owner adds (a folder of guides, of code) is found from SKILL.md."""
+    rows = [("the colours, pairs, type, layout, mark sizes, motion and claims", [BRAND_MD]),
+            ("the token values", [PREFIX + TOKENS_CSS, PREFIX + TOKENS_JSON]),
+            ("the logo files", [PREFIX + "assets/logo/"] + ([LOGO_HTML] if LOGO_HTML in files else []) if _holds(files, PREFIX + "assets/logo/") else []),
+            ("the fonts", [FONTS_CSS] if FONTS_CSS in files else []),
+            ("the colours text may sit on", [ON_GROUND_CSS] if ON_GROUND_CSS in files else []),
+            ("the rules and the facts as data", [RULES_JSON, FACTS_JSON]),
+            ("approved pages to learn from", ["reference-pages/"] if _holds(files, "reference-pages/") else []),
+            ("the approved ads and decks", ([MASTERS_README] if MASTERS_README in files else [PREFIX + "assets/masters/"]) if _holds(files, PREFIX + "assets/masters/") else []),
+            ("the signature move", [PREFIX + MOTION_SPEC] if PREFIX + MOTION_SPEC in files else []),
+            ("the web icons, social images and profile pictures", [PREFIX + f"assets/{d}/" for d in PLATFORM_EMITTERS if _holds(files, PREFIX + f"assets/{d}/")]),
+            ("how to make one kind of material", ["recipes/"]),
+            ("what every piece keeps, and what it may change", ["golden-rules.md"]),
+            ("how the brand looks and sounds", ["visual.md", "voice.md"]),
+            ("the owner's own folders and files", list(own)),
+            ("the check before handing over", ["checklist.md"] if "checklist.md" in files else []),
+            ("how to change or extend this kit", ["EXTENDING.md"]),
+            ("every file and its hash", [KIT_FILE])]
+    return "\n".join(["## Map", "", "| You need | Open |", "| --- | --- |", *(f"| {need} | {', '.join('`' + p + '`' for p in paths)} |" for need, paths in rows if paths)])
 
 
 def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, masters: dict | None = None) -> dict[str, bytes]:
@@ -1491,16 +1549,23 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
     if logo:
         files[LOGO_HTML] = logo
     files.update(motion_files(project))
-    files[RULES_JSON] = json_bytes(rules_doc(project))
+    files.update(platform_plan(project))
+    rules_data = rules_doc(project)
+    files[RULES_JSON] = json_bytes(rules_data)
+    files[CHECKLIST_MD] = checklist_md(project, rules_data)
+    files[INSTALL_PY] = (plugin_root() / "scripts" / "adaptlib" / "kitcopy.py").read_bytes()   # the installer the kit carries: the copy judge itself, byte for byte
     files[FACTS_JSON] = json_bytes(facts_doc(project))
     files.update(ground_plan(project)["files"])
     for more in (pages if pages is not None else reference_plan(project, fonts), masters if masters is not None else masters_plan(project)):
         for rel, data in more["files"].items():
             if files.setdefault(rel, data) != data:   # a file a page loads is a file the kit copies already (the tokens, a logo, a master): the same project file, so the same bytes
                 fail(EXIT_FAIL, f"{rel} is planned twice with different bytes: the kit copies one project file to one place")
-    template = (plugin_root() / "templates" / "applied-skill" / "SKILL.md").read_text(encoding="utf-8")
-    skill = adapt.applied_skill_md(project, template, kit={"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER, sorted(files))})
-    return {SKILL_FILE: skill.encode("utf-8"), **files}
+    held = {*files, SKILL_FILE, KIT_FILE, BRAND_MD, *OWNED_FILES}           # what the kit holds once it is written: the steps and the map name only these
+    kit = {"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER), "how": how_md(held), "map": map_md(held, own_entries(kit_dir(project))), "gaps": TOKEN_GAPS}
+    root = plugin_root() / KIT_TEMPLATES
+    skill = adapt.applied_skill_md(project, (root / "kit-SKILL.md").read_text(encoding="utf-8"), kit=kit)
+    brand = adapt.applied_skill_md(project, (root / "kit-brand.md").read_text(encoding="utf-8"), kit=kit)
+    return {SKILL_FILE: skill.encode("utf-8"), BRAND_MD: brand.encode("utf-8"), **files}
 
 
 def with_version(files: dict[str, bytes], version: str) -> dict[str, bytes]:
@@ -1533,25 +1598,26 @@ def next_version(prev: dict | None, edition: str, csha: str) -> str:
     return str(prev["version"]) if prev.get("content_sha") == csha else f"{edition}.{int(build) + 1}"
 
 
+def sort_plan(project: Path, owner: dict) -> dict:
+    """kit.json's `sort`: the sort of the rules (`kitcopy.sort_of`) in the golden-rules.md this build records in `owned`, which is the scaffold where the file is absent (`owner` is
+    the `owner_plan`) and the file of the kit folder otherwise."""
+    data = owner["files"][SORT_FILE] if SORT_FILE in owner["write"] else kit_bytes(project, SORT_FILE)
+    return sort_of(data.decode("utf-8", errors="replace") if data is not None else "")
+
+
 def kit_json_bytes(project: Path, files: dict[str, bytes], version: str, edition: str, csha: str, src: dict, fonts: dict, owned: dict[str, str],
-                   pages: dict | None = None, masters: dict | None = None) -> bytes:
+                   pages: dict | None = None, masters: dict | None = None, *, sort: dict) -> bytes:
     """kit.json for the generated files `files` (SKILL.md with the version in it); `fonts` is the `font_plan`, `owned` the owner's files with their sha256 (`owner_plan`), `pages` the
-    `reference_plan` (none: the project has no approved reference page), `masters` the `masters_plan`; the fonts they bring are in kit.json `fonts` too (`fonts_record`)."""
+    `reference_plan` (none: the project has no approved reference page), `masters` the `masters_plan`; the fonts they bring are in kit.json `fonts` too (`fonts_record`). `sort` is the
+    `sort_plan`."""
     doc = {"schema": SCHEMA, "kit": adapt.skill_name(project), "version": version, "edition": edition, "plugin_version": plugin_version(), "content_sha": csha,
            "generated": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "owned": dict(sorted(owned.items())), "fonts": fonts_record(fonts, pages, masters), "sources": src,
-           "reference_pages": pages["records"] if pages is not None else []}
+           "reference_pages": pages["records"] if pages is not None else [],
+           "sort": sort}                                          # the brand's sort of its rules, as golden-rules.md holds it at this build (ADR-0016)
     return (json.dumps(doc, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 # ---------------------------------------------------------------- the record of the last build
-
-def _json_object(f: Path) -> dict | None:
-    """The JSON object in a file, or None when there is no such file, it cannot be read, or it holds something else."""
-    try:
-        doc = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
-    except (OSError, ValueError):
-        return None
-    return doc if isinstance(doc, dict) else None
 
 
 def previous(project: Path) -> dict | None:
@@ -1584,12 +1650,6 @@ def _kit_json_record(project: Path) -> dict | None:
     return {"outputs": {**{k: v for k, v in doc["generated"].items() if recorded_path(k)}, KIT_FILE: sha256_file(f)}, "version": doc["version"], "content_sha": doc["content_sha"]}
 
 
-def recorded_path(rel: str) -> bool:
-    """A path a record may name: SKILL.md, kit.json, rules.json, facts.json, or a plain path under one of the generated folders. Anything else (a path that climbs out of the kit)
-    is not read."""
-    return rel in ROOT_FILES or (posixpath.normpath(rel) == rel and not posixpath.isabs(rel) and rel.split("/")[0] in GENERATED_DIRS and not rel.endswith("/"))
-
-
 # ---------------------------------------------------------------- kit check: files, links, fill markers, versions, sources, owner files
 # `kit check` (scripts/kit.py) reads the kit and writes the report `kit-check`. Everything it reads is read from a plain file of the kit: a link inside the kit is never followed.
 
@@ -1602,13 +1662,10 @@ CHECK_TOOL = "kit-check"                                    # the report of `kit
 LINK_KINDS = {".md": "md", ".html": "html", ".htm": "html", ".css": "css"}   # the files whose relative links are checked, by their extension
 FILL_MARKER = "[[fill"                                      # the note a scaffold leaves where the owner writes, any case
 SITE_RECORD = "site/site.json"                              # the record of the approved reference pages: its choices tagged `rule` are rule ids (sitedata.SITE_FILE)
-OWNED_CHANGED = "changed since the last build"              # why an owner file is not what the last build recorded ...
 OWNED_MISSING = "is missing"                                # a scaffolded file the owner took away: the build writes the scaffold again
 OWNED_REMOVED = "was removed since the last build"          # any other owner file the owner took away: the build forgets it
-OWNED_ADDED = "was added since the last build"              # an owner file the last build did not record
 OWNED_NOT_FILE = "is no file the kit can read (a folder, or a link)"
 _VERSION_LINE = re.compile(r"Kit version (\S+) \(kit\.json\)\.")
-_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
 _MD_LINK = re.compile(r"\]\(\s*(<[^>\n]*>|[^\s)]*)")
 _CSS_URL = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]*))\s*\)""", re.I)
@@ -1622,34 +1679,9 @@ def kit_report(project: Path) -> dict | None:
     return _json_object(project / REPORT)
 
 
-def paths_in(kd: Path) -> list[str]:
-    """The path in a kit folder `kd` of every file and every link below it, sorted. A link to a folder is listed as the one path it is and never followed; a folder with nothing
-    in it is not listed. A file named exactly `.DS_Store` (what Finder leaves in a folder it opened) is left out, anywhere in the kit, as `on_disk` leaves it out of the generated
-    folders: it is no file of the kit, so it is no input of the `kit-check` report, is not in the tree, and is not read for links or fill markers."""
-    out = []
-    for root, dirs, names in os.walk(kd):
-        base = Path(root)
-        out += [(base / n).relative_to(kd).as_posix() for n in names if n != FINDER_FILE]
-        out += [(base / n).relative_to(kd).as_posix() for n in dirs if (base / n).is_symlink()]
-    return sorted(out)
-
-
 def kit_paths(project: Path) -> list[str]:
     """`paths_in` the kit folder of the project."""
     return paths_in(kit_dir(project))
-
-
-def owner_paths(kd: Path) -> list[str]:
-    """The owner's files in a kit folder `kd`, as `paths_in` lists them: every file or link that is none of the files at the top the build writes (SKILL.md, kit.json, rules.json, facts.json), is not
-    below a generated folder (`brand/`, `snippets/`, `reference-pages/`: a file there that the kit did not write is a foreign file, which stops the build) and is no Finder `.DS_Store`. The five scaffolded
-    files are among them while they exist; sorted, so use `owner_sorted` for the order the copy list has."""
-    return [rel for rel in paths_in(kd) if is_owner_path(rel)]
-
-
-def owner_sorted(rels) -> list[str]:
-    """The owner's files in the order the build and the copy list name them: the five scaffolded ones (`OWNED_FILES`) that are in `rels`, in that order, then every other, sorted."""
-    have = set(rels)
-    return [r for r in OWNED_FILES if r in have] + sorted(have - set(OWNED_FILES))
 
 
 def is_judged(rel: str) -> bool:
@@ -1721,22 +1753,6 @@ def fill_markers(project: Path) -> list[str]:
         if text is not None:
             out += [f"{rel}:{n}" for n, line in enumerate(text.split("\n"), 1) if FILL_MARKER in line.lower()]
     return out
-
-
-def outside_fences(text: str):
-    """The lines of a Markdown text that are not inside a fenced code block, as (line number from 1, line): the fence lines themselves are left out. A fence opens with three backticks
-    or tildes (up to three spaces in), and closes with the same character, at least as many, and nothing after."""
-    fence = None
-    for n, raw in enumerate(text.split("\n"), 1):
-        line = raw.rstrip("\r")
-        m = _FENCE.match(line)
-        if fence is None:
-            if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):   # a backtick fence's info string holds no backtick
-                fence = m.group(1)
-                continue
-            yield n, line
-        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
-            fence = None
 
 
 def md_links(text: str) -> list[tuple[int, str]]:
@@ -1816,6 +1832,7 @@ _LINK_READERS = {"md": md_links, "html": html_links, "css": css_links}
 OUTSIDE = "points outside the kit: it will not resolve in a product repository"
 ABSOLUTE = "an absolute path: it will not resolve in a product repository"
 NO_SUCH_FILE = "no such file in the kit"
+SITE_ROOT_SNIPPET = re.compile(rf"^{re.escape(PREFIX)}assets/web/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)?head\.html$")   # emit web's <head> snippet: its links name the site's own root URLs, never kit files
 
 
 def _not_a_file(kd: Path, rel: str, serve: bool = True) -> str | None:
@@ -1878,18 +1895,23 @@ def unsupplied_fonts(doc: dict) -> dict[str, str]:
 
 def link_check(project: Path, doc: dict | None = None) -> dict:
     """Every relative link of the kit's Markdown, HTML and CSS files (`LINK_KINDS`): {"files": files read, "links": relative links judged, "bad": [(file, line, target, why)], "unsupplied": [(file, line,
-    target, path in the kit, reason)]}. With kit.json (`doc`), a link to a font it lists as not copied (`unsupplied_fonts`) is no broken link: it goes to "unsupplied" instead of "bad", so that the row
+    target, path in the kit, reason)], "placeholders": targets that hold a template's `{{...}}` field, which are no link and are not judged}. With kit.json (`doc`), a link to a font it lists as not copied (`unsupplied_fonts`) is no broken link: it goes to "unsupplied" instead of "bad", so that the row
     can say the font must be supplied under its own licence. The font has to be missing from the kit and the link has to spell its path letter for letter."""
-    files = links = 0
+    files = links = placeholders = 0
     bad, unsupplied = [], []
     listed = unsupplied_fonts(doc) if doc else {}
     for rel in kit_paths(project):
         kind = LINK_KINDS.get(Path(rel).suffix.lower())
+        if SITE_ROOT_SNIPPET.match(rel):   # pasted into a page's <head>: /favicon.ico is where the site serves it, not a path in the kit
+            continue
         text = kit_text(project, rel) if kind else None
         if text is None:
             continue
         files += 1
         for line, target in _LINK_READERS[kind](text):
+            if _PLACEHOLDER.search(target):          # a template's {{...}} field (an ad, a print template) is filled where the template is used: no link, never judged (the scaffold's pattern)
+                placeholders += 1
+                continue
             relative, why = link_problem(project, rel, target)
             links += relative
             if why:
@@ -1898,7 +1920,7 @@ def link_check(project: Path, doc: dict | None = None) -> dict:
                     unsupplied.append((rel, line, target, at, listed[at]))
                 else:
                     bad.append((rel, line, target, why))
-    return {"files": files, "links": links, "bad": bad, "unsupplied": unsupplied}
+    return {"files": files, "links": links, "bad": bad, "unsupplied": unsupplied, "placeholders": placeholders}
 
 
 def version_problems(project: Path, doc: dict) -> list[str]:
@@ -1943,8 +1965,41 @@ def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
         elif os.path.lexists(kd / rel):
             out.append((rel, OWNED_NOT_FILE))
         else:
-            out.append((rel, OWNED_MISSING if rel in OWNED_FILES else OWNED_REMOVED))
+            out.append((rel, OWNED_MISSING if rel in scaffolds(project) else OWNED_REMOVED))
     return out
+
+
+BRAND_SOURCES = ("state_sha", "tokens", "tokens_css", "facts", "masters")   # the brand inputs an owner file is written against: BRAND-STATE.md (with the motion spec), the token files, FACTS.md, the approved masters
+MASTER_RECIPES = ("recipes/ad.md", "recipes/presentation.md")   # the owner files that use the masters; with any file that names assets/masters/, the only ones a change to the masters alone makes behind
+
+
+BRAND_SOURCE_NAMES = {"state_sha": "BRAND-STATE.md", "tokens": "tokens.json", "tokens_css": "tokens.css", "facts": "FACTS.md", "masters": "assets/masters/"}   # how the owner's line names a brand input
+
+
+def behind_names(changed: list[str]) -> str:
+    """The brand inputs of `changed` as the owner's line names them. `state_sha` also hashes FACTS.md and the motion spec, so it is named as BRAND-STATE.md only as far as it is known."""
+    names = [BRAND_SOURCE_NAMES[k] for k in changed if k != "state_sha"]
+    if "state_sha" in changed:
+        if "facts" in changed:   # FACTS.md alone moves the hash, so BRAND-STATE.md is not known to have changed
+            return ", ".join(names) + " (and possibly BRAND-STATE.md or the motion spec)"
+        names.append("BRAND-STATE.md or the motion spec")
+    return ", ".join(names)
+
+
+def behind_files(project: Path, doc: dict) -> tuple[list[str], list[str]]:
+    """(the keys of `BRAND_SOURCES` that changed since the last build, the owner's files that are still as that build recorded them). A file nobody has touched since the build was written against the
+    brand the kit was built from, so once a brand input changed it is behind it; a file edited after the build is `owned_changes`' to report, and which brand it was written against is not known. May raise CliError
+    when a source cannot be read."""
+    changed = [k for k in source_changes(project, doc) if k in BRAND_SOURCES]
+    if not changed:
+        return [], []
+    recorded = doc["owned"]
+    files = [rel for rel in owner_sorted(recorded) if rel != "EXTENDING.md" and (data := kit_bytes(project, rel)) is not None and sha256_bytes(data) == recorded[rel]]   # EXTENDING.md is the plugin's guide, no brand content
+    if changed == ["masters"]:   # the masters alone: only the files that use them
+        files = [rel for rel in files if rel in MASTER_RECIPES or b"assets/masters/" in (kit_bytes(project, rel) or b"")]
+        if not files:
+            return [], []
+    return changed, files
 
 
 # ---------------------------------------------------------------- kit check, part 2: tags and values
@@ -1952,18 +2007,12 @@ def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
 # A rule id is judged against `known_rule_ids` of the project, and only when a line names one: `known` is a function the caller gives, so a project that cites no rule needs no site record.
 # When `known` cannot read the ids (a CliError), the lines that name a rule are left unjudged and counted (`unjudged`, `unread`); every other line is judged as always.
 
-TAG_EXAMPLE = "[example]"                                    # the tag that says a line shows one case and is no rule
 KIT_TOKENS_CSS = PREFIX + TOKENS_CSS                         # the token files as the kit holds them: a token reference is judged against these copies
 KIT_TOKENS_JSON = PREFIX + TOKENS_JSON
 ITEM_FILES = ("golden-rules.md", "visual.md")                # every bullet and every numbered line of these carries a tag
 NO_TAG = "untagged"
 TAG_HINT = ("tag each with `[example]` or `[rule: <id>]`, an id of rules.json (a rule of the brand written bare, `page:<id>`, `site:<id>`)")
 VALUE_HINT = ("cite a token (`var(--name)` of tokens.css, `{dotted.path}` of tokens.json) or a known `[rule: <id>]`, or tag the line `[example]`")
-_RULE_TAG = re.compile(r"\[rule:([^\]\n]*)\]")
-_PLACEHOLDER_ID = re.compile(r"(?:(?:page|site):)?<[^<>]*>")   # `<id>`, `<rule id>`, `page:<id>`: the syntax of a tag, written as an example; no id of D12 holds an angle bracket
-_BULLET = re.compile(r"^\s*[-*]\s")
-_NUMBERED = re.compile(r"^\s*\d+[.)]\s")
-_THEMATIC_BREAK = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")   # `* * *` and `- - -` start with a bullet marker and are no bullet
 _NOTES = re.compile(r"^reference-pages/[^/]+/notes\.md$")
 _NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)"
 _AFTER_VALUE = r"(?:(?<=\d(?:px|em|ms|vh|vw|ch|fr|pt)-)|(?<=\d(?:rem|svh|dvh|deg)-)|(?<=\d[s%]-))"   # a dash that follows a value: `2em-3em`, `16px-24px` (the lookbehinds are of one width each)
@@ -1991,21 +2040,6 @@ def judged_files(project: Path) -> list[tuple[str, str]]:
         elif _NOTES.match(rel) or (is_owner_path(rel) and Path(rel).suffix.lower() == ".md" and rel not in UNJUDGED_OWNED):
             out.append((rel, "bullets"))
     return out
-
-
-def rule_tags(line: str) -> list[str]:
-    """The ids named by the `[rule: <id>]` tags of a line, each trimmed, in order (an empty tag gives an empty id). A tag whose id is a placeholder in angle brackets (`[rule: <id>]`,
-    `[rule: <rule id>]`, `[rule: page:<id>]`, `[rule: site:<id>]`: a whole `<...>`, after `page:` or `site:` or not) names no id and is no citation: it shows the syntax, and a real id never holds an angle
-    bracket (D12). It is left out here, so `kit:tags` and `kit:numbers` read it as the plain text it is."""
-    ids = (m.group(1).strip() for m in _RULE_TAG.finditer(line))
-    return [i for i in ids if not _PLACEHOLDER_ID.fullmatch(i)]
-
-
-def needs_tag(line: str, kind: str) -> bool:
-    """Whether a line outside a code fence must carry a tag: a bullet (`- ` or `* `, indented or not, a thematic break such as `* * *` is none) in any judged file, and a numbered line (`1. ` or `1) `) in an `items` file."""
-    if _THEMATIC_BREAK.match(line):
-        return False
-    return bool(_BULLET.match(line) or (kind == "items" and _NUMBERED.match(line)))
 
 
 def _unknown_ids(ids: list[str], known, state: dict) -> list[str] | None:
@@ -2296,13 +2330,6 @@ def on_disk(project: Path) -> list[str]:
     return sorted(out)
 
 
-def _plain_file(kd: Path, rel: str) -> bool:
-    """True for a file of the kit that is a file, is itself no link, and sits in no folder that is a link: a link is never read through, and what a link to a folder leads to is not the kit's,
-    so it is neither compared nor moved."""
-    parts = rel.split("/")
-    return not any(kd.joinpath(*parts[:i]).is_symlink() for i in range(1, len(parts) + 1)) and (kd / rel).is_file()
-
-
 def scan(project: Path, files: dict[str, bytes], recorded: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
     """Compare the kit folder with the plan `files` (everything the build would write, kit.json included) and the record of the last build `recorded`
     ({path: sha256}). Returns (edited, foreign, retired), each sorted paths in the kit:
@@ -2322,140 +2349,10 @@ def scan(project: Path, files: dict[str, bytes], recorded: dict[str, str]) -> tu
 # ---------------------------------------------------------------- kit status: is the copy in a product repository current?
 # `kit status --repo` (scripts/kit.py) compares the kit folder of the project with the folder a product repository holds, and only reads. Nothing here writes, and a link is never read through.
 
-NOT_INSTALLED = "not installed"                             # the repository's kit folder holds no kit.json
-CURRENT = "current"                                         # every generated file and kit.json are the project's bytes
-NOT_CURRENT = "not current"                                 # a generated file differs or is missing, or a file of an older kit is left over
-WHY_MISSING = "missing"
-WHY_LINK = "is a link or a folder, not a file"
-WHY_BYTES = "not the same bytes"
-STATUS_SHOWN = 6                                            # paths named in a message before "and N more"
-
-
-def _read_plain(base: Path, rel: str) -> tuple[bytes | None, str | None]:
-    """(the bytes, None) of a plain file `rel` of a kit folder `base`, or (None, why): missing, a link or a folder (or behind a link), or unreadable. A link is never read through."""
-    if not os.path.lexists(base / rel):
-        return None, WHY_MISSING
-    if not _plain_file(base, rel):
-        return None, WHY_LINK
-    try:
-        return (base / rel).read_bytes(), None
-    except OSError as e:
-        return None, f"cannot be read ({e.strerror or e})"
-
-
-def _generated_files_in(kd: Path) -> list[str]:
-    """The paths in a kit folder of every file inside a generated folder, sorted, as `on_disk` lists them for the project: a Finder `.DS_Store` is left out, a link to a folder is the one path
-    it is and is never followed, and a generated folder that is itself a link is listed as that one path."""
-    out = []
-    for d in GENERATED_DIRS:
-        if (kd / d).is_symlink():
-            out.append(d)
-            continue
-        for root, dirs, names in os.walk(kd / d):
-            out += [(Path(root) / n).relative_to(kd).as_posix() for n in names if n != FINDER_FILE]
-            out += [(Path(root) / n).relative_to(kd).as_posix() for n in dirs if (Path(root) / n).is_symlink()]
-    return sorted(out)
-
-
-def installed_version(installed: Path) -> str | None:
-    """The `version` kit.json states in an installed copy, or None when there is no plain kit.json there or it holds no version."""
-    if not _plain_file(installed, KIT_FILE):
-        return None
-    version = (_json_object(installed / KIT_FILE) or {}).get("version")
-    return version if isinstance(version, str) and version.strip() else None
-
-
-def folder_state(folder: Path) -> str:
-    """One sha256 over every folder, file and link below `folder` (and the folder itself), each with its path, kind, size and modification time, none followed through a link: the read-only
-    proof of `kit status`, taken before and after. A folder that is not there is a state too."""
-    h = hashlib.sha256()
-    if not os.path.lexists(folder):
-        return h.hexdigest()
-    entries = [(folder, "")]
-    for root, dirs, names in os.walk(folder):
-        entries += [(Path(root) / n, (Path(root) / n).relative_to(folder).as_posix()) for n in [*dirs, *names]]
-    for f, rel in sorted(entries, key=lambda e: e[1]):
-        try:
-            st = os.lstat(f)
-        except OSError:
-            h.update(f"{rel}\0gone\n".encode("utf-8", "replace"))
-            continue
-        kind = "link" if f.is_symlink() else "folder" if f.is_dir() else "file"
-        h.update(f"{rel}\0{kind}\0{st.st_size}\0{st.st_mtime_ns}\n".encode("utf-8", "replace"))
-    return h.hexdigest()
-
 
 def compare(kit: Path, installed: Path) -> dict:
-    """The kit folder of the project (`kit`) against the folder a product repository holds (`installed`). Reads both, writes nothing, follows no link.
-
-    Returns {"state": NOT_INSTALLED | CURRENT | NOT_CURRENT, "installed_version", "project_version", "differ": [(path, why)], "missing": [path], "left_over": [path],
-    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path]}. The copy list `copy` is the generated files to copy (all of them when nothing is installed, otherwise
-    those that differ or are missing; kit.json last, as the build writes it), then the owner files the repository lacks (every owner file of the project, `owner_paths`: the five scaffolded ones first, then
-    the others sorted); `copy_owner` names those. A link among the owner's files is never read through: it ends the run (exit 3). A kit is NOT_INSTALLED when its
-    folder holds no kit.json; CURRENT when every generated file and kit.json are byte for byte the project's; NOT_CURRENT otherwise, which includes a file in brand/, snippets/ or
-    reference-pages/ that the project's kit does not have (`left_over`: a file of an older kit). An owner file that differs is the repository's own and is only reported
-    (`owner_differ`); one the repository lacks is on the copy list. The project's kit must be whole: a generated file kit.json lists that is missing there, no plain file, or not the
-    sha256 kit.json records ends the run (exit 3), because a copy cannot be judged against a kit that is not itself what it says."""
-    doc = _json_object(kit / KIT_FILE)
-    if doc is None or (bad := problems(doc)):
-        fail(EXIT_USAGE, f"{kit / KIT_FILE} is no kit.json this version reads" + (f": {bad[0]}" if doc is not None else ""))
-    wanted = [*sorted(doc["generated"]), KIT_FILE]                      # kit.json last: a copy that stops half way leaves a kit that kit.json does not vouch for
-    mine, broken = {}, []
-    for rel in wanted:
-        data, why = _read_plain(kit, rel) if recorded_path(rel) else (None, "is no path a kit holds")
-        if why:
-            broken.append(f"{rel} ({why})")
-        elif rel != KIT_FILE and sha256_bytes(data) != doc["generated"][rel]:
-            broken.append(f"{rel} (edited by hand)")
-        else:
-            mine[rel] = data
-    if broken:
-        shown = ", ".join(broken[:STATUS_SHOWN]) + (f", and {len(broken) - STATUS_SHOWN} more" if len(broken) > STATUS_SHOWN else "")
-        fail(EXIT_CANNOT, f"the kit in the project is not whole, so no copy can be judged against it: {shown}. Run `brand-creator kit check`, then `brand-creator kit build --yes`")
-    owner_rels = owner_sorted(owner_paths(kit))                          # the owner's files as the kit folder holds them now, the five scaffolded ones first
-    linked = [rel for rel in owner_rels if not _plain_file(kit, rel)]
-    if linked:
-        shown = ", ".join(linked[:STATUS_SHOWN]) + (f", and {len(linked) - STATUS_SHOWN} more" if len(linked) > STATUS_SHOWN else "")
-        fail(EXIT_CANNOT, f"the kit in the project holds a link among the owner's files ({shown}): a link is never read through, so no copy can be judged against it. Move it away yourself "
-                          "(`brand-creator kit build --yes --replace` moves it aside), then run `brand-creator kit check`")
-    owner = {rel: data for rel in owner_rels if (data := _read_plain(kit, rel)[0]) is not None}   # the project's owner files that can be copied
-    out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
-           "copy": [], "copy_owner": []}
-    if not os.path.lexists(installed / KIT_FILE):
-        out["copy"] = list(wanted)
-    else:
-        out["installed_version"] = installed_version(installed)
-        for rel in wanted:
-            data, why = _read_plain(installed, rel)
-            if why == WHY_MISSING:
-                out["missing"].append(rel)
-            elif data != mine[rel]:
-                out["differ"].append((rel, WHY_BYTES if data is not None else why))
-            else:
-                continue
-            out["copy"].append(rel)
-        out["left_over"] = [rel for rel in _generated_files_in(installed) if rel not in doc["generated"]]
-        out["state"] = NOT_CURRENT if out["differ"] or out["missing"] or out["left_over"] else CURRENT
-    for rel in owner_rels:
-        if rel not in owner:
-            continue
-        data, why = _read_plain(installed, rel)
-        if why == WHY_MISSING:
-            out["copy_owner"].append(rel)
-        elif data != owner[rel]:
-            out["owner_differ"].append((rel, WHY_BYTES if data is not None else why))
-    out["copy"] += out["copy_owner"]
-    return out
-
-
-def not_current_text(installed_version: str | None, project_version: str, differ, missing, left_over) -> str:
-    """What a copy that is not current is called, after its label: `not current (installed version A, project version B)` when the two versions differ (A is `unknown` when the installed kit.json states
-    none), and, when they are the same (a copy that has the new kit.json and still differs from the kit in a file), `not current (version V on both sides, but 1 file differs, 1 file is missing, 1 file is left
-    over from an older kit)`, naming only the kinds there are, so that it does not read as a contradiction. `differ`, `missing` and `left_over` are the lists `compare` returns (only their length is used).
-    The one wording of `kit status` (scripts/kit.py) and of `adoption status` (scripts/adoption.py)."""
-    if installed_version != project_version:
-        return f"not current (installed version {installed_version or 'unknown'}, project version {project_version})"
-    counts = ((len(differ), "file differs", "files differ"), (len(missing), "file is missing", "files are missing"),
-              (len(left_over), "file is left over from an older kit", "files are left over from an older kit"))
-    said = ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in counts if n)
-    return f"not current (version {project_version} on both sides, but {said})" if said else f"not current (version {project_version} on both sides)"
+    """`kitcopy.compare`, with a KitError turned into the plugin's failure (exit code and message kept)."""
+    try:
+        return _compare(kit, installed)
+    except KitError as e:
+        fail(e.code, e.message)

@@ -72,6 +72,7 @@ figcaption{font-size:13px;color:var(--muted);margin-top:4px}
 .check,.cold{margin:0;font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;border-left:4px solid var(--muted)}
 .check[data-check="pass"],.cold[data-cold="ship"]{border-left-color:var(--good)}
 .check[data-check="fail"],.cold[data-cold="fix"]{border-left-color:var(--warn)}
+.cold[data-cold="owner"]{border-left-color:var(--accent)}
 .layout-line{margin:0;font-size:14px}
 .fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
 .fit dt{font-weight:600}.fit dd{margin:0}
@@ -131,18 +132,19 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
         <p class="live"><a data-field="live" href="[[fill: Name one]]/index.html">Open the live page</a> to scroll it, in both colour schemes.</p>
         <p class="check" data-check="[[fill: pass or fail]]">[[fill: the check line, from the report of page-check: how many rows passed or which failed, for example "Page check: pass (brand rules at six widths, light and dark)"]]</p>
         <dl class="fit">
-          <dt>What it is</dt><dd data-field="what-it-is">[[fill: the hero in a sentence or two: what leads, what the visitor can do from it, how it ends]]</dd>
+          <dt>Idea</dt><dd data-field="idea">[[fill: the one memorable idea of this hero, in one line, stated before the page was built: what a visitor will remember]]</dd>
+          <dt>What it is</dt><dd data-field="what-it-is">[[fill: the hero in a sentence or two: what leads, what the visitor can do from it, how it ends; when motion/motion.json says the brand moves, where the signature move shows on this first screen, or why it is left out]]</dd>
           <dt>Takes from</dt><dd data-field="from-refs">[[fill: the group of the references board, or the site the owner named, this hero takes its structure from, and what it takes (structure and rhythm, never their look)]]</dd>
           <dt>Tells</dt><dd data-field="tells">[[fill: every tell page-check found, by its id, with what you will do about it; "none found" when it found none]]</dd>
           <dt>Reflex test</dt><dd data-field="reflex">[[fill: no hits, or one hit: id | argument per hit (the ids of page-tells.json and ai-defaults.json, and the items of research/site-cliches.md)]]</dd>
           <dt>Cost</dt><dd data-field="cost">[[fill: what it takes to build and keep in the product repository: the script, the pictures, the content the owner must supply]]</dd>
         </dl>
         <p class="layout-line" data-field="layout" data-layout="[[fill: layout id]]">Layout: <b>[[fill: layout id]]</b>. [[fill: why this structure serves the visitor's job; for own:word, why none of the layout references fit]]</p>
-        <p class="cold" data-cold="[[fill: ship or fix]]">Cold review: <b>[[fill: ship or fix]]</b>, [[fill: by in-thread or by agent]]. [[fill: its first finding in a line, from cold-review.md]]</p>
+        <p class="cold" data-cold="[[fill: ship, fix or owner]]">Cold review: <b>[[fill: ship, fix or owner]]</b>, [[fill: by in-thread or by agent]]. [[fill: its first finding in a line, from cold-review.md; for owner, the first question to the owner]]</p>
         <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
           <label><input type="radio" name="vote-[[fill: Name one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: Name one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: Name one]]" value="unsure">unsure</label></fieldset>
       </article>
-      <!-- [[fill: articles for variants two and three, same structure; a later hero board may show one or more]] -->
+      <!-- [[fill: articles for variants two and three, same structure; a later hero board shows only the variant(s) the owner picked or combined]] -->
     </div>
   </section>
 
@@ -205,7 +207,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
   -->
 
   <!-- PAGES STAGE, the pages (data-site-stage="pages"): replace the whole "variants" section above (and the Heroes entry of the table of contents) with this one, and write the eyebrow, the heading and the Reply paragraph (it names a variant) for the pages.
-       One article per page, repeated: data-site-page is the page id, also the name of the folder rounds/rN/<id>/ (lowercase letters, digits and -, 2 to 32 characters, starting with a letter: start, pricing);
+       Before the page cards, write the hero's motifs as a short system (shapes, devices, the move; one line each) and use at least one of them on every page for its own job; each card has an Idea line (data-field="idea"; missing or empty it fails site:fields, as on a hero card; it was a warning in 0.8.0). One article per page, repeated: data-site-page is the page id, also the name of the folder rounds/rN/<id>/ (lowercase letters, digits and -, 2 to 32 characters, starting with a letter: start, pricing);
        its index.html declares <body data-layout="<layout reference or own:word>" data-page="<the same id>">. The four stills are the files `brand-creator capture rounds/rN/<id>/index.html` wrote to
        rounds/rN/<id>/shots/. Takes from and the cold review (data-cold, with rounds/rN/<id>/cold-review.md) are optional on a page; delete a line you do not use, never leave it empty. There is no reflex line:
        the hero carried the reflex test.
@@ -223,13 +225,14 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
         <p class="live"><a data-field="live" href="[[fill: page id]]/index.html">Open the live page</a> to scroll it, in both colour schemes.</p>
         <p class="check" data-check="[[fill: pass or fail]]">[[fill: the check line, from the report of page-check: how many rows passed or which failed]]</p>
         <dl class="fit">
+          <dt>Idea</dt><dd data-field="idea">[[fill: the one idea of this page in the brand's world, in one line: which motif of the hero's system it uses for the page's own job]]</dd>
           <dt>What it is</dt><dd data-field="what-it-is">[[fill: the page in a sentence or two: what leads, what the visitor can do from it, how it ends]]</dd>
           <dt>Takes from</dt><dd data-field="from-refs">[[fill: OPTIONAL: what this page takes from the hero or from the references (structure and rhythm, never their look); delete the line otherwise]]</dd>
           <dt>Tells</dt><dd data-field="tells">[[fill: every tell page-check found, by its id, with what you will do about it; "none found" when it found none]]</dd>
           <dt>Cost</dt><dd data-field="cost">[[fill: what it takes to build and keep in the product repository: the script, the pictures, the content the owner must supply]]</dd>
         </dl>
         <p class="layout-line" data-field="layout" data-layout="[[fill: layout id]]">Layout: <b>[[fill: layout id]]</b>. [[fill: why this structure serves the visitor's job; for own:word, why none of the layout references fit]]</p>
-        <p class="cold" data-cold="[[fill: ship or fix]]">Cold review: <b>[[fill: ship or fix]]</b>, [[fill: by in-thread or by agent]]. [[fill: OPTIONAL: its first finding in a line, from cold-review.md; delete the line when the page has no cold review]]</p>
+        <p class="cold" data-cold="[[fill: ship, fix or owner]]">Cold review: <b>[[fill: ship, fix or owner]]</b>, [[fill: by in-thread or by agent]]. [[fill: OPTIONAL: its first finding in a line, from cold-review.md; delete the line when the page has no cold review]]</p>
         <fieldset class="vote" data-vote="[[fill: page id]]"><legend>Your vote</legend>
           <label><input type="radio" name="vote-[[fill: page id]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: page id]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: page id]]" value="unsure">unsure</label></fieldset>
       </article>

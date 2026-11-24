@@ -16,7 +16,8 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    claude plugin validate plugins/<name> --strict
    ```
 
-3. Commit and push the changelog and version bump.
+3. Commit and push the changelog and version bump. (On a machine that holds private brand projects, a pre-push hook
+   scans every push for their names first: [ADR-0010](../adr/ADR-0010-private-terms-are-kept-out-by-their-holders-pre-push-scan.md).)
 4. Wait until every CI run of that commit on `main` has passed. A tag push runs no CI, so this run is the release's only
    check ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)), and GitHub accepts the tag
    only on a commit where the checks `<name>` and `docs` passed (the tag rulesets below):
@@ -31,6 +32,18 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    whose CI failed. The tag then goes on the fix commit, which needs both checks too: a workflow whose paths that commit
    did not change never starts there, so start it by hand on `main`'s current commit with
    `gh workflow run <workflow>.yml --ref main` (`docs.yml`, or the plugin's own).
+
+   brand-creator's workflow runs only quick checks. Before its tag, run its full suite on that commit, on macOS and in
+   the Linux container, and record the result: [Release run](../../plugins/brand-creator/docs/internals/manual-checks.md#release-run).
+   From any machine, start it on GitHub's runners and wait for its verdict, `brand-creator-release`
+   ([ADR-0009](../adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)):
+
+   ```bash
+   gh workflow run brand-creator-release.yml --ref main
+   gh run list --workflow brand-creator-release.yml --commit "$(git rev-parse HEAD)" --json databaseId,status,conclusion
+   ```
+
+   On a Mac with Xcode and Docker you can run it yourself instead, as that page describes.
 5. Dry-run the tag, from the repository root:
 
    ```bash

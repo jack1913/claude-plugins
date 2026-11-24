@@ -24,7 +24,8 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | The safety hook and its guard | `hooks/hooks.json`, `scripts/guard.py` |
 | Files copied into brand projects (not docs) | `templates/` |
 | Tests | `tests/` (pytest in `tests/test_*.py`, `tests/node/`, `tests/smoke/`, `tests/docker/`) |
-| How CI runs them | `.github/workflows/brand-creator.yml` (`run:` lines; Linux in Docker, validate, macOS) |
+| How CI runs them | `.github/workflows/brand-creator.yml` (`run:` lines; validate and the quick tests on every push) and `.github/workflows/brand-creator-release.yml` (the full suite on macOS and in the Linux Docker image, started by hand before a release, `docs/internals/manual-checks.md`) |
+| Keeping private brand names out of a push (a pre-push scan for whoever holds private brand projects; not a test) | `tests/tools/private_terms.py`, `docs/internals/development.md` ("Private terms") |
 | Evals (behaviour cases, billed) and trigger evals | `evals/`, `evals/trigger-evals.json` |
 | Connector rules (none needed) | `CONNECTORS.md` |
 | Third-party notices | `THIRD_PARTY_NOTICES.md` |
@@ -41,7 +42,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 ## Rules for working here
 
 - A change stays inside `plugins/brand-creator/`, plus `.github/workflows/brand-creator.yml`.
-- Run the tests from this folder: `uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4 --dist worksteal`.
+- Run the tests from this folder: `BRAND_CREATOR_TEST_PARTS=pytest tests/run-all.sh` (pytest on one worker per CPU core; `--fast` for the daily tier).
   Tests that need a set-up data directory skip with a NOT VERIFIED banner; a skip is not a pass.
 - Do not bump `version` in `plugin.json` except when releasing. Release with the `changelog-release` skill at the
   repository root.

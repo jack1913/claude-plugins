@@ -94,7 +94,7 @@ and delete a line that does not apply. Take nothing from another project.
 The brief must say, and the template has a slot for each:
 
 1. the exact round folder to write to (`rounds/r<N>/<direction>/`), which from round 2 starts as a copy of the previous round
-   (`cp -R rounds/r<N-1> rounds/r<N>` first when the folder is not there yet; a round drawn without the copy started with
+   (`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first when the folder is not there yet; a round drawn without the copy started with
    none of the previous round's files);
 2. which colour goes to which item;
 3. a target footprint at 16 px (for example fill about 14-16 px wide and 12 px or more tall on a 16 grid);

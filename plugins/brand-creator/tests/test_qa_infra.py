@@ -190,8 +190,25 @@ def test_normalise_pdf_fixes_dates_and_ids_without_breaking_the_file(tmp_path):
     info = subprocess.run(["pdfinfo", str(out)], capture_output=True, text=True)
     assert info.returncode == 0 and "Pages:" in info.stdout and "1980" in info.stdout  # still a valid PDF, now dated 1980-01-01
     assert "1980" in next(l for l in info.stdout.splitlines() if l.startswith("CreationDate"))
-    ids = [m for m in __import__("re").findall(rb"/ID\s*\[\s*<([0-9A-F]+)>\s*<([0-9A-F]+)>", fixed)[0]]
-    assert all(set(i) == {ord("0")} for i in ids)  # the ID is zeroed
+    ids = determinism.pdf_ids(fixed)
+    assert len(ids) == 2 and all(set(i) == {ord("0")} for i in ids)  # the ID is zeroed, whichever form Ghostscript wrote
+
+
+def test_a_pdf_id_written_as_a_literal_string_is_zeroed_and_caught_like_a_hex_one(tmp_path):
+    """Ghostscript writes /ID as (...) instead of <...> when that is shorter (about one PDF in 40): it must be zeroed too."""
+    trailer = b"trailer\n<< /Size 3 /ID [(\\276Tv}\\(a\\)b(c)\\\\x)(\\276Tv}\\(a\\)b(c)\\\\x)] >>\nstartxref\n9\n%%EOF\n"
+    hexed = b"trailer\n<< /ID [ <7A2241ff8FC6> <7A2241FF8FC6> ] >>\n%%EOF\n"
+    for raw in (trailer, hexed):
+        pdf = tmp_path / "a.pdf"
+        pdf.write_bytes(raw)
+        assert "PDF /ID is not zeroed (pdf-dates)" in determinism.lint_file(pdf)
+        fixed = determinism.normalise_pdf(raw)
+        assert len(fixed) == len(raw) and determinism.normalise_pdf(fixed) == fixed
+        ids = determinism.pdf_ids(fixed)
+        assert len(ids) == 2 and all(set(i) == {ord("0")} for i in ids), ids
+        assert fixed.endswith(b" >>\nstartxref\n9\n%%EOF\n") or fixed.endswith(b" ] >>\n%%EOF\n")  # nothing after the ID moved
+        pdf.write_bytes(fixed)
+        assert determinism.lint_file(pdf) == []
 
 
 @pytest.mark.requires_gs
@@ -354,6 +371,26 @@ def test_a_newer_plugin_or_changed_emitter_code_makes_the_pack_stale(acme, plugi
     mutate_json(plugin_copy / ".claude-plugin/plugin.json", lambda d: d.__setitem__("version", "9.9.9"))
     r = bc("staleness", project=acme, plugin=plugin_copy)
     assert r.returncode == 1 and "staleness:plugin-version" in failing(report(acme, "staleness"))
+
+
+def test_after_a_plugin_update_the_stale_rows_name_the_chain_that_rebuilds_the_pack_when_the_project_has_one(acme, plugin_copy):
+    bc("staleness", "--write", project=acme)
+    mutate(plugin_copy / "scripts/emitters/web.py", "def ", "def  ", 1)
+    mutate_json(plugin_copy / ".claude-plugin/plugin.json", lambda d: d.__setitem__("version", "9.9.9"))
+    (acme / "assets/logo/extra.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>')
+    bc("staleness", "--write", project=acme)
+    (acme / "assets/logo/extra.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path d="M0 0h2v2z"/></svg>')
+    stale = ("staleness:plugin-version", "staleness:emitters", "staleness:input:assets/logo/extra.svg")
+    assert not (acme / "tools/finish.sh").exists()
+    assert bc("staleness", project=acme, plugin=plugin_copy).returncode == 1
+    got = rows(acme, "staleness")
+    for row in stale:  # no chain in this project: the rows say what to do by hand
+        assert "`staleness --write`" in got[row]["detail"] and "finish.sh" not in got[row]["detail"], got[row]
+    (acme / "tools/finish.sh").write_text("#!/usr/bin/env bash\n")
+    assert bc("staleness", project=acme, plugin=plugin_copy).returncode == 1
+    got = rows(acme, "staleness")
+    for row in stale:
+        assert "`bash tools/finish.sh`" in got[row]["detail"], got[row]
 
 
 def test_needles_keep_a_sibling_documents_quoted_sentence_honest(acme):

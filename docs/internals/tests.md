@@ -22,7 +22,7 @@ $ python3 .github/scripts/check-marketplace.py
 ```
 
 The workflow check, which also checks the rulesets, runs from the repository root too. A pass prints
-`6 workflows and 5 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
+`7 workflows and 5 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
 
 ```bash
 python3 .github/scripts/check-workflows.py
@@ -72,9 +72,15 @@ bin/brand-creator --data <dir> setup --yes
 BRAND_CREATOR_DATA=<dir> tests/run-all.sh --smoke
 ```
 
-CI runs the same suite inside a Linux container (`tests/docker/run.sh`), one part (pytest, node, smoke) per parallel job, and
-on macOS the Apple-tool tests and the two halves of the Acme smoke, each in a job of its own
-(`.github/workflows/brand-creator.yml`). Its verdict, the `brand-creator` check, passes only when every job passed. More:
+For daily work, `tests/run-all.sh --fast` leaves out the slow tests (those that took a second or more in the last measured
+run, `tests/durations.json`) and the smoke, and says how many it left out: under 2 minutes on a 12-core Mac.
+
+CI runs only quick checks (`.github/workflows/brand-creator.yml`): `claude plugin validate --strict` and the static tests,
+about a minute, where any skip fails. Its verdict, the `brand-creator` check, passes only when every job passed. The full
+suite runs before each release tag, on macOS and in the Linux container (`tests/docker/run.sh`): on GitHub's runners,
+started by hand (`.github/workflows/brand-creator-release.yml`), or on a Mac with Docker
+([ADR-0008](../adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md),
+[ADR-0009](../adr/ADR-0009-brand-creators-release-run-can-run-on-github-started-by-hand.md)). More:
 [its development notes](../../plugins/brand-creator/docs/internals/development.md).
 
 Without the data directory, the tests that need it print a "NOT VERIFIED" banner. A skip is not a pass.

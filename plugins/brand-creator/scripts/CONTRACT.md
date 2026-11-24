@@ -16,6 +16,7 @@ once; a script that does not use them is wrong, not special.
 - [Token sources (DTCG 2025.10)](#token-sources-dtcg-202510)
 - [Board contract (data attributes)](#board-contract-data-attributes)
 - [Hook guard](#hook-guard)
+- [Cleanup (`brand-creator cleanup`)](#cleanup-brand-creator-cleanup)
 - [Platform specs and emitters](#platform-specs-and-emitters)
 - [Name screening](#name-screening)
 - [QA gates and mark tooling](#qa-gates-and-mark-tooling)
@@ -38,7 +39,9 @@ skills say so). `setup`, `prereq`, `state` and `version --check` run on the firs
 or older one earlier on PATH is skipped, as uv skips it for the other scripts); none → exit 3 naming each one tried.
 Skills pass `--data "${CLAUDE_PLUGIN_DATA}"`, always quoted (a data path may hold a space; a test fails on any
 unquoted form in the skills). `BRAND_CREATOR_DATA` is the environment equivalent. Every subcommand
-except `help`, `version` (and `version --check`, see the finish chain), `root` and `prereq` needs one of them and exits 2 with a clear message otherwise. The data directory
+except `help`, `version` (and `version --check`, see the finish chain), `root` and `prereq` needs one of them and exits 2 with a clear message otherwise.
+`brand-creator <subcommand> --help` (or `-h`, also `emit <target> --help`) needs none: it prints that subcommand's usage, exit 0, and creates no directory (`bin/brand-creator` skips the check when `-h` or `--help`
+is among the arguments before a literal `--`; `smoke` has no options of its own and prints one line; the `render.mjs` commands (`shot`, `card`, `frames`, `capture`, `fonts`) print their own usage lines and the notes under them before the data directory is asked for). The data directory
 holds `node_modules/`, the Chromium build (when setup had to install one), `setup.json`, `cache/` (the IANA RDAP
 bootstrap, 24 h) and scratch output. Nothing
 is ever written under the plugin root (it changes on every update).
@@ -127,6 +130,9 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
 ```text
 <project>/
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md
+  .gitignore                       written by `new` from templates/gitignore (no dot, so a copy of the plugin keeps it): the one line `research/site-refs/*/1440-full.png`,
+                                   the full-page site captures, which the boards do not use (they use the smaller stills and the thumbnails). Never overwritten: `new` refuses a folder that
+                                   holds anything, an existing `.gitignore` included, before it writes a file. A project made before has none; the manual says what to add by hand
   research/research.md  research/YYYY-MM-DD-<topic>.md  research/positioning-map.md   P1 output (templates/research.md)
   research/cliches.md              (optional; "Forbidden" bullets feed the FORBIDDEN count in shots; templates/cliches.md)
   research/site-cliches.md         (the website references: the category's site clichés under "Avoid unless argued", no Forbidden section; templates/site-cliches.md)
@@ -155,7 +161,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   specimens/<name>/                page shots kept as specimens (shot --out specimens/<name>); any depth, the only project folder `shot --out` may write
   research/site-refs/<name>/       a real site's stills from `capture --url`: 1440.png 390.png 1440-full.png thumb-1440.jpg thumb-390.jpg capture.json (see capture)
   research/site-refs/owner/        screenshots the owner sent (not captured; the board's caption says so; `capture --url --name owner` is refused)
-  <page folder>/shots/             a project page's stills from `capture <page>`: 1440-light.png 1440-dark.png 390-light.png 390-dark.png 1440-light-full.png capture.json
+  <page folder>/shots/             a project page's stills from `capture <page>`: 1440-light.png 1440-dark.png 390-light.png 390-dark.png 1440-light-full.png capture.json (and, with `--frames`, frame-1440-0.png frame-1440-50.png frame-1440-100.png; `--reveal` adds no file)
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
@@ -177,10 +183,12 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
                                    its owner files are scaffolded once and are the owner's: see kit)
   tools/cascade.json                  documents outside the project that `check --cascade` searches too (optional)
   removed-<date>[-n]/              dated copies of what `collapse` changed and of slots an emitter retired (never deleted)
-  FAMILY.md                        family modes only (templates/FAMILY.md); read by family-check
+  FAMILY.md                        family modes only (templates/FAMILY.md; in a family-parent, the family's own); read by family-check
   history/<date>-<name>/  history/MANIFEST.sha256     frozen rounds (only `brand-creator freeze` adds files)
   DECISIONS.md  decisions/ADR-<NNNN>-<slug>.md   the decision log and the decision records (templates/DECISIONS.md, templates/ADR.md);
-                                   append-only by convention (dated amendments), not read by any check, skipped by the cascade
+                                   append-only by convention (dated amendments), skipped by the cascade; the lint of a pages board lists both as inputs (`site:choices`), and `cleanup`
+                                   reads them for references to rounds and appends the owner's yes to a plan to DECISIONS.md (see Cleanup)
+  qa/<date>-cleanup-plan.txt  qa/<date>-cleanup-removed[-n].txt   the plan `cleanup` showed and the record of a removal (see Cleanup); never read as a source of references
 ```
 
 Folders are created when their phase starts. `check` gates only what exists.
@@ -189,7 +197,7 @@ Folders are created when their phase starts. `check` gates only what exists.
 
 A `---` block of `key: value` lines, one level of nesting, trailing `# comments` allowed; the body is free markdown.
 Keys: `slug, name, created, plugin_version, tier (quick|standard|full), phase, architecture (standalone|family-member|
-product-in-family), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
+product-in-family|family-parent), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
 codes of the brand's own text, for example `pl` or `pl,en`; read by fontcheck, never defaulted from `language`), renderer, review_surface, review_url,
 site_research (auto|online|links-only|none: the owner's answer to online research for website references; `capture --url` needs online or links-only),
 incumbent (none or a line), inventory (path or "none (no target repo)"), edition (whole number, the brand book's), approved_edition (the edition G5 approved; `state --record G5` writes it), book_chapters (extra
@@ -198,6 +206,11 @@ then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G
 empty means not recorded. `brand-creator state --record G3 "<decision>"` writes it, `state --require G3` exits 1 when missing.
 `G4w` is the website references pick (or `skipped by owner`) and `G4p` the site's reference pages approved; `state` prints the gates in the
 order above, `--record` and `--require` accept both, and a project made before them gets the key on its first `--record`.
+`state --set tier=standard|full` to a higher tier than the project had (quick < standard < full) saves the value, then prints `tier raised: <old> -> <new>` and up to four indented lines, exit 0: the chapters
+the new tier's book needs that the project has no file for (`book/chapters/<id>.md`, one per content language; for a hand-authored book the `data-chapter` sections of the book), from the registry and rules of
+`chapters:required` (`bookdata.chapters_for`); the inventory when the new tier needs it and neither `INVENTORY.md` nor `inventory: none (no target repo)` is there (the rule of board-lint's `project:inventory`,
+`_common.inventory_needed`); the motion decision when the new tier is Standard or Full, G4 is recorded and `motion/motion.json` is missing (`check` fails `motion:decided` without it); and a line that an item that cannot be filled yet is written `Open: <what it waits for>` (see "Open items" under "Brand book"). Nothing is printed when nothing is missing, when the
+tier is set to the same or a lower one (a project with no `tier:` key counts as Quick, as the book reads it), or when `--set` is not about the tier. With `--json` or `--get` the lines go to stderr, so stdout stays the JSON or the value. If a hand-authored book's `book/book.json` cannot be read, the tier is still saved and one line says the chapters were not checked, and the inventory and motion lines are still printed.
 `state --set site_research=...` takes only its four answers: any other value exits 2, names them and writes nothing.
 `state --set KEY=VALUE` trims the spaces around the key and the value (`"reset_rounds =2,3"` is `reset_rounds`, checked as one), and a
 key that is not one word (letters, digits, `_` and `-`, dots between parts) exits 2 with nothing written.
@@ -216,6 +229,12 @@ board is written does not look as if it came after it. Only that command writes 
 `board-lint` reads it to tell a pick recorded after a full rejection from the one before it. The `## Directions` table in the body
 is read by `state --json`, which also reports `rounds` and `latest_round` as `rN` (`r0`, the style board, counts as a round) or
 `null` when no round exists, and `motion`, the decision of `brand-creator motion` (see The motion decision).
+
+`tryout_url` (written by `state --set tryout_url=<url>`, cleared by `state --set tryout_url=`) is the private page a shared try-out of the site round is on
+(`inline` makes the file, the Artifact tool publishes it, only with the owner's yes). It is a key of its own, apart from `review_url`, which stays the one
+review page of the boards: setting one never touches the other, `state` prints `try-out url: ...` only while it is set, and `state --json` holds it in
+`state`. A project made before the key has it from its first `--set`. Like `review_url`, it is no input of a page check or a board lint, so writing it
+leaves their reports current.
 
 ## Token sources (DTCG 2025.10)
 
@@ -580,9 +599,10 @@ One card per variant: an element with `data-site-variant="<name>"` (the `<articl
 | `<a data-field="live" href="<name>/index.html">` | the live page, one click away (the board has no replay) |
 | an element with `data-check="pass"` or `"fail"`, and its text | the check line: what `page-check` found for this variant |
 | `data-field="what-it-is"`, `"from-refs"`, `"cost"` | What it is, Takes from (the group of the references board, or the owner's site, the structure comes from) and Cost, each with text |
+| `data-field="idea"` | the Idea line of a hero card: the variant's one memorable idea in one line, stated before the page was built (the label is "Idea"). Missing or empty it fails `site:fields`. A page card has one too (the page's one idea in the brand's world): missing or empty it fails `site:fields` too (a warning in 0.8.0) |
 | `data-field="tells"`, `data-field="reflex"` | the tells `page-check` found and what will be done about them, and the reflex line of the variant |
 | `data-field="layout"` with `data-layout="<id>"` | the layout reference of the page, the same id the page declares |
-| an element with `data-cold="ship"` or `"fix"`, and its text | the cold review's verdict |
+| an element with `data-cold="ship"`, `"fix"` or `"owner"`, and its text | the cold review's verdict |
 | `<fieldset data-vote="<name>">` | the owner's vote, as on every board (the `page:votes` row); its radios are named `vote-<name>`, a group of their own per card |
 
 The pictures are the project's own files by a relative path, read from the page's folder as a browser reads it, or, in the copy published on a review surface (`review/index.html`, linted with `--round N`), `data:` URIs of the same bytes. The first hero
@@ -600,7 +620,7 @@ as a refine board does from round 2. Hardest surface, My call, questions and rep
 | `site:variants` | the count (2 or 3 on the first hero board of a project, 1 or more on a later one) or a name (a word, not a label, a folder name, unique) |
 | `site:files` | a variant has no folder, or one that is not spelt as the card spells it (an entry of `rounds/rN/` equal to the card's name, letter case included: a disk that does not tell letter cases apart, macOS or Windows, opens `ledger/` for the card `Ledger`, but the reports of `page-check` and `capture` are named after the page's path, so a card spelt otherwise never finds them; the row says the card and its folder must be spelt alike, on every kind of disk); no `index.html`; an `index.html` with no `<body>` tag, or whose `<body>` declares no `data-layout` or no `data-page`, or a `data-page` that is no page id; a card with no link to the live page, or one that does not lead to `<name>/index.html` |
 | `site:layout` | the page's `data-layout` is missing, or is neither an id of `page-layouts.json` nor `own:<word>` (the detail lists the known ids); the card has no `data-field="layout"` line, or its `data-layout` differs from the page's. A layout of its own (`own:<word>`) is a warning, never a failure: "say on the card why none of the references fit" |
-| `site:fields` | What it is, Takes from or Cost is missing, empty, a placeholder or still holds a `[[fill: ...]]` marker, in a card |
+| `site:fields` | What it is, Takes from or Cost is missing, empty, a placeholder or still holds a `[[fill: ...]]` marker, in a card. The Idea line (`data-field="idea"`) of a hero card is read here too: missing, empty, a placeholder or with a `[[fill: ...]]` marker, in a card, the row is a `fail` that names the card (`Ledger: Idea is missing or empty (...)`) (a warning in 0.7.0), so a board made before the line existed fails until the line is added; its detail lists every field that fails. A page card's Idea line (the page's one idea in the brand's world) is read the same way: missing or empty it fails (`start: Idea is missing or empty (...)`; a warning in 0.8.0), so a pages board made before 0.9.0 without Idea lines fails until the line is added. On a board of an earlier round, which the guard keeps read only (`guard.round_is_open`), a missing or empty Idea line is a `warn` instead (each named, with "rounds/rN/ is an earlier round and read only, so this only warns"), since it cannot be added there; any other field still fails (since 0.11.1) |
 | `site:check` | a variant has no page-check report: `assets/_checks/<tool>.json` with `tool = pagecheck.report_tool("rounds/rN/<name>/index.html")` (`page-check/<slug>-<hash6>`, named after the page's path; `scripts/pagelib/pagecheck.py` owns the rule and the board imports it); the report is not that page's (its top-level `target` is not `{"kind": "project", "page": "rounds/rN/<name>/index.html"}`); it is stale (a file in its `inputs` is gone or changed, `_common.stale_inputs`, the rule `check` applies; or it does not list the page among them, so a change to the page would not show); its `status` is not `pass` or `fail` (`not-verified`: the detail quotes up to three of its rows that were not verified); the card has not exactly one check line (an element with `data-check`), its value is not `pass` or `fail`, it differs from the report's status, or it has no text. A failing check shown as `fail` is honest and passes the row. Every failure names `brand-creator page-check rounds/rN/<name>/index.html` |
 | `site:tells` | a `warn` row `tell:<id>` of a variant's page-check report (`<id>` an id of `page-tells.json`; the row `tell:<id>` is a `pass` when none was found) is not named, by its id, on the card's `data-field="tells"` line: "show every tell page-check found, with what you will do about it". An id counts as named when no letter, digit or `-` touches it (`eyebrows` is not `eyebrow`). A `tell:<id>` warning with `hits: []` is page-check saying it could not check the page for that tell (no `lang`, a language with no word list, past the element cap), not that it found one: the card must still name it, and the message says page-check could not verify it ("show every tell page-check found or could not verify"), never that it found it. Other warnings of the report, and the `page:rule:<id>` row of a tell the owner adopted as a brand rule, are not read here. A variant whose report is missing, stale or no verdict is not judged: when nothing else fails the row is "not verified" (`skipped`, exit 3), and `site:check` says why |
 | `site:stills` | `rounds/rN/<name>/shots/capture.json` (`brand-creator capture`) is missing or unreadable; it is not the capture of the variant's page (`source.page`); it is stale (a file in its `inputs` is gone or changed, or the page is not among them); it lists no sha256 for one of the four views `1440-light`, `1440-dark`, `390-light`, `390-dark`; the file it names for a view is not there or has other bytes than the listed sha256; the card has not exactly one `<img data-field="still">` per view (by `data-view`, and no other view), or the bytes of one of them are not the listed sha256: the project's file by a relative path read from the board's folder, or on the review copy a `data:` URI of the same bytes (an address, or a path outside the project, is no capture). Every failure names `brand-creator capture rounds/rN/<name>/index.html` |
@@ -612,7 +632,7 @@ as a refine board does from round 2. Hardest surface, My call, questions and rep
 | `site:<name>:reflex-measured` | a warning: the page-check report of the card's page has a `tell:<id>` warning that the reflex line neither hits nor names as a near miss ("page-check found <id>; argue it on the card or change the page"; a `tell:<id>` warning with `hits: []` reads "page-check could not verify <id>" instead, and asks the same). Not verified (`skipped`) for a card without a current page-check verdict (`site:check` says why). `site:tells` asks that the card name the tell; this row asks that the reflex line argue it |
 | `site:reflex-shared` | every card has a reflex line and one pattern (`reflex.shared_hit`) is hit by all of them: the heroes are not divergent. An info row ("not required here") with fewer than two cards, or when a card has no line (`site:<name>:reflex` has failed then) |
 | `site:refs` | G4w names a pick (not `skipped by owner`) and: it names none of the groups (`data-name`) of the references board, nor the text or the host of the link of a site the owner liked (`data-like="like"`; a disliked site is never a name) in its owner-sites section ("record the pick under their names"); or the `data-field="from-refs"` line of a card names none of those that the G4w record names (a whole word or whole words, any letter case): "take from what the owner picked (G4w)". The record is read up to the word `dislikes` (`picked <groups>; likes <...>; dislikes <...>`): a group or a site named after it is one the owner turned away from, and is no pick. An info row when G4w is `skipped by owner`; not verified (`skipped`) without a G4w, a references board to read the names from, or a variant card |
-| `site:cold` | a hero has no `rounds/rN/<name>/cold-review.md`; its first non-empty line is not `verdict: ship` or `verdict: fix` (letter case and spacing do not matter); it has no `by:` line; its `inputs:` list is missing, holds a line that is not `- <path> sha256:<hex>`, lists a file twice or is not exactly the four stills of the variant (`rounds/rN/<name>/shots/<view>.png`), `brief/BRIEF.md` and `FACTS.md`; one of those files is missing or has another sha256 than the review lists ("the page or its stills changed after the cold review: review again", or the brief or the facts); it has more than five findings (numbered lines); the card has not exactly one `data-cold`, its value is not `ship` or `fix`, or it differs from the verdict. A `fix` shown as `fix` is honest and passes |
+| `site:cold` | a hero has no `rounds/rN/<name>/cold-review.md`; its first non-empty line is not `verdict: ship`, `verdict: fix` or `verdict: owner` (letter case and spacing do not matter); it has no `by:` line; its `inputs:` list is missing, holds a line that is not `- <path> sha256:<hex>`, lists a file twice or is not exactly the four stills of the variant (`rounds/rN/<name>/shots/<view>.png`), `brief/BRIEF.md` and `FACTS.md` (plus, allowed, the one seventh input `BRAND-STATE.md#g4-rules` and the three key frames `shots/frame-1440-0.png`, `-50.png` and `-100.png`: see "The cold review of a hero" below); one of those files is missing or has another sha256 than the review lists ("the page or its stills changed after the cold review: review again", or the brief or the facts), or the G4 rules part it lists is another one now ("the G4 rules of BRAND-STATE.md changed after the cold review: review again"; a part that cannot be read fails and says why); it has more than five findings (numbered lines); the card has not exactly one `data-cold`, its value is not `ship`, `fix` or `owner`, or it differs from the verdict. A `fix` shown as `fix` is honest and passes, and `owner` passes like `ship` (see "The cold review of a hero" below for what it says) |
 
 The `inputs` of the lint report are the page, `brief/BRIEF.md` when it exists, the website references board that G4w stands on (when it names a pick) and the `index.html` of each variant, so `check` calls the report stale ("not verified") as soon as one of
 them changes.
@@ -640,6 +660,25 @@ inputs:
 The reader sees only those six files, never the board, the references or the reasons (the prompt is in `skills/brand-creator/references/prompt-fragments.md`, **Review**). `by:` is `in-thread` (not blind: the same session that built the page reads it) or `agent`, and an agent
 only after the fleet gate. The reflex, references and cold rows add to the inputs of the lint report: `FACTS.md`, `research/site-cliches.md` (when it exists) and the `cold-review.md` of each variant, so a changed fact, cliché or review makes it stale.
 
+**The verdict `owner`, and at most two reviews.** `verdict: owner` says that what is left is a choice only the owner can make; its findings are written as questions to them, and the card's cold line says `owner` (`data-cold="owner"`, shown with its own mark).
+`site:cold` takes it as it takes `ship` and `fix`: it passes when the card says the same, and an unknown word (`verdict: maybe`, `owners`) still fails. At most two cold reviews are run per variant per board (the first, and one after the fixes); the second may say
+`owner`, and a third is not run. The file holds the last review only (the second replaces the first), so the lint cannot count them: the cap is a rule of the round (`07p-site-round.md`, "The cold review"), and the fleet gate message for reviewer calls
+states the number of calls it allows (`fleet.md`). With an agent, the prompt of the second call says in one line that it is the second and last review of the variant (a line of the prompt, not an input), so that the reviewer can tell it from the first. A review made before this release (`ship` or `fix`, six inputs, a `fix` on a card) lints as it did: the new verdict adds no failure and no warning.
+
+**The rules the reader may be given.** The reader may also be given the approved G4 rules, as text in the prompt, so that it judges the stills against them (a dark still that equals the light one is right when a rule says so) without reading the rest of the
+project record. A review that was given them lists one more input, the part record of the G4 rules (see Reports, "An input may stand for a part of a file"), as a line of the list: `- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part's canonical text.
+`brand-creator state --part g4-rules` prints that line without its dash and, on the next line, the text the sha256 is of (one line of JSON: the G4 record and the recorded `(rule)` lines), the text to give the reader; it exits 2 for a part this plugin does not read
+and 1 when the part cannot be read. The list is the six inputs alone (a review made before this release) or the six plus that line, in any order, each once; the whole `BRAND-STATE.md`, another part and any other file still fail `site:cold`. The line is judged by
+`_common.stale_inputs`: another sha256 now, or a `BRAND-STATE.md` that is gone or cannot be read, fails the row, and another line of the file changing does not. When a review lists it, the lint report also stands on the part (an input with `part: g4-rules`),
+so a changed rule or G4 record makes the report stale too. The page-stage cold review (optional on a page) takes the same inputs.
+
+**The key frames the reader may be given.** For a page that animates when it loads, the reader may also be given the three key frames of its first screen (`capture <page> --frames`, see capture), so that it judges the motion (an entrance, a tear-off,
+a tab switch) from what the page does and not from the end stills alone. A review that was given them lists three more inputs, as lines of the list: `- rounds/rN/<name>/shots/frame-1440-0.png sha256:<hex>`, and the same for `frame-1440-50.png` and `frame-1440-100.png`.
+The list is the six inputs alone, the six plus the rules line, the six plus the three frames, or all of them, in any order, each once. One frame or two fail `site:cold` (`it lists 1 of the 3 key frames (...): list all three, or none`); so does a frame that is
+not one of those three. Each frame must be the file now (`the page or its stills changed after the cold review: review again`) and must be what the page's `shots/capture.json` lists for it in `frames` (`the key frames <review> lists are not the ones <capture.json> lists now (...):
+run brand-creator capture <page> --frames, then review again`), so a page taken again without `--frames` makes the review stale. A review that lists the frames puts them among the inputs of the lint report, so a frame taken again makes the report stale too.
+A page with no animation on load has no frames: its review keeps the six inputs, and so does every review made before this release.
+
 ### The site board, pages stage (`data-site-stage="pages"`)
 
 Once the owner picked a hero, the next site round shows the other pages. The same board, `templates/site-board.html`, with the three comments at its end put to use (the pages in place of the variants, the choices section, the two questions of the pages), and `<body data-round="N" data-board="site"
@@ -664,7 +703,7 @@ The rows of the pages stage (the gates and the sections above apply as well):
 |---|---|
 | `site:hero-first` | no round before this one holds a site board at the hero stage ("hero first: show the hero variants and record the owner's pick before the other pages"); the `<body>` that declares the kind has no `data-hero`; or `data-hero` is none of the variant cards (`data-site-variant`, spelt alike, letter case included) of a hero board in an earlier round (the latest board that holds the name is the one read; the detail lists the names it looked at). The hero board it found is an input of the lint report |
 | `site:pages` | no page card; a page card whose `data-site-page` is not a page id, or is used twice; a page whose `<body data-page>` is not its card's id. A page whose folder or `index.html` is missing is `site:files`' to say |
-| `site:files`, `site:layout`, `site:fields`, `site:check`, `site:tells`, `site:stills` | the rows of the hero stage (see above), one result each for the whole board, read for the page cards: the same folder, `index.html`, `<body>` declarations and live link (`rounds/rN/<id>/index.html`), the same layout line, the same page-check report and four stills; `site:fields` asks for What it is and Cost, and for Takes from only where a card has the line. Without a page card they are "not verified" (`skipped`, "there is no page card to look at (site:pages says why)") |
+| `site:files`, `site:layout`, `site:fields`, `site:check`, `site:tells`, `site:stills` | the rows of the hero stage (see above), one result each for the whole board, read for the page cards: the same folder, `index.html`, `<body>` declarations and live link (`rounds/rN/<id>/index.html`), the same layout line, the same page-check report and four stills; `site:fields` asks for What it is and Cost, and for Takes from only where a card has the line, and an Idea line on every page card (a page card without one fails; it was a warning in 0.8.0). Without a page card they are "not verified" (`skipped`, "there is no page card to look at (site:pages says why)") |
 | `site:cold` | as at the hero stage, but only for a page that has a `cold-review.md` (or a card that claims one, which fails: "the card has a cold line (`data-cold`) but ... does not exist"): the file is held to the rules of a hero's, and the card's cold line says its verdict. No page with a review is an info row ("not required here") |
 | `section:choices` | the page has no `data-section="choices"` element, or it is empty |
 | `site:choices` | no item with `data-choice`; an id that is not `c` and a number, or is used twice; an item with no text; `data-tag` missing or neither `rule` nor `example`; a rule whose `data-source` is empty, is shorter than six characters, or is found in none of `BRAND-STATE.md`, `DECISIONS.md` and `decisions/*.md` ("a rule says where it was decided: record the owner's decision in DECISIONS.md, then cite it"); a `data-pages` that is empty, or names an id that is no page card of this board |
@@ -685,10 +724,146 @@ a `gates:` with a value on its own line (a flow map such as `gates: {G1s: ""}`),
 nothing); deletes anywhere under `rounds/` and moves out of `rounds/` except from the latest (or open) round into a
 `removed-*` folder. `patch` asks the same question through the same function (`guard.round_is_open`), so it edits `rounds/r0/` exactly
 when the hook lets a write in.
-`brand-creator freeze` is always allowed. The same zones are protected from `git mv`, `git stash -u|-a|--include-untracked|--all`, `git clean`, `git checkout -- <path>`, `git restore`, and from `tar -x`, `unzip`, `7z x` and `ditto` extracting into them (listing and testing archives stay allowed). `BRAND_CREATOR_GUARD_STRICT=1` also blocks Bash writes into the latest round.
+`brand-creator freeze` is always allowed, and the guard does not inspect any `brand-creator` command, so `brand-creator cleanup` runs: it removes committed whole round folders only, after the owner's recorded yes (see Cleanup), while every git deletion form and every `xargs` deleter stays blocked. The same zones are protected from `git mv`, `git stash -u|-a|--include-untracked|--all`, `git clean`, `git checkout -- <path>`, `git restore`, and from `tar -x`, `unzip`, `7z x` and `ditto` extracting into them (listing and testing archives stay allowed). `BRAND_CREATOR_GUARD_STRICT=1` also blocks Bash writes into the latest round.
 It is best effort (an interpreter one-liner can still write); the real gate is `history/MANIFEST.sha256`, verified by
 `check`. Fail-open applies only to input it cannot parse (it prints a warning): a broken guard must not brick unrelated
 sessions. `hooks/hooks.json` sets `onFailure: "block"` on the guard (Claude Code 2.1.295 or later): a missing `python3` (Windows without Python, or the Microsoft Store alias), a crash or a timeout blocks the call with a visible `failed; blocking because onFailure is "block"` notice instead of silently doing nothing; older versions ignore the field.
+
+## Masters (`brand-creator masters`, `brand-creator pdf normalise`)
+
+The approved ads and decks of a brand: a masters round (`data-board="masters"`, `templates/masters-board.html`, a round after G4, and after
+G4p when the brief lists a site; `skills/brand-creator/references/phases/07m-masters-round.md`), gate G4m. Scripts: `scripts/masters.py`,
+`scripts/boardlib/mastersdata.py` (the manifest and the board rows), `scripts/masterslib/pptxlib.py` (a PowerPoint file read from its XML),
+`scripts/masterslib/fontembed.py` (fonts embedded as EOT, `ppt/fonts/*.fntdata`), `render.mjs masters-measure`.
+
+```text
+brand-creator masters check [--round N]                      render and check every master; rounds/rN/png/ and the report `masters`
+brand-creator masters approve [--round N] [--replace]        after G4m: the masters and what they load into assets/masters/, README.md, masters.json
+brand-creator masters embed-fonts <deck.pptx> --font FILE.ttf [--font ...] [--out FILE]
+brand-creator pdf normalise <file.pdf> [--out FILE]
+```
+
+**masters.json** (in the round): `entries` (each `file` inside the round, `kind` one of `ad`, `slide`, `deck-html`, `deck-pdf`, `deck-pptx`,
+`image`, `font`; `canvas` [w, h] for `ad` and `slide` only; `direction`; `note`), `copy_rules`, `builder`. An HTML ad or slide declares
+`<meta name="masters-canvas" content="WxH">`. board-lint rows: `masters:gate` (G4), `masters:manifest`, `masters:files`, `masters:canvas-size`,
+`masters:directions` (two or more on the first masters board of a project).
+
+**masters check** serves the round alone on 127.0.0.1 (a request to another origin is aborted), opens each HTML ad and slide at its canvas
+(device scale 1), waits for its fonts and for its animations that end, and writes `png/<name>.png`. Rows: `masters:canvas` (an element's box
+outside the canvas fails, unless it is inside `data-masters-bleed`: listed), `masters:covered` (a text box that overlaps another element's text box fails; a non-text element painted over a text,
+sampled every 4 px with `elementFromPoint`, warns unless it is inside `data-masters-overlay`), `masters:overlays` (info), `masters:page-errors`
+(a console error, a request out, a missing file: fail), `masters:pdf` (pages = slide entries, the first page's MediaBox = the slide canvas × 0.75
+pt, `normalise_pdf` leaves it unchanged; a PDF with object streams fails, naming how to write it without them), `masters:pptx` (every typeface a text names in `p:embeddedFontLst`, every picture of a slide present;
+a shape, picture, connector or graphic frame (table, chart) whose box, mapped through its groups'
+transforms, passes `p:sldSz` is the warning `masters:pptx-boxes`) and `masters:pptx-render` (skipped, NOT VERIFIED, until the G4m record holds "PowerPoint"). Exit 0, 1,
+2 (no masters board), 3 (not verified or no browser). The report lists masters.json and every master as inputs.
+
+**masters approve** refuses (exit 1, nothing written) without G4m, without a current passing `board-lint` of the round's board and a current
+passing `masters` report of the round, and when a master's references leave the round (`closure.escapes`). It copies every entry, every file
+the HTML masters reach (`closure.static_closure`, and in the browser `closure.browser_closure`: what a script loads) and their `png/` into `assets/masters/` keeping their paths (two HTML masters of one file name are a manifest problem: their pictures share `png/<name>.png`), and writes `masters.json`
+(the manifest with `round` and `approved`, the G4m record) and `README.md`. When `assets/masters/` holds files, `--replace` is needed and moves
+it to `removed-<date>/assets-masters/` first. The kit copies `assets/masters/` (kit.json `sources.masters`); `kit:behind` names
+`recipes/ad.md`, `recipes/presentation.md` and owner files that name `assets/masters/` when only the masters changed. The book: block
+`{{masters}}` and the opt-in chapter `masters` ("Ads and decks"). `check`: `masters:behind-site` (info) when G4p is newer than G4m.
+
+**embed-fonts** takes TrueType fonts only, groups them by name ID 1 (the typeface the slides name) and the style of name ID 2 (Regular, Bold,
+Italic, Bold Italic), refuses a font whose OS/2 fsType forbids embedding and a deck with fonts embedded already, and writes the zip with fixed
+timestamps (the same bytes on every run). **pdf normalise** runs `determinism.normalise_pdf` on a file that starts with `%PDF-` (exit 2 otherwise).
+
+## Cleanup (`brand-creator cleanup`)
+
+Old round folders leave a project through git, after the owner's yes. Script `scripts/cleanup.py` (standard library only), the rules that read the rounds in `scripts/boardlib/rounds.py`.
+
+```text
+brand-creator cleanup [--project DIR] [--keep rN]...                                  the dry run (default): print the plan, write qa/<date>-cleanup-plan.txt
+brand-creator cleanup [--project DIR] [--keep rN]... --record-yes CODE --said "<owner's words>"   record the owner's yes to that plan in DECISIONS.md
+brand-creator cleanup [--project DIR] [--keep rN]... --yes CODE                       remove the planned files with git rm (staged, never committed)
+brand-creator cleanup [--project DIR] --history [--static] [--record-yes CODE --said "..." | --yes CODE]   the same three runs for history/ (below)
+```
+
+**`--history`** slims the frozen rounds in `history/` to what `freeze` keeps since 0.10.0 (`scripts/lib/closure.py`: the board pages, every file they
+reach, read from the files and, without `--static`, in the plugin's Chromium; the scripts; the text records `*.json`, `*.md`, `*.txt`). A `history/`
+that does not match `history/MANIFEST.sha256` is refused (exit 1, the problems named, nothing written), and so is a file to remove that is not
+committed as it is. Without a set-up data directory it stops (exit 3) and names `--static`. The plan file is `qa/<date>-cleanup-plan-history.txt`
+(its hash covers the mode and every file with its blob), the yes is a DECISIONS.md entry like any cleanup's, and `--yes` removes with `git rm`,
+rewrites the manifest without those files and stages it, then writes `qa/<date>-cleanup-removed-history.txt` with `removed from history: <freeze>...`
+and the restore line (the freezes and the manifest, from the head before). `--history` and `--keep` refuse each other; `--static` goes with
+`--history` only. The guard keeps blocking every other way to change `history/`.
+
+`CODE` is the plan hash: the first 12 hex digits the dry run prints, or all 64; it is checked against the plan computed again on every run, never read from a file. `--keep rN` (repeatable) keeps one
+more round and is part of the plan, so the same options go with all three runs. `--record-yes` and `--yes` are separate runs (both: exit 2). `--said` goes with `--record-yes` only, is one line (a newline or any other
+control character is exit 2), has runs of spaces collapsed, and may not be empty. `--help` needs no data directory. Exit codes: 0 done (a dry run, a recorded yes, a removal) or nothing to clean, 1 a refusal, 2 usage (and a link or
+special file in what would be removed), 3 `git` is not on PATH. Nothing is written on any refusal. The command never commits.
+
+**Rounds and stages.** A round is a folder `rounds/r<N>/`; the rest of `rounds/` is never touched. The stage comes from `<body data-board>` of its `board.html` (read as board-lint reads it): `style`; `pick` and `refine` (mark);
+`motion`; `site-refs`; `site` with `data-site-stage="hero"` (site-hero) or `"pages"` (site-pages). No `board.html`, a page that cannot be read, no kind or one this version does not know, a `site` board with no known stage, or a
+`data-round` that is not N is **unknown**: the round is always kept, so only rounds the command can place are removed.
+
+**The keep-set** grows to a fixed point (a kept round is a source of references, so what it refers to is kept too). A round is kept when any rule holds, and the plan names every reason found:
+
+1. the highest N of each stage, so the guard's latest round and the next round number do not change; and the highest round whose kind is `pick` (the latest pick board), besides the latest of the mark stage;
+2. an unknown round;
+3. `--keep`;
+4. the earlier rounds the lint of a kept board reads: the first motion board (of a motion board that is not the first), the first site board of its stage (`siteboard.is_first`), the website references board (`siteboard.references_board`),
+   the hero board that holds the card `data-hero` names (`siteboard.hero_boards`), and for a pick board of a round in `reset_rounds` the rejected round and the style boards `style_rearmed` reads. The same functions answer
+   for the kept rounds (an optional `rounds` argument; board-lint's answers are unchanged), and the run stops (exit 1, nothing written: `cleanup would change how board-lint reads rounds/r<N>/board.html (<the question>): this is a bug in cleanup's keep rules; keep the round board-lint reads with --keep`) when any answer for a kept board differs;
+5. `g1s_round` of BRAND-STATE.md when set, and `round` of `site/site.json`, read through `sitedata.load_site` only when that file exists; a value that is set and not a whole number stops the run (exit 1, named); a project with no `site/` cleans normally;
+6. every round a source file names: the pattern `rounds(\\/|\\\\|/|\\|%2f|%5c)r<digits>` (ASCII, any letter case, not followed by a digit; it reads `rounds/r3`, `rounds\r3`, the JSON-escaped `rounds\/r3`, `rounds%2Fr3`, `ROUNDS/R3`), and each relative URL that resolves into `rounds/rN/`
+   (`.html`, `.htm`, `.svg`, `.css` through `sitedata.urls_in`; `.md` through link and image targets and `src`/`href`; percent-decoded first); a `.json` file is searched as raw text and as its decoded strings; a symbolic link whose target lies in `rounds/rN/` keeps N (it is not followed);
+7. in every file of a kept round, a relative path `../r<N>/` (also with `\`) resolved against the file's folder;
+8. reports: every `assets/_checks/**/*.json` and every `capture.json`. The subject is `page` (board-lint), `run.target.page` or `target.page` (page-check), `proof` (motion, frames) or `source.page` (capture). A report whose subject lies in a round
+   that would be removed pins nothing; any other report pins every round an `inputs[].path` lies in.
+
+Sources are **every file of the project** except: `.git/`, `node_modules/`, `history/` (frozen copies name their round on purpose), any folder named `removed-*`, the candidate rounds, the reports of rule 8 (`assets/_checks/**/*.json`, `capture.json`),
+`qa/*-cleanup-plan*.txt` and `qa/*-cleanup-removed*.txt`, and `brief/canvas-round-*.md` (a drawing brief describes how a round was drawn and would keep every round ever briefed). Also read, outside the project: the documents `tools/cascade.json` lists in `also` and the
+`parent_docs` of the `family-check` block of `FAMILY.md` (a listed document that is missing stops the run). A file is read as text unless a NUL byte is in its first 8 KiB, decoded as UTF-8 with `errors="surrogateescape"`. What stops the run (exit 1, named): a source that cannot be
+read, a `.json` source or report that does not parse, and the state keys of rule 5.
+
+**Order of checks and refusals** (the first failing step ends the run, except 9a and 9b, which list every problem, up to 20):
+
+| Step | What | Exit |
+| --- | --- | --- |
+| 1 | arguments (an unknown flag, `--yes` with `--record-yes`, `--said` misuse, a `--keep` that is not `r<N>`, `CODE` not 12 to 64 hex digits) | 2 |
+| 2 | the project (`--keep r9: there is no rounds/r9/` also exits 2) | 2 |
+| 3 | `git` on PATH | 3 |
+| 4 | the project is in a git work tree | 1 |
+| 5 | git can restore: HEAD exists; no merge, rebase, cherry-pick, revert or bisect in progress; `rounds/` is not a repository of its own (a `rounds/.git`, or mode `160000` at `rounds`) | 1 |
+| 6 | `rounds/` or a round folder is a symbolic link; a round folder not named `r` and ASCII digits with no leading zero (`r03`, `r٣`) | 2 |
+| 7 | the keep-set (sources readable, state keys whole numbers) and the lint context check | 1 |
+| 8 | nothing to remove: `nothing to clean: every round is kept` and the keep list, exit 0, nothing written (with `--record-yes` or `--yes` it is exit 1: the plan changed to nothing, nothing recorded or removed) | 0 |
+| 9a | a symbolic link, FIFO, socket or device in a candidate (walked with `os.walk`, links not followed) | 2 |
+| 9b | a file of a candidate that is untracked or ignored (other than a file named `.DS_Store`), modified, staged, deleted, renamed, conflicted, assume-unchanged, skip-worktree, a submodule (mode `160000`), a `.git` entry anywhere under a candidate, a file on disk git does not list, or a candidate with no tracked file | 1 |
+| 10 | the dry run prints and writes the plan | 0 |
+
+With `--record-yes` after step 9b: 11 a plan file in `qa/` holds this hash (else `no plan with code <CODE> was shown`); 12 the code matches the plan computed now (else `the plan changed since it was shown (now <code>)`); 13 `DECISIONS.md` exists;
+14 the entry as it would be written holds no round reference (rule 6 run on the entry text; the owner's words are free text, and an entry that named `rounds/r2/..` would keep r2 and change the plan); 15 an entry for this hash that no complete removal used yet exists already: exit 0, nothing written;
+16 the entry is appended. With `--yes`: 11 the code matches the plan computed now; 12 `DECISIONS.md` holds an entry `- Cleanup plan: sha256:<hash>` under a `## ` heading; 13 the entries for this hash outnumber the removed records with `status: complete` (a record with no status
+line counts as complete) that name it, so **each recorded yes is used once and a second entry for the same hash allows one more run**; 14 steps 9a and 9b again right before removing, and the same file list; 15 `git rm`; 16 the post-conditions.
+
+**Git.** Every call is `git -C <project> --no-optional-locks --literal-pathspecs ...` through `subprocess.run` with a list, no shell, `stdin` closed, and an environment without any variable whose name starts with `GIT_` (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+`GIT_COMMON_DIR`, `GIT_CONFIG_*` and the rest cannot point git at another repository). The state is read with `status --porcelain=v2 -z --no-renames --untracked-files=all --ignored=matching` (no rename pairing: a staged file that looks like a removed one never turns a planned deletion into a rename) and `ls-files -v -s -z`; status paths come from the repository root, so the prefix of
+`rev-parse --show-prefix` is taken off, and a path without it stops the run. A file named `.DS_Store` counts the same whether git calls it untracked or ignored, is not in the plan hash, is listed again right before it is unlinked, and is named in the removed record.
+
+**The plan.** The dry run prints, and writes to `qa/<date>-cleanup-plan.txt` (only when its bytes change; the file is a view, the hash is always computed again): the head commit, `plan: sha256:<64 hex>   code: <12 hex>`, the kept rounds with every reason (file and line), the
+removed rounds (files, size, `frozen in history/<folder>/` or `not frozen: git is its only copy`), the files to remove (`<blob> <mode> "<path>"`, paths as JSON strings so a name with a space, quote or newline stays one line), the files git does not know that go with them, the number of other
+staged changes in the repository, the reports of removed work, and the next two commands. The hash is the sha256 of `brand-creator cleanup plan v1`, the slug, `keep-option rN` lines (sorted), `remove rN` lines (by N), `file <blob> <mode> "<path>"` lines (by path bytes; the blob is the index's, which equals HEAD's after step 9b)
+and `loose "<path>"` lines, UTF-8 with `\n` line ends. So a changed set of rounds, a changed `--keep`, or a file that changed and was committed again is a new plan and needs a new yes; a commit elsewhere in the repository does not. **Reports of removed work:** the `assets/_checks/**` reports whose subject lies in a removed round are removed with it,
+the one exception to "never touch `assets/`" (only those reports): a tracked one is a `file` line, one git does not know a `loose` line (deleted, and it does not come back). A report with another subject, or none this version knows, stays. A report inside a folder that `.gitignore` ignores (git prints the folder, not the file) is a `loose` one. A name on disk that is decomposed (NFD) while git, with `core.precomposeunicode`, lists it precomposed is the same file.
+
+**The yes.** `--record-yes` appends to `DECISIONS.md`, in the template's form: `## <date>: clean old rounds (remove r1, r2)`, Gate, Decided, Why (the owner's words), Rejected, Consequences, and the last line `- Cleanup plan: sha256:<hash>`. It names rounds only as `r1`, which the pattern does not read. The file is read and written without translating line endings: a `DECISIONS.md` with CRLF keeps every line as it was and the entry is written with CRLF. Appending to `DECISIONS.md` makes
+the lint report of a pages board stale (it lists the file as an input): run `brand-creator check --refresh` after the removal. The recorded yes binds a plan to a decision entry; it cannot prove who wrote the entry.
+
+**Removing.** The paths are the exact `file` lines, never a folder, a pattern or a list read from a file: `git rm -q -- <paths>`, no `-r`, no `-f`, no `--ignore-unmatch`, in chunks of at most 200 paths and 64 KiB of path bytes. A failed chunk stops the run: the removed record says
+`status: failed at chunk <k> of <n>: <git's message>`, the restore line is printed, exit 1, and the yes is not used (only `status: complete` uses it; the staged deletions are put back by the restore line, and the plan then computes to the same hash; the next run refuses, printing that restore line of the newest failed record (by date, then by the number in `-removed-<n>.txt`, not by file name), only while a deletion the failed record lists is still staged, and a file that any record with `status: complete` lists is no failure, whichever plan that run had: a complete run staged it on purpose). Then the `.DS_Store` files and loose
+reports are unlinked and each emptied candidate folder is removed bottom-up. Post-conditions: every candidate folder is gone; `git status` shows each planned file as a staged deletion and nothing else new; `verify_history` gives the same list as before. A difference is exit 1 with the restore line. Nothing is committed: the removal is staged for the
+owner to commit, and the command prints a suggested commit message. The record `qa/<date>-cleanup-removed.txt` (`-2`, `-3` when one exists that day; never overwritten) holds the status, the hash, the head before, the entry used, the removed rounds, the count, what was deleted without git, the restore line and the file list.
+
+**Undo.** `git -C '<project>' --literal-pathspecs checkout <head before> -- <the round folders and the tracked report files>` restores the index and the files as they were (a report git did not know is not named: it does not come back), before or after the owner commits; the project path is quoted with `shlex.quote`. After a commit that holds only the cleanup, `git revert <commit>` works too. The guard blocks `git checkout -- <path>`
+under `rounds/` for the agent, so the restore is the owner's `!` line.
+
+**Stated limits.** The keep-set is the riskiest part, not `git rm`: nothing here was run against a real brand project. References are found by text, by the URL reading `site approve` uses, and by the decoded strings of JSON files; a path built at run time from parts, a reference inside a binary
+file, or one outside the project that neither `tools/cascade.json` nor `FAMILY.md` lists is not seen, so a still-used round can be removed (git keeps it recoverable, but a broken link may go unnoticed until the page or the book is opened). The owner compares the dry run's keep list with what they would keep by hand before the first real
+run. Every file of the project is read, which is slower than a list on a project with large text files. The undo restores git's copy: a `.DS_Store` file and a report git did not know do not come back. Not built: `--json`, `--undo`, a `check` row about the size of `rounds/`.
 
 ## Platform specs and emitters
 
@@ -743,6 +918,9 @@ no switch and a warning names the missing file. The manifest row records the fil
 that keeps the old tab icon: `favicon.drawing` in `qa/rules.json`, or `marks.<id>.favicon` for one of several marks. A row with no
 `drawing_file` (written before 0.3.1) is not compared.
 
+The apple-touch and maskable icons take the ground of `qa/rules.json` `icons.ground` (see qa/rules.json); with `drawing` both are the drawing edge
+to edge, and the maskable safe-zone check measures against the drawing's own ground. The manifest's `theme_color` and `background_color` are that ground.
+
 `emit apple` exits 3 off macOS (and on a Mac without Xcode) before it reads the project. `emit tray` reads `tray/tray.json` (a state's source is a
 path, or a map of master size to path, or `{"light": ..., "dark": ...}` of those; a master serves only the sizes it divides, a size with no master
 is exit 2). `Assets.car` files are compiled into a scratch folder and compared by their rendition list; only the list is shipped. A row that asks
@@ -753,7 +931,10 @@ because each master has its own report (`assets/_checks/downscale/<slug>.json`).
 write this time: the file is moved to `removed-<date>/<path>` in the project (never deleted), the manifest row is dropped and the report gets a
 `retired:<path>` warning and a `retired` list. A removed tray state, a dropped deployment target or a feature option that is gone no longer ships.
 `emit social` writes the GitHub social preview and the README headers only when `INVENTORY.md` lists a repository row or `brief/BRIEF.md` names a repository URL, a Repository line or a README/GitHub required surface (`--repo-images yes|no` forces it); otherwise an `note:repo-images` info row says why they were skipped.
-A folder the run skipped on purpose (`emit apple --no-cards`) is spared (`Emit.keep()`), and `emit social` spares superseded fingerprinted
+A folder the run skipped on purpose (`emit apple --no-cards`) is spared (`Emit.keep()`); `emit apple --drop-cards` skips the cards too but
+spares nothing, so the `dmg/` and `store/` files of an earlier run are retired like any dropped slot. The DMG background and the store frames
+set the brand's drawn lettering (the lockup, else the mark and the wordmark, as `emit social` reads them; with neither file they type the
+name and warn `note:cards name`), and the store frames' screenshot area has square corners when every radius token is 0. And `emit social` spares superseded fingerprinted
 Open Graph files (cached link previews may still use their URL; it warns instead). Their rows stay in the manifest marked `"superseded": true`
 (a row an emit writes again has no mark), and the book's files chapter lists them with the note "superseded, kept for cached link previews"
 instead of as a second current card.
@@ -763,7 +944,7 @@ as used `FACTS.md` (store frames, AppStream, CLI identity), `INVENTORY.md` (Appl
 band drawings. Editing any of them makes the emit report stale.
 
 Chain: `templates/finish.sh.tpl` is the ordered build (`version --check`, generators, tokens, contrast, emitters, gates, `verify-idempotent`,
-`board-lint` on the board of the latest round, `staleness --write`, `check`). `version --check` comes first: a session that still runs an older copy of the plugin than the one Claude Code
+the adapter files, the applied skill or the kit again ("The adapter files" below), `board-lint` on the board of the latest round, `staleness --write`, `check --refresh`). `version --check` comes first: a session that still runs an older copy of the plugin than the one Claude Code
 has installed (`installed_plugins.json` next to the plugin cache: a user install, or a project or local one for this folder) exits 1 there and
 says to start a new session; a copy that is not in a plugin cache (a checkout) or a record that cannot be read is "not checked" (exit 0). The
 chain runs `contrast --cvd` when `qa/rules.json` has a `cvd` section. The `board-lint` step is "The last lint" below (which board, and what an exit other than 0 does). It exports `BRAND_CREATOR_CHAIN=1`; a generator that rewrites a whole output folder calls `_common.require_chain()` and exits 1
@@ -829,8 +1010,26 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
  "family":    {"tile_share_tolerance": 0.05},
  "favicon":   {"drawing": "assets/logo/favicon.svg"},
  "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
+ "icons":     {"ground": "light"},
+ "social":    {"mode": "light"},
  "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 ```
+
+`icons.ground` (`light` by default, `dark` or `drawing`; `marks.<id>.ground` overrides it for one mark, empty = `icons.ground`) is the ground of
+the icons that need one: the apple-touch and maskable icons and the manifest's `theme_color` and `background_color` (`emit web`), the avatar
+(`emit profiles`), and the app icons of `emit apple` (the `.icon` fill and default layer, the marketing icon, the legacy iOS and macOS sizes, the
+watchOS icon and the tvOS and visionOS back layers; with `dark` the default appearance takes the dark ground and the dark artwork; with `drawing`
+every appearance, dark included, takes the drawing's own ground, `--content-fraction` defaults to 1.0, and the watchOS, tvOS and visionOS safe
+areas take the largest share whose ink stays inside them on that ground; the DMG background and the store frames stay on the light ground). `light` and `dark` are `color.bg` of that mode, with the mark set inside the icon (the dark one: the drawing's `-dark.svg`, else
+derived through the token roles with a warning). `drawing` is for a mark that carries its own ground (a light shape on a full-bleed dark square,
+made to be cropped by the phone): its ground is read from its corners, the touch icon takes the drawing edge to edge, and the maskable icon
+takes it on that ground at the largest share (up to 1.0, in whole percents) whose ink stays inside the safe circle (a report row
+`note:maskable content` gives the share; exit 1 when no share fits); the safe-zone and safe-circle checks count only what sits on that ground as
+ink. A band drawing that already is a `-dark.svg` is its own dark artwork with `dark` (no `<name>-dark-dark.svg` is looked for). A drawing that does not fill its canvas with one opaque ground (see-through pixels,
+or corners of different colours) exits 1, naming the key and the file: nothing falls back to the light ground. With `drawing`, the book shows such a
+drawing on both grounds (the mark-by-size table and `{{marks}}`) when it has no `-dark.svg`, without the "no dark drawing" warning.
+`social.mode` (`light` by default, or `dark`) is the ground of the Open Graph card and the GitHub social preview (`emit social`); `dark` takes the dark
+mark and lettering (`-dark.svg`) as the dark README header does, with a warning for each that has no dark file.
 
 `favicon.drawing` (empty by default) fixes the drawing of `icon.svg` (`emit web`); it must be an existing `.svg` in the
 project (exit 2 otherwise) and pure vector (exit 1 otherwise), and so must its `-dark.svg` when there is one.
@@ -917,9 +1116,14 @@ the threshold. SVG states are rasterised at the set's `size`; PNG states must sh
 
 ### family-check (family modes only)
 
-`architecture: family-member | product-in-family`; a standalone brand gets one info row. It reads the ```` ```json family-check ```` block
-of `FAMILY.md` (template `templates/FAMILY.md`, which documents every field): `glyphs.shared` names must be cell-equal in the family's
-source and this product's source (`compare`: `shape` or `exact`), and the `tiles` marks must agree in ink share of the tile and ink-box
+`architecture: family-member | product-in-family | family-parent`; a standalone brand gets one info row. It reads the ```` ```json family-check ```` block
+of `FAMILY.md` (template `templates/FAMILY.md`, which documents every field): `glyphs.shared` names must be equal in the family's
+source and this product's source (`compare`: `shape` or `exact`). A glyph is cells (row strings, or rows of 0 and 1), compared cell for cell,
+or polygons (a list of closed contours, each at least three `[x, y]` numbers, filled even-odd): `exact` wants the same contours in the same
+order with the same points; `shape` moves both to 0,0, scales the longer side of their ink box to 128 px, fills them and passes when at most
+1 pixel in 1000 differs (the row names the count). A glyph drawn as cells in one source and as polygons in the other fails, named; a contour
+that is not at least three number pairs is exit 2. In a `family-parent`, which owns the family source, `glyphs.own` is optional: without it
+each shared name must be defined in the family source (`glyph:<name>` passes or fails "missing from the family source"). The `tiles` marks must agree in ink share of the tile and ink-box
 height within `tile_share_tolerance` (the ground is the most frequent colour on the image edge). Sources are read, never executed: a `.py`
 file through `ast.literal_eval` of the named top-level assignment, a `.json` file as JSON; a source that is missing or not a literal makes
 the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling repository is only ever read.
@@ -934,8 +1138,16 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
   basic_latin, rules`; en, pl, de, cs, fr, es, tr); the plugin has no default language. The sets come from `--lang` or
   `content_languages` in BRAND-STATE.md. A missing required letter fails, a missing typographic extra warns, more than two font families
   warns (default budget, owner-adjustable). The `licence:<font>` row also carries `family` (name ID 16, else name ID 1, else the file
-  stem), `weight` (OS/2 `usWeightClass` when it is 1 to 1000, else 400: a font with no OS/2 table, or one that stores 0 or a value over 1000, is 400) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
-  set, else `normal`); its status does not depend on them, and its detail changes only for a stored weight that is no weight: it then starts "OS/2 usWeightClass <n> is not a valid weight (1 to 1000): taken as 400".
+  stem), `weight` (OS/2 `usWeightClass` when it is 1 to 1000, else 400: a font with no OS/2 table, or one that stores 0 or a value over 1000, is 400), `weight_range` (always present; `[<lowest>, <highest>]` for a variable font, from the `wght` axis of its `fvar` table, as whole numbers from 1 to 1000 inside the axis with the lowest below the highest; `null` for a static font, a variable font with no `wght` axis or an axis that gives no such range), `slant_range` (always present; `[<lowest>, <highest>]` for a variable font that slants, from the `slnt` axis of its `fvar` table with the sign turned, because the axis counts a clockwise slant as negative and CSS as positive: whole degrees from -90 to 90 inside the axis with the lowest below the highest; `null` for a static font, a variable font with no `slnt` axis or an axis that gives no such range; an `ital` axis is not read: Chromium 149 does not set it for italic text, so a face declared italic for it would show the upright letters) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
+  set, else `normal`); a font file that cannot be opened, or whose name, OS/2, head or fvar table cannot be decoded, gets one `font:<font>` fail row ("cannot read <font>: ...") and no other row, and the run goes on with the other fonts; the row's status does not depend on them, and its detail changes only for a stored weight that is no weight: it then starts "OS/2 usWeightClass <n> is not a valid weight (1 to 1000): taken as 400".
+- Every `fontcheck` run writes the one report over the last and keeps no merge, so a font an earlier run checked and this run does not name
+  drops out of the report and `kit build` leaves it out. Before writing, the run reads the previous report's `fonts`: a font in it that is a
+  font file inside the project, outside `assets/fonts/` (those are always read), that still exists and is not among this run's fonts is one
+  `fonts:dropped` row (status `warn`, never a failure, key `dropped` the project paths in the order the earlier report listed them). Its detail names
+  each one and says "name every font in one run, or kit build leaves it out". A font taken away since is not dropped; a font outside the
+  project is not judged (the report keeps only its file name, and the kit never holds it). No earlier report, or one with no font left
+  out, adds no row; an earlier report that cannot be read (not JSON, or `fonts` not a list of file names) adds the row `fonts:earlier`
+  (status `info`, "not compared: ...") and the run goes on. The report's own `fonts` stays this run's fonts only.
 - `outline-glyphs` writes text as paths: fontTools instancer pins the variable axes, skia-pathops removes overlaps, `SVGPathPen` writes
   one `<path>` per glyph. The SVG has no `<text>` and no font reference (mark_lint checks) and carries `data-baseline`, `data-cap-height`
   and `data-x-height` that `logo-sheet --guides` draws. Layout is the font's advance widths plus `--tracking` and `--pair`; GPOS kerning
@@ -1207,7 +1419,9 @@ default), or "nothing moves", recorded once by the owner. Quick decides it at G4
 - `staleness`: `tools/inputs.json` records the sha256 of every upstream input (default globs `tokens/*.json`, `assets/logo/*.svg`,
   `assets/logo/*.png`, `qa/*.json`, `FACTS.md`, `INVENTORY.md`, `tray/*.json`, plus `BRAND.md` and `DESIGN.md` once they exist, extended with `--input`), the plugin version, the sha256 of the emitter code (`scripts/emitters/*.py`,
   `platform-specs.json`, `scripts/lib/*.py`) and needle sentences that must stay in sibling documents. `staleness --write` records after a
-  build; `staleness` flags any difference (exit 1); `check` runs the comparison whenever the file exists.
+  build; `staleness` flags any difference (exit 1); `check` runs the comparison whenever the file exists. A row for a changed input,
+  plugin version or emitter code says to run `bash tools/finish.sh` again when the project has that chain, else to rebuild the pack and
+  run `staleness --write`.
 - `specs-due` (needs no project): lists the platform-spec rows that are stale (`checked` older than `stale_after_days`, from
   `BRAND_CREATOR_TODAY` or today), that become stale within `--within` days, or are status U or R; `--fail-on-due` exits 1 on a stale row. A
   row's `checked` date records a person reading the source, never a script run.
@@ -1279,12 +1493,15 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   ```json
   {"schema": 1, "root": "<the project, or a run folder of --from>", "page": "pages/index.html", "url": null,
    "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "rules": [{"id": "short-buttons", "kind": "max-words-per-control"}],
-   "colours": ["oklch(0.52 0.12 185)"], "dsf": 1}
+   "colours": ["oklch(0.52 0.12 185)"], "dsf": 1, "stray_min_px": 8}
   ```
 
   `rules` (optional, default `[]`) are the brand rules whose facts the browser collects from the page's text (see "Brand rules"): `page_check.py` sends `{id, kind, selector?}` for each entry of `qa/rules.json`
   `page.rules` of kind `max-words-per-control` or `words-under-accent`, with the rule's `selector` when it names one (`selectors` then holds it too, once); a rule of any other kind asks the browser for nothing. Up to 200
   objects with a string `id` and `kind` and an optional non-empty string `selector`, else exit 2. The views then hold `rule_facts`.
+
+  `stray_min_px` (optional, a number from 0 to 1000, else exit 2; default 2) is the least distance outside a parent or the viewport that makes a stray-box candidate: `page_check.py` sends `min_outside_px` of the stray-box tell in
+  `page-tells.json` (8), so a small offset the tell ignores never fills the list of candidates.
 
   `colours` (optional) are CSS colours the browser is asked to render for the judge: `page_check.py` sends the modern values (`oklch()`, `oklab()`, `color()`) that
   `tokens.css` serves for the primitives. Up to 500 strings of up to 200 characters, else exit 2.
@@ -1400,7 +1617,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   table's `value` cells, a row labelled `(example ...` left out. A claim is a number of two digits or more (`1.5` has two), or a single digit next to `%`, a currency sign or
   code (`€`, `$`, `£`, `zł`, `PLN`, `EUR`, `USD`, `GBP`, `CHF`: a sign before the number or after it, with or without a space, so `€5`, `5€` and `9 €`; a code before or after it, so `PLN 5` and `5 PLN`) or a unit (`mln`, `mld`, `tys.`, `km`, `kg`, `mm`, `cm`, `ml`, `min`, `ms`, `px`, `GB`, `MB`, `KB`, `TB`, and, written right against the number, `k`, `m`, `g`, `l`, `h`, `s`, `x`);
   a bare single digit (a step label) is not a claim, and neither is a digit written against letters (`mp3`, `A4`, `3rd`) or in a dotted version. Numbers are compared as numbers
-  (`1 200`, `1,200`, `1.200` and `1200` are one; `12,5` and `12.50` are `12.5`; with both signs the last is the decimal point, so `100.000,50`, `100,000.50` and `100 000,50` are `100000.5`); a date is its numbers, in both forms: `2026-10-17` and `17.10.2026` need `2026`, `10` and `17` in the facts (a day or month with or without its leading `0` is one number: `5.11.2026` is backed by `2026-11-05`), and a dotted `17.10` (day 1 to 31, month 1 to 12, two digits each: `30.10`, `05.11`) needs `17` and `10`, or the decimal `17.1` that it also reads as; a dotted date with a year (`1.5.2026`, and glued as `17.10.2026r.` or `1.5.2026r.`) may have one digit in its day or month; `12.5`, `2.10` and `10.1`, a day or month of one digit and no year, are decimals only, on the page and in the facts, and so is a dotted number with a currency sign, code or unit (`4.5 kg`). A date written with a month name is one date, read only in a block whose language is `pl` or `en` (another language, or none, keeps its numbers): Polish `21 października 2026`, `21 października`, and a month with a year in the nominative, genitive or locative (`Październik 2026`, `w październiku 2026`) in any letter case; English `October 21, 2026`, `October 21st`, `21 October 2026`, `21 October`, `October 2026`, the month with a capital letter or in capitals (a lower-case `may` or `march` is a word), the abbreviated `Oct` not read. A day is part of a month-name date only when no number runs past it: a day followed by `%` (`March 15% of users` holds the percent `15%`, not the date March 15), or by a digit glued with `.` or `,` (`May 3.5 kg`, `October 12,5`, `March 15.11.2026`, a dotted date), is a number of its own, while a day followed by a comma and a four-digit year, with a space after the comma or without, is the full date (`October 21,2026` is `October 21, 2026`). After a day only the genitive of a Polish month makes a date: `21 październik` and `21 październiku` are the number `21`. It is one number of the check, a claim whatever the digits of its day, listed as written (`22 października 2026`), and backed as a dotted date is, by its day, month number and year (`premiera 2026-10-21` backs every form above); a month-name date in a `FACTS.md` value (the names of both languages) backs the other forms the same way. Digits grouped by spaces (a no-break space too) are one number only when the first group has 1 to 3 digits and each later group exactly 3, so `13 205,20 zł` is `13205.2` and `In 2026 200 tools` holds `2026` and `200`. Two numbers are never claims: a year of 19xx or 20xx right after a copyright sign (`©`, `(c)`) or the word `copyright` in any letter case, or after such a year and a dash (`© 2024–2026`), and the status code of an error page, a bare number from 400 to 599 (no sign, code or unit). A page is an error page when its file name without the extension is such a code (`404.html`, `500.html`; for `--url`, the last segment of the path), or its `<title>` or one of its shown `<h1>` holds one as the only number of that text, with no `+` before or after it (every number counts there: a single digit and a copyright year too) and the same text holds an error word of the page's language, the document's `lang` (`pagecheck.ERROR_WORDS`, whole words in any letter case: English `error`, `not found`, `forbidden`, `unauthorized`, `unavailable`, `gone`, `bad request`, `server error`; Polish `błąd`, `nie znaleziono`, `nie istnieje`, `brak dostępu`, `odmowa dostępu`, `niedostępna`, `niedostępny`): `Błąd 404 | Acme`, `404 · Nie znaleziono` and `Błąd 404 – strona nie istnieje` do on a Polish page and `Error 500` on an English one; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)`, `404 or 500` and `Acme 2026 – Błąd 404` do not, nor does an error word of the other listed language. A page in any other language, or one that sets no `lang`, is an error page by its file name only. On an error page that code is no claim anywhere on the page, a small `Błąd 404` label and a large `404` alike, and only that code: `500` still is. Phone numbers, postal codes and street numbers are claims and need a fact or a `data-sample`. (2) A status word no
+  (`1 200`, `1,200`, `1.200` and `1200` are one; `12,5` and `12.50` are `12.5`; with both signs the last is the decimal point, so `100.000,50`, `100,000.50` and `100 000,50` are `100000.5`); a date is its numbers, in both forms: `2026-10-17` and `17.10.2026` need `2026`, `10` and `17` in the facts (a day or month with or without its leading `0` is one number: `5.11.2026` is backed by `2026-11-05`), and a dotted `17.10` (day 1 to 31, month 1 to 12, two digits each: `30.10`, `05.11`) needs `17` and `10`, or the decimal `17.1` that it also reads as; a dotted date with a year (`1.5.2026`, and glued as `17.10.2026r.` or `1.5.2026r.`) may have one digit in its day or month; `12.5`, `2.10` and `10.1`, a day or month of one digit and no year, are decimals only, on the page and in the facts, and so is a dotted number with a currency sign, code or unit (`4.5 kg`). A date written with a month name is one date, read only in a block whose language is `pl` or `en` (another language, or none, keeps its numbers): Polish `21 października 2026`, `21 października`, and a month with a year in the nominative, genitive or locative (`Październik 2026`, `w październiku 2026`) in any letter case; English `October 21, 2026`, `October 21st`, `21 October 2026`, `21 October`, `October 2026`, the month with a capital letter or in capitals (a lower-case `may` or `march` is a word), the abbreviated `Oct` not read. A day is part of a month-name date only when no number runs past it: a day followed by `%` (`March 15% of users` holds the percent `15%`, not the date March 15), or by a digit glued with `.` or `,` (`May 3.5 kg`, `October 12,5`, `March 15.11.2026`, a dotted date), is a number of its own, while a day followed by a comma and a four-digit year, with a space after the comma or without, is the full date (`October 21,2026` is `October 21, 2026`). After a day only the genitive of a Polish month makes a date: `21 październik` and `21 październiku` are the number `21`. It is one number of the check, a claim whatever the digits of its day, listed as written (`22 października 2026`), and backed as a dotted date is, by its day, month number and year (`premiera 2026-10-21` backs every form above); a month-name date in a `FACTS.md` value (the names of both languages) backs the other forms the same way. Digits grouped by spaces (a no-break space too) are one number only when the first group has 1 to 3 digits and each later group exactly 3, so `13 205,20 zł` is `13205.2` and `In 2026 200 tools` holds `2026` and `200`. Two numbers are never claims: a year of 19xx or 20xx right after a copyright sign (`©`, `(c)`) or the word `copyright` in any letter case, or after such a year and a dash (`© 2024–2026`), and the status code of an error page, a bare number from 400 to 599 (no sign, code or unit). A page is an error page when its file name without the extension is such a code (`404.html`, `500.html`; for `--url`, the last segment of the path), or its `<title>` or one of its shown `<h1>` holds one as the only number of that text, with no `+` before or after it (every number counts there: a single digit and a copyright year too) and an error word of the page's language stands right beside it, with nothing between them but white space, the separators `-`, `–`, `—`, `·`, `•`, `|`, `:` and `/`, parentheses round the code (`Not Found (404)`) and the filler words `page`, `site` (English) or `strona`, `witryna` (Polish), in any letter case (O10), the language being the document's `lang` (`pagecheck.ERROR_WORDS`, whole words in any letter case: English `error`, `not found`, `forbidden`, `unauthorized`, `unavailable`, `gone`, `bad request`, `server error`; Polish `błąd`, `nie znaleziono`, `nie istnieje`, `brak dostępu`, `odmowa dostępu`, `niedostępna`, `niedostępny`): `Błąd 404 | Acme`, `404 · Nie znaleziono` and `Błąd 404 – strona nie istnieje` do on a Polish page and `404 – Strona nie istnieje` on a Polish one, and `Error 500`, `404 Page Not Found`, `Not Found (404)` and `Service Unavailable 503` on an English one; an error word away from the number does not (`450 tickets, all gone`, `Gone in 450 seconds`, `Ponad 400 produktów, żaden niedostępny`: counts, so claims); a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)`, `404 or 500` and `Acme 2026 – Błąd 404` do not, nor does an error word of the other listed language. A page in any other language, or one that sets no `lang`, is an error page by its file name only. On an error page that code is no claim anywhere on the page, a small `Błąd 404` label and a large `404` alike, and only that code: `500` still is. Phone numbers, postal codes and street numbers are claims and need a fact or a `data-sample`. (2) A status word no
   `FACTS.md` value contains (as a lower-case substring, as `book-lint`'s `words:status`): English from `bookdata.LINT_DEFAULTS["status_words"]`, Polish from `pagecheck.STATUS_WORDS_PL`
   (`wkrótce`, `dostępne`, `dostępny`, `dostępna`, `w przygotowaniu`, `w budowie`, `premiera`, `przedsprzedaż`, `nowość`), whole words in any letter case; the Polish list applies to text
   whose language is Polish. (3) A `data-sample` whose label is empty or white space ("label the sample"). The language of a run is its closest `lang`, else the document's; any other than
@@ -1411,6 +1628,17 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   before-publishing list. The report also holds it at its top level as `samples`, `[{label, text, selector, view}]` (always present, `[]` when there is none); a sample on the page
   is never a failure, and must be replaced with real content before the page is published. Convention: `data-sample="<what it stands for>"` on any element marks sample content; its text,
   and the text of everything inside it that has no `data-sample` of its own, is not checked as a claim.
+- **Copy rows of `FACTS.md`.** A row labelled `copy: <slot>` (`copy: site H1`, `copy: signature line`) holds wording the owner approved for use as copy, in its `value`, apart from the plain fact it presents.
+  No reader treats it differently: `page:claims` and `book-lint` read its `value` like any other, so a number or status word in it is backed; no emitter label matches it. The site round
+  (`07p-site-round.md`) has a headline quote a `copy:` row, or be new wording the owner approves on the board, never a fact's `value` as it stands.
+- **Word row.** `page:words`, once over all widths and schemes, right after the claim rows: `_common.forbidden_terms(project)`: the bullets under a heading
+  starting `Forbidden` in `brief/BRIEF.md` and `research/cliches.md` only (`book-lint` also applies the book's own `lint.forbidden`; the page check does not), looked for as whole words in any letter case in the same `claim_text` runs, a labelled `data-sample` included (the hit says
+  it is in a sample: a made-up sentence is still wording the brand forbids). A hit is a `warn`, never a `fail` (the exit code stays 0): the detail names up to six, each with the word,
+  the selector, the sample label when there is one and the text around it; the same block in another view is one hit, named at the first view that has it. With no word listed the row is `info` ("no forbidden
+  words are listed, so none was looked for"), never a `pass`; with a list and no hit it is `pass`; a view that held more blocks than were measured (`claim_text_total`) makes it a warning "NOT verified
+  beyond the first blocks of text"; `skipped` when no view was measured. The row holds `forbidden_hits` (`[{word, selector, context, width, sample}]`, `sample` is `null` outside a sample),
+  `forbidden_checked` (how many words were looked for) and `forbidden_words`. Whichever of the brief and `research/cliches.md` exist are inputs of the report: a change to either makes a
+  `page-check` report stale.
 - **Mark facts.** Every view also holds `marks` and `images`, collected over the same shown elements. A mark is an element with `data-brand-mark`, or an image whose file name says
   it is the logo: the name without its extension (its stem) is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more, in any case (`logo.svg`, `mark.svg`, `wordmark.svg`,
   `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). `mark` is also a person's name, and both are ordinary words (a team page holds photos of people named Mark), so they make a candidate
@@ -1536,30 +1764,61 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
     image or a border (form controls, table parts and rules are not counted: the `table`, `thead`, `tbody`, `tfoot`, `tr`, `td` and `th` of a table are data, so a table of styled cells is not a mock-up), no `img`, `svg` or `picture` inside with a side over `max_icon_px` (48) css px (a smaller one is an icon and does not exempt
     the box; a `picture` is as big as the `img` it draws), no `canvas` or `video`, and no non-empty `data-sample` on it or an ancestor. The items of a list, the `li` of a `ul` or `ol` with everything in them (the
     outermost list in the box; a list inside one of its items is part of it), excuse a box only when the box is the list or the items are nearly all of it: at most `max_unlisted_styled` (1) of its styled
-    descendants are outside the items, or the items themselves (the boxes of the `li`, each clipped to the rectangle of the box, so a row of items that runs on past it fills no more of it than lies in it; not the room of the list round them, which may be stretched past them) take `min_list_area_ratio` (0.8) of its area. So a styled checklist or timeline is not a mock-up, but a panel with its own styled head, figures or footer beside
+    descendants are outside the items, or the items themselves (the area of the union of the boxes of the `li`, each clipped to the rectangle of the box, so a row of items that runs on past it fills no more of it than lies in it, and items stacked in one place, a fade carousel, count as one; not the room of the list round them, which may be stretched past them) take `min_list_area_ratio` (0.8) of its area. So a styled checklist or timeline is not a mock-up, but a panel with its own styled head, figures or footer beside
     a list is judged on all its styled boxes, the items of the list each counted. Styled boxes inside a table cell (a status badge in a `td` or `th`) count as part of the table: a box that is a `table`, `thead`, `tbody`, `tfoot` or `tr`, or
     whose styled descendants are all in cells (a cell itself too), is not judged, so an index table whose rows end in a badge is data; a table with a styled head or footer beside it is judged on all its styled boxes, the badges too, and a drawing in a cell is its own box. A box that holds an `h1`,
-    or more than `max_headings` (1) headings (`h1` to `h6`, `[role=heading]`), is a section of the page, not a drawing in it, and is not judged: the whole page, or a band of cards with icons, is not a mock-up,
+    or more than `max_headings` (1) headings (`h1` to `h6`, `[role=heading]`), is a section of the page, not a drawing in it, and is not judged, and so is a page band: a `<section>` or `[role=region]` with a heading as a direct child or named by `aria-labelledby` after a heading (`band`; the boxes inside it are still judged, so a drawn panel in a band warns, and a heading inside a child does not make the band), and a box round a band is judged on the styled boxes outside the bands it holds (`in_bands`), so a full-width wrapper round a band is not a mock-up: the whole page, or a band of cards with icons, is not a mock-up,
     while a figure drawn as a panel with a header, rows and small svg icons, with no heading or one, is.
   - `three-equal-tiles`: in a view of `min_viewport_px` (1024) or more, an element with exactly three shown element children (a `<template>`, a `<script>` or a hidden child is not counted), side by side in one row, widths within `width_tolerance_px` (2), the shorter at
     least `min_height_ratio` (0.8) of the taller, each holding a shown heading.
+  - `stray-box`: after the page's animations that end have ended (`waitAnimations`, as `shot` waits), a shown element (not hidden, opacity above 0, `visibility: visible`, with a box) that lies wholly outside the
+    box of its parent (the nearest ancestor that is neither inline nor `display: contents`; none for a child of the body) on one axis by `min_outside_px` (8) css px or more, or wholly outside the viewport by that much
+    past its left, top or right edge, is a hit: a box the animation left behind. The edges are those of the page, in page coordinates (`scrollX` and `scrollY` are added), so a page that is scrolled when it is measured
+    (a script, an `autofocus` field below the fold, a `#fragment` in the URL) has nothing above or left of its scroll position past an edge: the verdict is the one the same page gets unscrolled. It is not one when an ancestor clips it on that axis (`overflow` other than `visible`, `clip-path`, `contain: paint`, `content-visibility`) and the element
+    lies wholly outside that ancestor's box on it (one that still sits inside the box of the ancestor that clips it is shown, so `main { overflow-x: hidden }` hides nothing it holds; the overflow of `html` and `body`
+    is the viewport's and clips only what is outside the viewport), when it or an ancestor is `position: fixed` or `sticky`, when it lies in a parent that is itself out the same way
+    (the parent is the stray), or when it is a focusable control positioned `absolute` and out of the viewport (a skip link set off screen). Below the viewport is where a page scrolls to, and no hit. Each view is measured a
+    second time with the viewport 1300 css px high (the width and scheme stay), for this tell alone, so a bug that shows only on a tall screen is found (the open page is resized and its animations waited for again, not
+    loaded again: a script that reads the window height once, as the page loads, is not run again at the tall height); a hit seen at the view's own height is not said again for the tall one.
+    NOT verified (never a pass, never a hit): an element that still has a running animation or transition, a view that still has an animation running after the wait (`animations.running`: one that never ends, or waits
+    for a scroll or view timeline) and a view whose wait was cut off (`animations.capped`), each for the width (a tall window says so) it was seen at.
+  - `tilted-form`: a shown form, `input` (not `type=hidden`), `select`, `textarea`, or `button` inside a form, whose rotation is `min_degrees` (0.1) or more either way (the angle is
+    taken from the matrix the browser composes from the element's own `rotate` and `transform` and those of every ancestor, normalised to -180..180, so 180 counts and 360 does not). The hit names the element and what
+    turns it: its own transform, or the transform of the nearest ancestor that rotates. A control drawn at the same angle as its form is not listed again, the form is the hit; a tilted element with no form control in it is
+    not this tell; a button outside a form is not a form control. A skew, a 3D turn or a mirror is not measured (an element turned in 3D, mirrored, skewed or scaled unevenly, by itself or an ancestor, is left out; a 3D transform that turns nothing out of the plane, such as `perspective(1px) translateZ(0)`, is read by its in-plane part). More than 100 such elements in a view is NOT verified beyond the first ones (`pagecheck.TILT_CAP_NOTE`).
   - Note `stock-anatomy` (info): in one view, from the top of the page down, the hero, a `three-equal-tiles` row, an FAQ (a `details` with a `summary`, or a heading that is a word of the note's lists) and a
     closing band (the last block of `main`, or of the body without one: a heading, an action and at most `cta_max_words` (40) words).
 - **Tell facts.** Every view holds `tell_facts` from `page_measure.mjs`, whatever the rules: `viewport`; `eyebrow` (`{sel, text, words, uppercase, letter_spacing_em, font_size_px, heading_sel, heading_tag,
-  heading_font_size_px}`, the candidates of 1 to 12 words); `arrows` (`{sel, label, edge, glyph, gap_chars}`, `gap_chars` as counted above); `separators` (`{sel, text, count, via}`, `via` is `text` or `pseudo`); `hero` (`{found, sel, h1_sel, top,
-  words, viewport_height, lang, actions: [{sel, label, lang}]}`, at most 6 actions); `boxes` (`{id, parent, sel, width, height, styled, in_lists, in_cells, table, list_area, media_px, headings, h1, labelled}` for boxes of 120 x 80 css px with 4 styled
+  heading_font_size_px}`, the candidates of 1 to 12 words); `arrows` (`{sel, label, edge, glyph, gap_chars}`, `gap_chars` as counted above); `tilts` (`{sel, tag, angle, by}`, `by` is `self` or the selector of the ancestor that turns it; only rotations other than 0; at most 100, then `tilts_capped`); `separators` (`{sel, text, count, via}`, `via` is `text` or `pseudo`); `hero` (`{found, sel, h1_sel, top,
+  words, viewport_height, lang, actions: [{sel, label, lang}], h1_text, h1_bottom, first_action: {sel, label, bottom} or null}`, at most 6 actions; the last three are for `page:first-screen`); `boxes` (`{id, parent, sel, width, height, styled, in_lists, in_cells, table, list_area, media_px, headings, h1, labelled}` for boxes of 120 x 80 css px with 4 styled
   descendants or more, `parent` the id of the nearest box above that is in the list, at most 200; `in_lists` of the `styled` sit in the items of lists, and `list_area` is the area in css px squared of those items themselves, the sum of the part of each `li` box that lies in the rectangle of the box (not of the list, which may be stretched past them, and not what a row of items runs on past the box; a list with no styled item adds none); `in_cells` of the `styled` sit in a `td` or `th` (in the box, or the box itself) and `table` is true for a `table`, `thead`, `tbody`, `tfoot` or `tr` box; `media_px` is the
   largest side in css px of the shown media inside by element name, `{"svg": 24, "img": 600}` or `{}` (a `picture` by the `img` it draws), and `page-tells.json` says which are icons; `headings` is the number of shown
   headings inside and `h1` the number of shown `h1` among them); `tiles` (`{sel, tiles: [{sel, left, top, width, height}]}`, at most 40); `headings`, `details` and
   `last_band` (where the pieces of a stock page are). The lists are capped (60 eyebrow candidates, 100 arrows, headings and details, 200 separators); `truncated` is true when the page has more than 8000 elements, which the walks over every element (`middot-run`,
-  `styled-div-mock`, `three-equal-tiles`) stop at. Nothing is judged in the browser.
+  `styled-div-mock`, `three-equal-tiles`, `stray-box`) stop at. Nothing is judged in the browser.
+- **Stray facts.** `tell_facts.strays` is `[{sel, text, animating, parent, viewport}]`, up to 100 in document order, the elements a shown box lies out of place for by `stray_min_px` (8 from `page_check.py`; 2 when a request gives none) css px or more, measured on the page after its animations
+  ended; `text` is its text (60 characters), `animating` whether it or an ancestor still has a running animation or transition, `parent` `{sel, side, px}` (`side` of the parent it lies on: `below`, `above`, `right` or `left`;
+  `px` the gap) or null, `viewport` `{side, px}` (`left`, `top` or `right`; `px` how far past the edge) or null. `tell_facts.strays_truncated` is true when the walk stopped short (more than 8000 elements, or more than 100 candidates) and `tell_facts.strays_capped`
+  when there were more than 100 candidates (the list holds the first 100): the stray-box row then says "NOT verified beyond the first boxes found outside their place" (`pagecheck.STRAY_CAP_NOTE`), never a silent pass. `tell_facts.strays_tall` is `{viewport: {width, height: 1300}, animations: {waited, running, capped}, strays}` (and
+  `truncated` when the page had more than 8000 elements or 100 candidates, and `capped` when it had more than 100 candidates, and `load`, the page errors and the requests to another origin or failed own requests that only the resize brought, as strings) from the second
+  measurement at the tall window, or `{viewport, error}` when that failed (the view keeps its other facts). The tall window is measured once per width, in the first scheme of the run that measures that width: the geometry of a stray depends on the width and the height alone, so the view of another scheme carries no `strays_tall` at all, which `find_tells` reads as "measured in the other scheme", never as an error or a NOT verified note. The view's `errors`, `non_local`, `failed_local`, `resources` and `served`, which `page:load`
+  reads, are taken before the resize, so nothing the tall window brings fails the view; the stray-box row says it as a NOT verified note for that width. The thresholds are `pagecheck.find_tells`'s.
 - **Tell rows.** `tell:<id>`, one per tell of the file in its order, none for a tell a brand rule has adopted. The thresholds are applied to every view and a place seen in several views is one hit with its `widths`.
   Pass: "none found in N view(s)". Warn: "N found: <selector>: <what was seen> (at <widths> px)" (up to six named; the row's `hits` keeps up to 100 as `{selector, text, widths}`) and the tell's `why`. Skipped:
   no view was measured. `tell:stock-second-action` also warns "NOT verified: no word list for <lang>" when the page's `lang`, or the closest `lang` of its second action, is not in `languages` (a page that sets
-  no `lang` too); the other tells need no word list. `middot-run`, `styled-div-mock` and `three-equal-tiles` warn "NOT verified beyond the first elements of a view" when a view was cut at 8000 elements.
+  no `lang` too); the other tells need no word list. `middot-run`, `styled-div-mock`, `three-equal-tiles` and `stray-box` warn "NOT verified beyond the first elements of a view" when a view was cut at 8000 elements.
   `note:stock-anatomy` (info, with `anatomy`: `{view, hero, tiles, faq, closing_band}`, the tops in css px) appears only when one view shows the stock order. A `page.rules` entry of kind `tell` (`tell` is an id of the file;
   any other id exits 2 before a page is opened) gives `page:rule:<id>` in place of `tell:<tell>`: the same hits, a warning while the rule is not tied to a recorded G4 line and a failure after, a pass when none are
   found; the row holds `tell` and `hits`. `pagecheck.load_tells()`, `tell_ids()` and `check_tell_rules(rules)` are the readers other tools import; the file ships with the plugin (exit 3 if it cannot be read).
+- **First-screen row.** `page:first-screen` (after the `tell:` rows, before the page rules) is judged from `tell_facts.hero` in every rendered view: the bottom edge (page y, css px) of the hero's first shown `h1` (`h1_bottom`, with `h1_text`, 80 characters, and `h1_sel`) and of the first shown
+  link or button of the hero outside a nav that has a label (`first_action`: `{sel, label, bottom}`, or `null`; unlike `actions` it is not cut at the fold) must not be lower than the viewport height of that view (`viewport.height`: not a height of the page's own, the window the check sets
+  for the width, 800 at 360, 844 at 390, 1024 at 768, 768 at 1024, 900 at 1440, 1080 at 1920, 900 otherwise; the same window the `hero-text-budget` tell counts in). An edge exactly on the fold is inside. Warn (never fail, a tall hero may be meant): "at <width>-<scheme> (window <h> px high) the
+  heading|action <selector> "<text>" ends <n> px below the fold", up to six named, with the row's `below_fold` (`{view, width, scheme, viewport_height, what, selector, text, px_below}`, up to 100) and `viewport_heights`. Pass: the heading and first action end inside the first screen in N view(s); a hero with no
+  action is measured on its heading and the row says so. A view with no shown `h1` while another has one is named ("not measured at <views>: no shown h1 there") and the row is then a warn, never a pass. Info "not measured: the page has no hero ..." when no view shows an `h1` (never a pass). A view whose record has no window height is named ("not measured at <views>: no window height", a warn), and when no view has a measured heading the row is info "not measured: no view shows the page's hero with a measured heading" (both reachable only from a malformed or old measures file). Skipped when no view was measured. The hero box is the `h1`'s nearest section, header, banner or hero element (else its parent, which on a page with no section around the heading may be all of `main`), and the first link or button in it counts, a logo link included. When that box holds no labelled link or button outside a nav (a wrapper named for the hero around the heading alone, such as `<div class="hero__title">`), the actions are looked for in the block around it, up to the first section, header or banner; the heading and its words are still measured in the nearest box.
+- **First-screen motion row.** `page:first-screen-motion` (after `page:first-screen`, before the page rules) is judged from the measures file's `first_screen_motion`: render.mjs loads the page twice more in the narrowest and the widest view that measured, in the light scheme (else the first scheme that measured), each in its own window (`{width, scheme, viewport, normal, reduced}`, or `{…, error}`). Each load adopts (pauses) the animations that run on load as the key frames do (`startPass`, settle 1000 ms; the `reduced` load with `prefers-reduced-motion: reduce` and the reduced mode, which counts requestAnimationFrame calls in its last 500 ms as `alive`), seeks every one that ran to the end of the longest finite one (`length`, ms) and names those whose target's box meets the window there (`first`: `[{name, end, infinite, moves}]`, up to 40, with a duration or endless; `moves` when a keyframe changes a transform, translate, rotate, scale, a position or inset, an offset, a margin, a width or height or a background position, so a fade or a colour change does not move). The `normal` load then seeks from 0 to `length` in 40 even steps until the hero's heading and first action (`h1_sel` and `first_action.sel` of the settled view's `tell_facts.hero`) are both shown (`shown_at`: ms or null; `at_start`: how shown at 0). Shown is where the element's text is painted (each text box by its area; an element with no text by its own box): the part inside the window and every ancestor that clips its overflow (a text's own parent included), times the opacity of its ancestors, at least 0.5; `display: none` or not `visibility: visible` is not shown. A `clip-path` on the way is not read (`clip`), `unseekable` counts animations on a scroll or view timeline and `real_time` says the page moves by requestAnimationFrame. Warn (never fail): the heading or first action shown later than 500 ms (`MOTION_MESSAGE_MS`) into the motion, or not at any moment of it; an endless animation in the first screen, else a first-screen motion longer than 5000 ms (`MOTION_PAUSE_MS`), "WCAG 2.2.2 asks for a way to pause, stop or hide it (not looked for)"; with reduced motion an animation in `first` that `moves`, `alive` calls, or a heading shown under 0.5 at the end; `real_time` and `unseekable` are named NOT verified and make the row a warn. Pass: nothing in the first screen moves on load, or every one of those holds. Skipped when no motion view was measured; a view whose loads failed is named "not measured at <view>: <why>". The row carries `motion_views`, `message_ms` and `pause_ms`.
+- **Stray-box rows.** `tell:stray-box` is a tell row like the others, with the hit `text` "<its text> is still shown <n> px below its parent <selector> and <n> px past the left edge of the screen after the page settled" (the
+  distance under `min_outside_px` is not said; ", in a window 1300 px high" ends a hit only the tall window shows). A row with no hit and a reason it could not judge is a warning that says "NOT verified at <widths> px: ..." with
+  `hits: []`, so `site:tells` asks the card to name it as a tell the page check could not verify. `page-tells.json` holds `min_outside_px`; the height of the tall window is `PAGE_TALL_HEIGHT` in `render.mjs`.
 - **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
   `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`, and the claims rows also load `scripts/booklib/bookdata.py` (the FACTS.md table and the English status words), found next to the module; a tool puts `scripts/pagelib` on `sys.path` and calls
@@ -1577,7 +1836,7 @@ The tools of the two optional steps after G4 in Standard and Full: the website r
 `assets/_checks/`: the record is `capture.json` beside the stills. Every refusal below comes before the browser starts, and every picture is taken before the
 first file is written, so a page or a site that does not load leaves nothing behind.
 
-**A page of the project:** `capture <page.html> [--project DIR] [--wait MS] [--timeout MS]`.
+**A page of the project:** `capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]`.
 
 - The page is confined to the project (a path outside it exits 2). The stills go to `<the page's folder>/shots/`, which is fixed. A page under `history/`, and a
   page in a round before the latest (`rounds/r<K>/` with `K` below the latest round), exit 2 with `<page> is inside ..., which is read-only (capture writes its
@@ -1603,6 +1862,48 @@ first file is written, so a page or a site that does not load leaves nothing beh
   hash, so a still is detectably stale when one of them changes; files inside `shots/` itself are left out, so a page that loads one of its own stills still comes
   to rest. `problems` are what went wrong while the page loaded (a request to another origin, a page or console error, a failed request of the page's own),
   sorted, at most 40 and then `"<n> more"`: they are recorded, never gated (`page-check` gates the page).
+- **Key frames (`--frames`).** Beside the stills above, `shots/frame-1440-0.png`, `shots/frame-1440-50.png` and `shots/frame-1440-100.png`: the first screen at 1440 x 900, light,
+  device scale 1, with every Web Animation (a CSS animation, a CSS transition, `element.animate`) that was running when the page loaded paused where it was found and seeked
+  to 0, 50 and 100 % of the longest one that ends (`end`: its delay, iterations and end delay included), as the motion proof seeks a page (`shot --motion`). An animation the page held
+  paused, or one on a scroll or view timeline, is not moved, and one that repeats forever is only seeked over its first iteration. Each frame has a page load of its own and is
+  taken after the state it was seeked to is written into the page's style and the animations are dropped (what an animation draws is composited in layers that are not drawn to the
+  same pixel twice), with the `transition` of every element an animation moves turned off first (a state written over a live `transition` would start a new transition from the rest value, and
+  the picture would show the page at rest instead of the state seeked to: the entrance a script starts on load by adding a class is the common case), so a second `capture --frames` of the
+  same page writes the same bytes. The frame at 100 % is the first screen at rest, as `1440-light.png` takes it, only on a page whose motion on load all ends: beside an animation that repeats
+  forever (a spinner) the frame has it seeked over its first iteration while the still has it in real time, and beside `requestAnimationFrame` motion the frame has the page's script wherever it
+  is, so the two can differ there. A motion a script starts more than about 150 ms after load is seen only when the page had no animation running at its first look (with a spinner already
+  there it is missed, and the run says what it saw: only animations that repeat forever). A page with no
+  finite animation running on load writes no frame and the run says why (`key frames: none written: no animation runs on load`, `... every animation that runs on load repeats forever or has
+  no length, so there is no end to take frames up to`, `... its animations run on a scroll or view timeline, which cannot be seeked`, `... the page moves by requestAnimationFrame only, which cannot
+  be seeked`): never an error, exit 0, and `capture.json` has no `frames` key. A page that also moves by `requestAnimationFrame` gets its frames and a line saying they may differ from run to run. The
+  line `key frames: 3 of the first screen (1440, light) at 0, 50, 100 % of <length> ms` follows the usual one, and the usual one counts the frames among the stills. `--frames` is a usage error (exit 2)
+  with `--url`. `capture.json` then also holds `"frames": [{"percent": 0, "ms": 0, "file": "frame-1440-0.png", "sha256": "<hex>"}, {"percent": 50, ...}, {"percent": 100, ...}]`, after `full`. A run without `--frames`
+  writes no `frames` key and leaves the frame files of an earlier run where they are (nothing is deleted), and says so (`frame-1440-0.png, ... are from an earlier run and not part of this one`): a cold review that
+  lists them then fails until `capture --frames` is run again. The frames are not among the `inputs` of the page (they are inside `shots/`), and `site approve` never copies them (it copies no `shots/`).
+- **Reveal (`--reveal`).** A page that shows content on scroll (an `IntersectionObserver`, a class a scroll handler adds, `data-reveal`) is otherwise shot without scrolling, so the stills
+  show what lies below the first screen unrevealed. With `--reveal`, in each of the four loads, after the page has settled as above and before the stills are taken, the page and every
+  box that scrolls inside it are walked to their end. A step moves a scroller by half of what the screen shows of it, so a reveal script that watches with a margin or a threshold sees every
+  item too. A step is followed by two frames, `--wait`, and the animations that end (at most 15 s), as after load. First the window, from its top down. Then the boxes, in document order:
+  every shown element with `overflow-y` `auto`, `scroll` or `overlay`, content taller than itself and that moves when scrolled (the body only when the root's overflow is not `visible`). A box built with `flex-direction: column-reverse` (a chat) scrolls into negative positions: it is walked over its own range, from its top (the lowest position) to its end (0), wherever the page left it at load.
+  Boxes are found after the window's walk and again after each box. A box is put at its own top and on the screen (the window and the scrollers around it scrolled to show its top), walked
+  down, and then, while its bottom is below the screen, carried up by the scroller around it. A box under half a screen tall (a code block, a short list) is counted (`"small_boxes"`), not
+  walked. A box that is off the screen however the page is scrolled (a closed drawer, a list in a closed menu) is neither. Every scroll is instant, whatever the page's `scroll-behavior`, and
+  the page's scroll snapping and scroll anchoring are off for the walk and put back after it. The height of each scroller is read again at every step, so a page that grows as it is scrolled
+  is followed (`"grew": true`). The window and the boxes share 80 steps (40 screens) per load, and the walk of one load also stops after `--timeout` ms. A walk that stops before the end says
+  where: `"page_unfinished": true` (the run prints `CAPPED: the page is longer than 40 screens, ...`), `"boxes_unfinished": N` (`CAPPED: the page and its boxes needed more than 80 steps, ...`),
+  or `"timed_out": true` (`CAPPED: a walk took longer than --timeout, ...`). A box whose size the page's `IntersectionObserver` does not report within 1 s is not walked
+  (`"boxes_unmeasured": N`, `NOT MEASURED: ...`). A page that stops answering during the walk (a script that never ends, no answer within 20 s after `--timeout`) stops `capture`
+  at once: exit 1, nothing written, `the page stopped answering during the --reveal walk`. A scroller that does not move, or that the page moves back, ends its walk
+  (`"not_scrolled": true`, `NOT SCROLLED: ...`), never called long. Then every scroller is put back where the walk found it (the top, on a page that does not scroll itself on load), the page
+  settles again, and a scroller that is not there is reported (`"not_returned": true`, `NOT RETURNED: ...`). The four first screens and the full page then show the revealed state, with the
+  window at its top and each box where the page had it. What a box reveals below its first screen is in no still: each box is shown where it was found, and the full page is the window's.
+  A page whose root has `overflow: hidden` or `clip` (also from the body, when the root's overflow is `visible` on both axes: `overflow-x: clip` on the root keeps the body's overflow out of the window) is still walked, because a script can scroll it, but a visitor cannot scroll it with
+  the wheel: when the window took a step, the record gets `"root_hidden": true` and the run adds `NOTE: the page's own scrolling is hidden or clipped ..., a visitor cannot scroll it with the
+  wheel`. The record gets `"reveal": {"steps": <the most steps any load took>, "capped": false}`, after `full` and before `frames`, with `boxes` and `box_steps` when a box was walked, and
+  each key above only when it is true or above 0. The run prints one line, `reveal: ...`, whose counts are the most any load had, or `reveal: nothing to scroll: ...` when there was nothing to
+  walk. A run without `--reveal` writes no `reveal` key, and a run with it on an unchanged page writes the same bytes, as any other run. `--reveal` is a usage error (exit 2) with `--url`.
+  Content that reveals on something other than scrolling (a click, a timer longer than `--wait`), scroll-driven animations (they follow the scroll, so the stills show them at the top), boxes
+  that scroll sideways, and boxes inside a shadow root or an iframe are not walked; a box slotted into a shadow scroller is.
 - `capture.json` is rewritten only when a still, an input or a problem changed (for `--url`: a view, the full page, a thumbnail or what the site answered: its
   final address, status or title). Otherwise the old file, its `date` included, stays byte for byte, so a run that finds nothing new does not make a report that read it
   stale; the line it prints then says `0 of N file(s) written, the others unchanged`.
@@ -1676,6 +1977,20 @@ library's `site` module wherever `scripts/` is on `sys.path`) puts the pages the
 - It prints what it wrote and, per page, `brand-creator capture site/<id>/index.html` and `brand-creator page-check site/<id>/index.html`, then `brand-creator check`.
   The approved copy has no `shots/` until `capture` is run on it.
 
+### site review-status
+
+`brand-creator site review-status <page> [--project DIR]` (`scripts/site_pages.py`) says whether a page needs a cold review. `<page>` is `rounds/r<N>/<name>/index.html` or its folder. It is read-only: no
+report, no file. It finds the newest `cold-review.md` of that variant (`rounds/r<N>/<name>/`, else the same variant name in earlier rounds, newest first; another variant's review is never used, however
+alike the pages), and compares the sha256 each of its `inputs:` records with the file now: the stills as those of the page's own folder (`rounds/r<N>/<name>/shots/<file>`, so a copied round has to run `capture`
+first), `brief/BRIEF.md`, `FACTS.md`, the `BRAND-STATE.md#g4-rules` part when listed. A review in an earlier round also has to find `index.html` byte for byte as the page it read. Last, the stills must be those of the page as it is now: the folder's `shots/capture.json` is the capture of this page, none of its inputs (the page, the tokens' stylesheet) changed since, and its four stills are the bytes it lists, and, when the review lists the key frames, its `frames` list them with the same sha256 (as `site:cold` asks); otherwise the page changed after the stills and `capture` has to run again. A review that lists a file outside the project, a still that is not one of its own folder's, or not all four stills, is not used. It prints one line:
+
+| Line | Exit | When |
+| --- | --- | --- |
+| `reuse <path>: the page is unchanged since that review` | 0 | every recorded file is as it was: run no review, the board cites that one |
+| `review needed: <why>` | 1 | no earlier review of the variant; no `inputs:` list, a line that is not `- <path> sha256:<hex>`, or not the four stills of its own folder, or a file outside the project; a recorded file that changed or is gone (named); the page differs from the one an earlier round's review read; the stills are older than the page (run `capture`; an unusable `capture.json` counts as old stills); the key frames the review lists are not the ones `capture.json` lists (run `capture --frames`; a missing frame gets the same hint) |
+| usage error | 2 | no page, a path outside the project or not of the form above, the page file not there, `--round` or `--replace` given |
+| cannot read | 3 | a file that exists but cannot be read |
+
 ### site/site.json
 
 The decision record of the approved pages (schema 1), written by `site approve`:
@@ -1728,9 +2043,40 @@ made before the site round, and a site round not yet approved) gets no `site:` r
 in `site/` holds `BRAND-STATE.md` by its G4 rules only, so recording G5 or G6 or setting the phase afterwards leaves it current; a changed G4 record or `(rule)` line makes it stale. A page that `check` passes has not changed since approval, was checked against
 the brand rules as it is, and has stills of the page as it is.
 
+### inline
+
+`brand-creator inline <page.html> --out <file.html> [--project DIR]` (`scripts/inline_page.py`) writes one self-contained copy of a page of the project, so a try-out
+(`tryout/<Name>/index.html`) can be shown to someone as a private page. It writes no report in `assets/_checks/`, and nothing reads its output: the file is for
+the Artifact tool, and publishing it is the owner's decision (the review-surface consent; the command publishes nothing and reads no setting).
+
+- **Reads** only inside the project: `page` is resolved with `confine`, and so is every file it names (a path that leads outside, or through a link to a place
+  outside, exits 2). The page and each stylesheet must be UTF-8 text (exit 1 otherwise). Paths are read as a browser reads them, from the folder of the file that names them: the
+  `url()` and `@import` of a stylesheet are seen from the stylesheet's own folder, not the page's. The places read are those of `site approve` (`sitedata`: `src`, `srcset`, `poster`,
+  `url()` and `@import` in a `<style>`, a style attribute and a stylesheet), by element: `<link rel="stylesheet">` becomes a `<style>` element (its `media` kept; `integrity` and
+  `crossorigin` go; `</style` in the text is written `<\/style`), `<script src>` becomes an inline `<script>` (its other attributes kept; `src`, `integrity`, `crossorigin`, `defer`, `async`, `referrerpolicy`, `fetchpriority` and `blocking` go;
+  `</script` in the code is written `<\/script`, `<!--` as `<\!--`; a classic script with `defer` goes to the end of `<body>`, in order, where it ran), the `href` of an icon link
+  (`icon`, `apple-touch-icon`, `mask-icon` and the like) and the `src`, `poster`, `srcset`, `imagesrcset` and `data` (of an `<object>`) of an element, and the `href` of an SVG `<image>`, become `data:` URLs
+  (`;base64,`, the `#fragment` kept; the types of the book: png, jpg, webp, gif, svg, avif, ico, woff2, woff, ttf, otf). A `<link>` that only hints (`preload`, `prefetch`, `modulepreload`,
+  `preconnect`, `dns-prefetch`) is dropped. An `@import` is replaced by the stylesheet it names (up to eight deep; one that imports itself exits 1); a stylesheet's `@charset` is dropped.
+  Not read, and left as written: `<a href>`, `<form action>`, `<link>` of any other kind, the text of a `<script>`, a bare string in `image-set()` and a URL a script builds. A link to a file
+  of the project is dead in the copy.
+- **Refuses**, naming the file and line, up to twelve problems, and writes nothing when there is one (exit 2 when any of them is exit 2, else 1):
+  - exit 2 a URL on another website (`http(s)://`, `ftp(s)://`, `ws(s)://` or `//`: the sentence names the URL), any other scheme but `data:`, and a path starting with `/`; this includes a
+    `preconnect` or `preload` of another website;
+  - exit 1 a file that does not exist or is a folder; a kind of file the command does not inline (video, audio, a manifest, anything whose type is not in the list above); a frame or `<embed>` of
+    an HTML page; an SVG `<use>` of another file (a browser does not take it from a `data:` URL); an `@import` with a condition (a media query, `layer()`, `supports()`) or of a `data:` URL; a module
+    (`type="module"`) that imports another file; an alternate stylesheet; a `<base href>`; a `<script>` or stylesheet whose address is a `data:` URL; a stylesheet (a `<link>` or an
+    `@import`) that is not a `.css` file, and a `<script src>` that is not a `.js` or `.mjs` file, so no other project file (`BRAND-STATE.md`, `FACTS.md`) goes into a copy shown to others;
+    any file whose path inside the project has a hidden file or folder (a name starting with `.`).
+- **Writes** one file, `--out`, only when its bytes change, and never before every refusal above: a `.html` file outside the project or under `<project>/tryout/` (the real path is judged, so a link out of `tryout/`
+  is outside and a link into the project from outside is inside; a relative `--out` is read from the folder the command runs in). Anything else inside the project, a folder, another suffix and the page itself exit 2, and so does a file that already exists under `tryout/` unless it holds exactly the bytes about to be written (the same copy again): the command cannot tell its own earlier copy from another try-out's page, so it never replaces one (the message names the file and says to write outside the project). The text of every `<style>` element it writes, from a `<link>` or from an `@import` (inside a `<style>` too), has `</style` written `<\/style`; deferred scripts go before the last `</body` of the page text, found in the text as written. A copy under `tryout/` is a text file with base64 in it, which `check --cascade` searches: the instructions write it outside the project, in the data folder's `scratch/`.
+- The copy is read once more before it is written, and must name no file to load (exit 1, "a fault in this command, not in the page", if it does). That proves the places above; that the page
+  asks the network for nothing as it runs (a script's request) is `page-check` or `shot` on the page or on its copy under `tryout/`. The same inputs give the same bytes.
+- It prints `wrote <path>: <n> bytes, <k> file(s) inlined (...)`. Exit 0 written; 1 and 2 as above. It needs no browser.
+
 ## Brand book
 
-`brand-creator book`, `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,
+`brand-creator book` (with `book chapter` and `book nbsp`), `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,
 `collapse.py`; libraries in `scripts/booklib/`, which `staleness` does not hash with the emitters). Needs `content_languages` and `edition`
 in BRAND-STATE.md (exit 2 otherwise: the language is never defaulted from `language`).
 
@@ -1740,14 +2086,14 @@ FACTS.md, the contrast and downscale reports and `book/chapters/*.md`, and write
 included). The same inputs give the same bytes (no clock, no random numbers; PNG proofs are rasterised by resvg); `book --verify`
 rebuilds in memory and compares. `check` gates a generated book three ways: a current passing `book-lint` report made with
 `--self-consistency`, a current `book` report, and a `book.html` whose sha256 is the one `book` recorded (a hand edit fails). `authored-vector`:
-the book is hand-authored HTML; `book` exits 2, `book-lint` is the gate, `patch` is the only edit path (below). Both reports record
+the book is hand-authored HTML; `book` exits 2, `book-lint` is the gate, `patch`, `book chapter` and `book nbsp` are the edit paths (below). Both reports record
 `state_view_sha`, a hash of what the book reads from BRAND-STATE.md and FACTS.md (edition, approval, G6, directions, rules, edition log,
 facts); `check` treats a report whose view changed as not verified. A change to the phase or review URL does not. The reports also record `frames_view_sha`, a hash of the list of the stills of the gated proofs: for each `motion/frames/<case>/` the sha256 of its `frames.json` and of its strip and its reduced still, or `absent` for a picture that is not there (so one that goes and comes back is seen). A `check` that finds it different says "not verified" (`report:book:frames`, `report:book-lint:frames`), which is how stills that appeared, went or changed after the book was built are noticed. The list is empty, and the stills are none of the inputs of `book`, `book-lint` and `book-pdf`, for a book that shows none: one whose chapter list has no `motion` (a Quick book) or whose `motion/motion.json` says `off`. They also record `manifest_view_sha`, a hash of the manifest rows the book shows (everything except the press kit, which contains the book's PDF, so the book cannot name its hash and a rebuilt kit must not make the book stale; the files chapter says where the kit is, without a checksum); `assets/manifest.json` is not a report input, and a changed row the book shows makes `book`, `book-lint` and `book-pdf` not verified.
 
 **Chapters.** Registry order, selected from `tier`, `architecture`, the project's files and `book_chapters`: quick `idea, mark, colour,
 files, changing` (plus `wordmark` when `assets/logo` has a wordmark or lockup); standard adds `motion` (when `motion/proof.json`,
 `motion/SPEC.md` or `motion/motion.json`, on or off, exists), `type`, `use`, `proof`, `donts`, `history`; full adds `adoption` and `launch`; `endorsement` and `family` in the
-family modes; `tone`, `photography`, `components`, `site` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
+family modes (a `family-parent` among them; `book --init` gives it `templates/book/<id>.parent.md`, worded for the parent); `tone`, `photography`, `components`, `site` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
 (`<id>.<lang>.md` for each language when `content_languages` has several; every language is required). `book --init` copies the skeletons
 from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter fails the build.
 
@@ -1755,13 +2101,14 @@ from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter f
 `>` quotes, pipe tables, fenced code, own-line images (embedded as data URIs; SVG under `assets/` is mark-linted), inline `**`, `*`, `` ` ``,
 links. Raw HTML is escaped. Anything else is an error with the line number. Computed blocks on their own line: `{{marks[:stem,stem?]}}`,
 `{{mark-sizes}}` (the drawing the size band rule picks, rendered at exactly the size on light and dark, the enlarged copy being the same
-pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
+pixels, plus the downscale reports' accent measurements; a drawing with no `-dark.svg` is shown on the dark ground too when `icons.ground` is `drawing`), `{{colours}}` (a hex value never breaks across lines), `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
 `{{motion}}`, `{{tokens}}`, `{{files}}` (one row per manifest row and source artwork file with `data-path` and `data-sha`; a row marked `superseded` carries a note saying so), `{{checks}}`,
-`{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`, `{{site}}` (the approved pages, below). Inline: `{{count:NAME}}`
+`{{decided}}` (the DECIDED directions and the "Rules (G4)" lines that start with "(rule)" or "(rule, a note)", without the marker, a `` `code` `` span shown as code; a line whose
+tag speaks of a rule in another form, "(rules)" for example, is left out with a `book:decided` warning that quotes it), `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`, `{{site}}` (the approved pages, below). Inline: `{{count:NAME}}`
 (`files, slots, colours, pairs, roles, sizes, artwork, emitters, chapters`), `{{fact:LABEL}}` (a FACTS.md row's value), `{{edition}}`,
 `{{name}}`, `{{approved}}`. `::: variant GROUP NAME` and `::: switcher GROUP` fences are open choices (see `collapse`). Settings in
 `book/book.json` (unknown keys are exit 2): `min_label_px` (default 12, stated in the book), `sizes`, `fonts` (`{family, file, weight, style}`,
-embedded as data URIs), `labels` (`{lang: {English label: translation}}`; a label with no translation is shown in English and warned),
+embedded as data URIs; a variable font is declared with its weight range, `font-weight:<lowest> <highest>`, and the type table shows `<lowest>–<highest>`: the range is the `weight_range` of the file's `licence:` row in the current `fontcheck` report, because with one weight the browser holds the font at it and fakes the bolder headings; a row whose `weight_range` is `null` is a static font and keeps the `weight` given here, 400 when none is; with no current report, no row for the file or no range CSS takes in it, the book keeps the one weight and warns in `book:type` that the range is not known), `labels` (`{lang: {English label: translation}}`; a label with no translation is shown in English and warned),
 `output`, `lint` (`history_chapter, forbidden, scratch, round, status_words, count_nouns, allow_external_links, files_exclude`).
 
 **The site chapter.** Opt-in (`book_chapters: [site]`), Standard and Full; it sits after `components` and before `use`. `{{site}}` shows the approved pages of the site round (`site/site.json`, written by
@@ -1849,12 +2196,14 @@ in a hand-authored book too; `state --record G5` writes `approved_edition`, so a
 `patch` and `collapse` log under `## Edition log` and refuse to change an approved edition unless `--new-edition` opens the next. A
 hand-authored book must show the stamp before G5 is recorded (patch the cover, then record).
 
+**Open items.** An item the owner cannot fill yet (a launch step with no inventory, repository, handle or mailbox yet) is written in the chapter as a list item or paragraph that reads `Open: <what it waits for>`, or `<Label>: Open: <what it waits for>` (`- [ ] Handles: Open: the name is not chosen yet.`; a `<p>` inside such an `<li>` is the same item, listed once; two `<p>` or a nested list in one `<li>` are separate items, each read from its own text; but in a hand-authored book a nested list that holds no `Open:` item may name what an `Open:` item waits for, `<li>Handles: Open:<ul><li>the domain</li></ul></li>`, also with the lead text in a `<p>`, and the item is then read whole; the Markdown subset of a generated book has no nested lists, so a generated chapter writes what the item waits for on the `Open:` line); `templates/book/adoption.md` and `launch.md` say so in their markers. It is no leftover marker: the build accepts it and `book-lint` does not fail it, while `[[fill: ...]]` still fails the build and `words:scratch`. `book:open-items` lists the open items of the book with their chapter and label (info, up to eight named) so they stay visible; `Open:` with nothing after it is a fail (it names nothing it waits for); a book with none gets a pass. Hand-authored HTML is read the same way (the text of a `<li>` or `<p>` inside a `data-chapter` section).
+
 **book-lint rows** (each one result in `assets/_checks/book-lint.json`): `html:head`, `ids:duplicate`, `anchors:broken`, `network:refs`
 (script, handlers, `<link>`, iframe, `src`/`srcset` that is not `data:`, http(s) in links or text, CSS `url()` that is not `data:`, `@import`),
 `links:files` (warn), `marks:lint` (mark_lint on every inline `<svg>`, every `<img data-mark>` data URI and every linked `.svg`; an
 `<svg data-diagram>` may hold text but no script or external reference), `images:alt`, `words:scratch`, `words:round` (outside the history
 chapter), `words:forbidden` (FORBIDDEN list of BRIEF.md and cliches.md, outside the history chapter), `words:status` (a status word needs a
-FACTS.md value that contains it), `variants:open`, `chapters:required`, `edition:stamp`, `counts:data` (every `data-count` equals the data),
+FACTS.md value that contains it), `variants:open`, `chapters:required`, `book:open-items`, `edition:stamp`, `counts:data` (every `data-count` equals the data),
 `counts:typed` (a digit followed by `files`, `slots`, `colours`, `pairs`, `roles`, `sizes` or `chapters` in prose must equal the data; write it
 as `{{count:NAME}}`), `facts:data`, `files:accounting` (every manifest row and artwork file has a `data-path` row with the right `data-sha`),
 `legal:<label>` (FACTS.md rows whose label starts `legal` must appear verbatim), `lang:parity` (every `lang=` + `data-key=` block exists in
@@ -1908,7 +2257,19 @@ A book that does not lint clean is not exported. Print production (bleed, trim, 
 
 **patch** (`patch FILE --old T --new T --count N`): replaces and refuses, writing nothing, unless the text occurs exactly N times. Never edits
 `history/`, an earlier round (the hook's rule: only the latest round, and `rounds/r0/` while G1s is empty, are open) or `assets/_checks/`; refuses `book.html` of a generated brand. On a book file it appends
-`- <date> edition <n>: patched <file> (<k> replacements)[: note]` to `## Edition log`. **collapse** (`--group G --keep NAME [--apply]`): removes
+`- <date> edition <n>: patched <file> (<k> replacements)[: note]` to `## Edition log`. `patch --loose-space` counts and replaces `--old` where the book has a no-break space (U+00A0), a narrow no-break space (U+202F) or a longer run of white
+space in place of a space in `--old` (and only there; white space at the very start or end of `--old` that holds a line break is matched exactly, so an `--old-file` that ends in a newline does not take the blank line after the match); the count must still be exact, so an ambiguous match is refused. **book chapter** (hand-authored
+books only; `book chapter --replace ID --from FILE`, `--add ID --from FILE [--after ID]`, `--remove ID`; scripts `booklib/book_hand.py`) works on whole
+`<section data-chapter="ID">` elements: `--replace` swaps the chapter for the fragment in FILE (one `<section data-chapter="ID">` element, nothing else
+around it) and keeps the rest of the book byte for byte; `--add` inserts a new chapter after `--after` (default: the last); `--remove` is refused while
+the book still links to `#ID`, to the removed section's own `id` or to an id inside it. Exit 2 for a generated book, an id not found (or already there for `--add`), a fragment whose root is not a section with
+the same `data-chapter`, or a book that does not exist; exit 1 for an approved edition without `--new-edition`. It uses the edition path of `patch` (one
+line `- <date> edition <n>: replaced|added|removed chapter <id> in <file> (chapters <a> -> <b>)[: note]`) and afterwards recomputes what every
+`data-count="chapters"` element shows (the contents) from the number of chapters; `book-lint` (`counts:data`) fails a count that is not that number.
+**book nbsp** (`book nbsp --fix [--yes]`) lists, as a dry run, each ordinary space after a one-letter word of the book's `content_languages` (the
+`single-letter-nbsp` rule of `scripts/data/languages/<code>.json`, the function `booklint.single_letter_nbsp_pattern` that `book-lint` warns with) and with
+`--yes` turns each into a no-break space, through the same edition path (`- <date> edition <n>: nbsp in <file> (<k> spaces made no-break)`); without
+`--fix` it exits 2. Only the run of ordinary spaces right after the word changes (one no-break space; nothing after it, nothing inside a tag (an attribute value that holds `>` included), comment, `<code>`, `<script>`, `<style>`, `<svg>`, `<pre>`, `<table>` or `<textarea>`). A place where a block-level tag (`</p>`, `</h2>`, `<br>`, `<li>` and the like) stands between the word and the next one is left alone, though the lint still warns on it: a no-break space between two blocks would show as a gap; the dry run lists the same edits `--yes` writes. `book chapter` and `book nbsp` refuse (exit 1) the paths `patch` refuses: `history/`, `removed-*/`, an earlier round, `assets/_checks/` (`bookedit.refuse_frozen`). **collapse** (`--group G --keep NAME [--apply]`): removes
 every `::: variant G x` block of a losing option and every switcher from `book/chapters/*.md`, elements with `data-variant="G:x"` and
 `data-switcher="G"` from a hand-authored book, tokens whose `$extensions["brand-creator"].variant` is `G:x`; unwraps the winner; copies every
 changed file to `removed-<date>[-n]/<path>` first; records the decision under `## Collapsed`. Without `--apply` it prints the plan.
@@ -2126,6 +2487,20 @@ A loss is an item of the before record that the repository no longer has and nob
   record, so a list without wiring renders the bytes it always did). Per repository: one line of counts per kind, before and after; under it one line per lost item, `- <item>: dropped, <reason>`
   or `- <item>: lost, not recorded`. Every line carries `<!-- target-repo -->`, so the cascade counts it as a record.
 
+### check --refresh
+
+`check --refresh` re-runs the stale reports that are a pure re-run of a check, then runs `check` as usual (its exit code is the check's). A report is stale when a file in its `inputs` is gone or changed (`_common.stale_inputs`); a report that cannot be read as one is left to `check`, which fails it. Which are re-run, and with what (`check.refresh_command`; nothing is guessed: the words come from what the report records, else the project's defaults):
+
+| Report | Re-run as |
+| --- | --- |
+| `page-check/<slug>-<hash6>` of a project page (`target.kind` `project`) | `page-check <target.page>`, with `--widths` and `--schemes` only when the report's `run` block records that they were given on the command line (`run`: `target`, `widths`, `schemes`, `widths_from: "flag"` or `"rules"`, `schemes_from: "flag"` or `"default"`; page-check writes it when the report opens, so a report that records a crash has it too, while its top-level `target` is written only by a finished check and every reader of a verdict still sees a crash as no report of the page): widths that came from `qa/rules.json` are read from it again, so an edit of `page.widths` (which makes every page-check stale) is applied by the re-run. A report that records neither is re-run with the rules' widths and both schemes |
+| `contrast` | `contrast`, with `--cvd` when the report has the `cvd` block and `--skip-marks` when it has the `touching:skipped-on-purpose` row; not while the `tokens` report is stale too (the built tokens would be judged as they are) |
+| `book-lint` | `book-lint <book_file>`, with `--self-consistency` and `--allow-variants` when the report says it was made with them (`book-lint` and `book` record `allow_variants` only when it was set) |
+| `kit-check` | `kit check` (it reads the kit and writes only its own report; a kit built from an older brand fails its `kit:sources` row, which names `kit build --yes`: the kit itself is never rebuilt here) |
+| `board-lint` | `board-lint <page>` (the page the report names) |
+
+The page-checks run first, then `contrast`, `book-lint` and `kit check`, then `board-lint`: a board's lint lists the page-check reports as inputs, so its staleness is read again after the page-checks ran. Each re-run prints `refresh: brand-creator <words> -> exit N: <its verdict line>`. A re-run that exits 2, or any other code without writing a report, prints `[FAILED: no report was written]` and a line on stderr; that report stays stale, so `check` says "not verified" for it. A tool that failed after it opened its report (it prints `failure recorded in <path>`) prints `[FAILED: the report records the failure]`: the report is current and says fail. A re-run that runs over 1800 s is stopped and said `timed out ... [FAILED]`; `check` goes on. A stale report that is not in the table is never re-run: it writes files the owner reads or needs the owner's options or yes (`adapters`, `applied-skill`, `kit`, `book`, the emitters, `tokens`, `staleness` (by `staleness --write`), a page-check of a built site or an address, `shot`, `logo-sheet`, `downscale`, `states-check`, `family-check`, `fontcheck`) and is printed as `refresh: <tool> is stale and is not re-run: <why>; check names the command`; a page-check, board-lint or book-lint whose page, board or book was removed is printed as `refresh: <tool> is stale and is not re-run: <file> is gone, so there is nothing to re-run and check does not judge that report`. With nothing stale it prints `refresh: no stale report`. `--refresh` is not in the slash command's argument hint; the skill runs it when a row says a report is stale. `tools/finish.sh` ends on it (below).
+
 ### check --cascade
 
 `check --cascade "<old value or phrase>"` (repeatable; `--ignore-case`; `--also PATH` repeatable) searches every current text file of the project, PDFs as text
@@ -2142,7 +2517,7 @@ of those files, including the text of an adoption row's `change`, is searched li
 
 `adapters --brand-md --design-md [--primary ROLE] [--bm-type T] [--bm-architecture A] [--replace]` writes `BRAND.md` and `DESIGN.md` at the project root from the built
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
-master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
+master, endorsed; product-in-family: product, endorsed; family-parent: master, branded-house, and its Strategy says it is the parent of the family; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
 (colour roles in light and dark, type families with the sizes, weights, line height and tracking the tokens define, the spacing, radius and layout values, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
@@ -2206,22 +2581,28 @@ proposal, said so), motion (the section above, through the template's `{{motion}
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like
 the adapters (`applied-skill:file`, `applied-skill:state`).
-The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md, with every path inside the kit (the tokens, the marks and the band drawings
-under `brand/`, and the template's `{{kit}}` line filled with the kit section; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
+The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md and brand.md from the kit's own templates (`kit-SKILL.md`, `kit-brand.md`), with every path inside the kit (the tokens, the marks and the band drawings
+under `brand/`, and the `{{kit}}`, `{{how}}` and `{{map}}` lines filled from the kit; see `kit`). The kit also hands the builder its own words for a ground colour or a layout value the tokens lack (`kitlib.TOKEN_GAPS`): its `brand.md` says "missing" and to build the colour from the token colours, and to choose a layout value in line with those listed and say so, where the applied skill says to ask the owner. Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
 A project whose skill folder holds a `kit.json` is handed over to `kit build --yes`: `applied-skill` then exits 2 before it writes anything (with `--plan` and `--replace` too), with "this project's brand skill is a kit (kit.json): run `brand-creator kit build --yes`". `check` gates such a project through the `kit` report and runs no `applied-skill:file` or `applied-skill:state` row for it.
 
 ### kit
 
 `kit build --yes [--plan] [--replace]` (`scripts/kit.py`; the kit as data is `scripts/adaptlib/kitlib.py`) writes the brand kit into the applied skill's folder, `.claude/skills/<slug>-brand/`.
-The kit is the applied skill with more around it: its SKILL.md is still written by `adapt.applied_skill_md` (see `applied-skill`), now with every path inside the kit and a `## The kit`
-section. That section says the kit works beside the owner's web-design skill and not instead of it, and that a product copies the files it uses from `brand/` into its own public or static folder and links them from there. A project without a kit keeps the applied skill as it is: the same bytes, the same command and the same `check` rows.
+The kit is the applied skill with more around it: its SKILL.md is still written by `adapt.applied_skill_md` (see `applied-skill`), from the kit's own template
+(`templates/applied-skill/kit-SKILL.md`), with every path inside the kit. It holds, in this order: `## How to read the kit` (text of the template: the three weights, Fixed, Default and Example, as a table; the heading of a line in the owner's files as its weight and the tag as its source; what holds where no heading says the weight (the tag decides: a `[rule: <id>]` line is fixed, numbered or not, a choice of a reference page is a default, an `[example]` line is an example; numbered steps with no tag are practice); the three things never made up (a new brand colour, a claim `facts.json` does not hold, a redrawn logo); and that "the owner" is whoever maintains the brand), `## How to work` (one sentence that says the steps are the brand's practice, to follow or to better, then numbered steps, the same for every brand, each naming only files the kit holds: `kitlib.how_md`; no step sends a choice to the owner: a missing claim is left as a visible placeholder marked as a sample, or left out, and whoever maintains the brand is told, and what the brand has not decided is the maker's to decide and to state),
+`## The kit` (the version line and what the folder is; `kit.json` lists the files, SKILL.md does not), `## Rules the owner decided` (every G4 rule verbatim, under one sentence that says `golden-rules.md` sorts them by weight and a rule it does not sort is fixed), `## Never` and `## Map` (one row per need, only for what the kit holds: `kitlib.map_md`; since 0.11.1 one row, "the owner's own folders and files", names every folder and file the owner keeps at the top of the kit folder beyond `recipes/` and the scaffolded files, as `kitlib.own_entries` reads them at the build, a link never among them, so a folder such as `guides/` or `code/` is found from SKILL.md; adding one changes SKILL.md at the next build).
+The kit section says the kit works beside the owner's web-design skill and not instead of it, and that a product copies the files it uses from `brand/` into its own public or static folder and links them from there.
+The colour, type, layout, mark, motion and claims sections go to `brand.md`, written by the same builder from `templates/applied-skill/kit-brand.md`. A project without a kit keeps the applied skill as it is: the same bytes, the same command and the same `check` rows.
 
 ```text
 .claude/skills/<slug>-brand/
   SKILL.md      generated: the applied skill, its paths inside the kit, plus the "## The kit" section (it holds the line `Kit version <version> (kit.json).`)
-  kit.json      generated: schema, version, edition, sources, the sha256 of every other generated file and of each owner file (`owned`)
+  kit.json      generated: schema, version, edition, sources, the sha256 of every other generated file and of each owner file (`owned`), the sort of the rules (`sort`)
   rules.json    generated: the G4 rules with ids, the size rule and bands, the contrast pairs with their ratios, the forbidden words, the page block (see Rules and facts below)
   facts.json    generated: the public rows of FACTS.md
+  brand.md      generated: the colours and pairs, type, layout, mark and size bands, motion and what may be claimed (the sections SKILL.md leaves to it)
+  checklist.md  generated: the check before handing anything over, every item a `- [ ]` line built from rules.json (see Checklist below)
+  install.py    generated: the kit's installer, `scripts/adaptlib/kitcopy.py` byte for byte (see kit: install.py below)
   brand/        generated: byte copies of the brand's files AT THEIR PROJECT PATHS, so a relative link in one of them still resolves
     assets/tokens/tokens.css, tokens.json
     assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
@@ -2229,21 +2610,23 @@ section. That section says the kit works beside the owner's web-design skill and
     motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
     site/<id>/ (the page, its folder and its stills) and every project file an approved reference page loads (see Reference pages below)
     assets/masters/<every file of the approved masters, a font by the font rule> (see Masters below)
+    assets/web/, assets/social/, assets/profiles/: every file `emit web`, `emit social` and `emit profiles` recorded in assets/manifest.json (see Platform files below)
   snippets/fonts.css   generated: an @font-face for each copied font
   snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
   snippets/logo.html   generated: the logo in light and dark, switched as tokens.css switches them
   reference-pages/<id>/notes.md   generated: an approved reference page's layout (structure only), approval, stills and choices, each tagged
   EXTENDING.md  voice.md  visual.md  golden-rules.md   the owner's: scaffolded once from templates/kit/, never overwritten (see Owner files below)
   recipes/web-page.md   the owner's: the web-page recipe
+  recipes/ad.md, recipes/presentation.md   the owner's: scaffolded once when assets/masters/masters.json lists an ad, or a slide or deck (see Owner files below)
   <any other file>      the owner's too: a recipe under recipes/, a folder of your own such as notes/ (see Owner files below)
 ```
 
-Everything the build writes, except the five owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
+Everything the build writes, except the owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
 `brand/`, `snippets/` and `reference-pages/` are the generated folders. Every file of the kit folder that is no generated file, is not `kit.json` and is no Finder `.DS_Store` is the owner's: the five the build
 scaffolds, a recipe the owner adds under `recipes/`, a file in a folder of her own. The build leaves each alone, and `kit.json` lists all of them (`owned`).
 
 `kit.json` (schema 1): `kit` (the folder's name), `version`, `edition`, `plugin_version`, `content_sha`, `generated` (path in the kit to sha256, every generated file except `kit.json`
-itself, SKILL.md with its version in it), `owned` (the owner's files, see Owner files below) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
+itself, SKILL.md with its version in it), `owned` (the owner's files, see Owner files below), `sort` (the sort of the rules, see "The sort of the rules" under kit status; the last key, written by every build and optional when a `kit.json` is read: one from before the key has none) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
 and `FACTS.md`, each `null` when the project has none; `motion`, see Motion below; and `logos`: one sha256 over the logo files and the band drawings; and `masters`, one sha256 over the files below `assets/masters/`, a key that is there only when the project has such a file, so that
 the `sources` of a project without masters are the bytes they always were). `kitlib.load()` is strict: a key it does not know, at any level, and a key that is missing, stop it (exit 2) naming the key
 (`sources.masters` is the one key that may be missing).
@@ -2270,13 +2653,23 @@ or as the folder one belongs in, whatever it points at (a file or a folder of th
 (exit 1, never exit 2, "<path> (a link among your own files: never read through)", up to 6 paths named) and `--replace` moves the link itself to
 `removed-<date>[-n]/<its project path>`, never what it points at; one of the five whose path was such a link is scaffolded again. `kit check` never reads through it (`kit:owned`: "is no file the kit can read") and
 `kit status` is exit 3, because a copy cannot be listed from a file that is never read. `EXTENDING.md` has no fill marker. `voice.md`,
-`visual.md` and `golden-rules.md` each hold a heading with the brand's name, one sentence and one `[[fill: ...]]` marker (the note between the brackets holds no square bracket); `recipes/web-page.md`
-is the web-page recipe: seven numbered steps (the visitor's job and the page's idea, references, tokens and the brand files copied into the product's own public or static folder, the hero first with the web-design skill beside the kit, the page check, a cold read, and the samples marked before publishing), with no value, no link, no bullet and no fill marker. `kit.json` `owned` is `{path in the kit: sha256}` for every owner file: the hash of the file on disk or, for one of the five that is absent, of the scaffold the build writes; the five are always in it. `kitlib.load()` refuses
+`visual.md` and `golden-rules.md` each hold a heading with the brand's name, one sentence and one `[[fill: ...]]` marker (the note between the brackets holds no square bracket; the marker of `golden-rules.md` asks for the brand's rules sorted under `## Fixed`, `## Defaults` and `## Examples`); `recipes/web-page.md`
+is the web-page recipe: `## Fixed` (what SKILL.md and `golden-rules.md` fix, and claims), `## Defaults` with `### How we usually make one` (one sentence that says the steps are the brand's practice, to follow or to better, then seven numbered steps: the visitor's job and the page's idea, references, tokens and the brand files copied into the product's own public or static folder, the hero first with a web-design skill beside the kit, the page check where brand-creator and the brand project are at hand, a cold read, and the samples marked before publishing) and `## Examples` (the reference pages as one answer), with no value, no link, no bullet and no fill marker. The recipes scaffolded for masters (`recipes/ad.md`, `recipes/presentation.md`) have the same three headings, five steps and one fill marker. `kit.json` `owned` is `{path in the kit: sha256}` for every owner file: the hash of the file on disk or, for one of the five that is absent, of the scaffold the build writes; the five are always in it. `kitlib.load()` refuses
 a path that is no owner file (`kitlib.is_owner_path`: a plain path in the kit folder, not `kit.json` or a file the build writes, not below a generated folder, not a `.DS_Store`), a hash that is no sha256, and one of the five that is missing. `content_sha` covers these hashes, so an owner file
 added, edited or taken away moves the version at the next build and the same bytes keep it; a kit whose owner has added nothing has the `owned` it always had. The files are
-written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists after the generated files only the five, under
-"Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not, so that its list of files does not depend on what the owner has written; a recipe or file she adds is named
-nowhere in SKILL.md, and a session in a product repository finds it through `EXTENDING.md`. SKILL.md still carries the version line, which moves when she adds, changes or takes away an owner file).
+written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them. SKILL.md names no owner file one by one: its map names `golden-rules.md`, `visual.md`,
+`voice.md`, `EXTENDING.md` and the folder `recipes/`, the same whatever the owner has written, and a session in a product repository finds a file she added there or through `EXTENDING.md` (SKILL.md still carries the
+version line, which moves when she adds, changes or takes away an owner file).
+Two more recipes are scaffolded once the approved masters call for them (`kitlib.scaffolds`, `MASTER_SCAFFOLDS`): `recipes/ad.md` when `assets/masters/masters.json` (written by `masters approve`) lists an entry of
+kind `ad`, `recipes/presentation.md` when it lists one of kind `slide`, `deck-html`, `deck-pdf` or `deck-pptx`. Each is five numbered steps with no value (start from an approved master, `brand/assets/masters/README.md`;
+keep its canvas and layout; claims from `facts.json`; nothing outside the canvas and no text covered, a PowerPoint deck checked in PowerPoint and never Keynote; anything new a proposal) and one fill marker,
+and is written once, never overwritten, and written again when deleted while `masters.json` still lists the kind, like the five. `kit.json` `owned` lists them then; `kitlib.load()` still requires only the five.
+Masters with no `masters.json` (placed by hand) get no scaffold. A `masters.json` with a problem stops the build (exit 1), naming the first one and `masters approve`.
+
+**Checklist.** `checklist.md` (`kitlib.checklist_md`) is built from `rules.json` and a few fixed lines the plugin holds for every brand, and from nothing else. Its opening line says a "no" on a fixed line is fixed and a "no" on a default is a choice with a reason (`golden-rules.md` says which rules are defaults; a rule it does not sort is fixed). Sections, each left out when it has no item:
+`## Logo` (the logo from its files; one line per size band, "Up to <max> px the <name> mark uses `<drawing>`." or, for a band of a named mark, "<mark> (<name>)"; the accent line of the size rule),
+`## Colour` (every colour a token role; one line per distinct pair kind and floor, "Every <kind> pair reaches at least <min>:1"), `## The owner's rules` (each G4 rule with its id), `## Words` (the forbidden words),
+`## Page rules` (each rule of the page block, with its id and its G4 words), `## Claims` and `## New things` (fixed lines, the last two "Anything the brand has not decided was decided in line with the fixed parts, and the hand-over says what was decided." and "Every fixed rule in `golden-rules.md` holds, and each default that was left has a reason you can state.").
 
 **What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report (or one that records no outputs), `kit.json` stands in, because it is the version's only home:
 its `generated` hashes, its own bytes as they are on disk, its `version` and its `content_sha`. A deleted report therefore resets nothing: the version goes on, and a file the last build wrote is not "edited by hand".
@@ -2305,10 +2698,14 @@ the `fontcheck` report (`assets/_checks/fontcheck.json`) is current (`_common.st
 - licence: `<recognised>`; only OFL fonts are copied (a default you may change): copy it into a product yourself, under its own licence
 - OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt
 - the fontcheck report has no family name: run `brand-creator fontcheck` again (also said, with "weight or style" for "family name", when the row has no weight or no style; a weight that is not a whole number from 1 to 1000 is no weight)
+- the fontcheck report was written before fontcheck read the weight range of a variable font: run `brand-creator fontcheck` again (the row has no `weight_range` key: the one weight it holds would declare a variable font wrongly, so the font is left out until the report is new)
+- the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again (a `weight_range` that is not `null` or two weights, the lower first)
+- the fontcheck report was written before fontcheck read the slant range of a variable font: run `brand-creator fontcheck` again (the row has no `slant_range` key: `font-style: normal` would declare a font that slants wrongly, so the font is left out until the report is new)
+- the fontcheck report holds a slant range for it that CSS does not take: run `brand-creator fontcheck` again (a `slant_range` that is not `null` or two whole numbers from -90 to 90, the lower first)
 
 `kit.json` `fonts.copied` lists `{file, licence, licence_files}` with paths in the kit. `snippets/fonts.css` is written when one font or more is copied, sorted by path. It opens with the comment
 `/* generated by brand-creator from assets/fonts/ and the fontcheck report; paths are relative to this file */`, a second comment that says to copy `brand/assets/fonts/` into the product's own public or static folder and to point each font source at the path the site serves it from (a built site does not serve `.claude/skills/`), then one `@font-face` per copied font with `font-family` (the report's `family`),
-`src: url("../brand/assets/fonts/<file>") format("<woff2|woff|truetype|opentype>")` (the path percent-encoded where a URL needs it), `font-weight` and `font-style` (both from the row). Nothing else
+`src: url("../brand/assets/fonts/<file>") format("<woff2|woff|truetype|opentype>")` (the path percent-encoded where a URL needs it), `font-weight` and `font-style` (both from the row) and `font-display: swap`. `font-weight` is the row's `weight_range` as `<lowest> <highest>` when it has one (a variable font: with one weight the browser holds the font at it and fakes the bolder ones), else its `weight`. `font-style` is `oblique <lowest>deg <highest>deg` from the row's `slant_range` when it has one and its `style` is `normal` (a variable font that slants: declared `normal`, the browser fakes its italics; with the range, upright text stays upright and italic text takes the font's own slant), else its `style`. Nothing else
 is set. `kit.json` always has the key `fonts` (both lists empty when there are no fonts) and `sources.fonts`: one sha256 over the font files, the licence texts and the `fontcheck` report, or `null`
 when `assets/fonts/` holds no font file. Row `kit:fonts`: pass when every font is copied; warn when one is not (the kit is still written); skipped when there is no current `fontcheck` report (the kit
 is written without any font and the build exits 3). No fonts means no row. The report's inputs add the font files, the licence texts and the `fontcheck` report, so a changed font makes the `kit`
@@ -2341,7 +2738,7 @@ a `<style>` block that switches as `tokens.css` does: light shows by default, `:
 `:root:not([data-theme="light"])`. The only declaration in it is `display: none` on the image that is not shown, so no size, colour, spacing or visible `display` value is set and the page's own
 rules keep the image that is shown. It adds no key to `kit.json`: the snippet is made from the logo file names and the brand name, which `sources.logos` and `adapter_state_sha` already cover.
 
-**Rules and facts.** `rules.json` and `facts.json` sit at the top of the kit folder, are generated like every other file (locked by `kit.json`, listed in the kit section of SKILL.md, covered by
+**Rules and facts.** `rules.json` and `facts.json` sit at the top of the kit folder, are generated like every other file (locked by `kit.json`, named on the map of SKILL.md, covered by
 `kit:file`) and are written with `indent=2`, no ASCII escapes and a trailing newline. Both are always written.
 
 - `rules.json` (schema 1): `edition` (`approved_edition`, a string); `g4`, the recorded "(rule)" lines of BRAND-STATE.md "Rules (G4)" (the reading of `adapt.view`: a line with a `(...)` placeholder is no
@@ -2404,7 +2801,7 @@ be trusted, and the build reads nothing for them until the checks pass. A projec
   does not copy is not given a copy of its own. Row `kit:reference-pages` then warns, naming the font, how the page has it (`loaded at <file>:<line>`, or `sits in the page folder`) and why it is not copied. In the kit `kit check`
   warns on the link (`kit:links`) instead of failing it: the font is listed in `kit.json` `fonts.not_copied`, so it must be supplied under its own licence.
 - `reference-pages/<id>/notes.md` is generated (`kitlib.notes_md`): `# <id>`; `Layout: <the page's layout> (structure only)` (an id of `page-layouts.json`, or `own:<word>`); `Approved: <site.json approved>`; `Page: [index.html](../../brand/site/<id>/index.html)`;
-  `Stills: ` the links to the stills (`[1440-light](...)`, `[full page](...)`, each percent-encoded where a URL needs it); and `## Choices`, one bullet for each choice whose `pages` names the page (a choice with no `pages` names every
+  `Stills: ` the links to the stills (`[1440-light](...)`, `[full page](...)`, each percent-encoded where a URL needs it); and `## Choices`, two sentences that say a `[rule: site:<id>]` choice is a default unless one of the brand's own files lists it under Fixed, and an `[example]` choice is an example as the page itself is (left out when no choice names the page), then one bullet for each choice whose `pages` names the page (a choice with no `pages` names every
   page): `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example, in the record's order; a page no choice names says so in one plain line. The words are the owner's, so they are
   written (`kitlib.note_text`) so that `kit check` reads in a note only what the note says, as Markdown shows it: white space is collapsed and a control character is a space; the first bracket of `[[fill`, `[rule:` and `[example]` is
   `&#91;`, the `(` after `]` and after `var` is `&#40;`, and `{a.b}` is `{{a.b}}` (the doubled braces are the placeholder spelling `kit:numbers` leaves alone). A value on a bullet is cited by the bullet's own tag. On the lines that have no
@@ -2417,6 +2814,14 @@ be trusted, and the build reads nothing for them until the checks pass. A projec
 - The report's inputs add `site/site.json`, the files of the page folders, the files they load and the page-check report of each page, so a page checked, captured or approved again makes the `kit` report stale. Row `kit:reference-pages`: pass,
   with the number of pages and their ids, when each is copied; warn when a page loads a font that is not copied (above); info "no approved reference pages" while the project has none. A reference page's notes are judged by `kit check`
   like a recipe (`kit:tags`, `kit:numbers`: their bullets are the page's choices).
+
+**Platform files.** Every file the manifest records for `emit web`, `emit social` or `emit profiles` (the favicon, the touch, PWA and maskable icons, `site.webmanifest`
+and `head.html`, the Open Graph card, the GitHub preview, the README headers, the avatars and the banners) is copied byte for byte to `brand/<project path>`; the
+proofs (`_proof/`) and the card pages (`_build/`) are not in the manifest, so never in the kit. A file that is gone, or whose bytes are not the ones its emitter
+recorded, stops the build (exit 1) with the emitter to run again. `kit.json` `sources` gets a `platform` key (one sha256 over the paths and their sha256, as the other
+sources) only when the manifest lists such a file, so a kit without them is the bytes it always was; each file is an input of the `kit` report, and the map has a row
+"the web icons, social images and profile pictures" naming the folders the kit holds. `kit:links` does not read `assets/web/head.html` (and `assets/web/<id>/head.html`):
+it is pasted into a page's `<head>`, and its links are the site's own root URLs.
 
 **Masters.** `assets/masters/` is a project folder the plugin knows: the masters the owner approved (an ad, a deck and other templates, with their pictures, PDFs, PPTX and the fonts they ship). Only approved masters belong in it:
 the plugin cannot know which are approved, so everything in the folder goes into the kit. Everything below it, at any depth, is copied byte for byte to `brand/<its project path>` (`brand/assets/masters/ad/index.html`),
@@ -2463,7 +2868,8 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
 ### kit check
 
 `kit check` (`scripts/kit.py`; the checks are `scripts/adaptlib/kitlib.py`: `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes`, `owned_changes`) proves that the kit in the project is whole,
-and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. Exit 0 pass, 1 a row failed, 3 a row is not verified
+and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. With `--all` (since 0.11.1), after the rows it also prints every
+line `kit:tags` and `kit:numbers` fail, one per line under "every line kit:tags fails (N):" and "every line kit:numbers fails (N):" (or "--all: no tag or value problem to list"); the rows themselves name the first six, and the report is the same with or without it. Exit 0 pass, 1 a row failed, 3 a row is not verified
 (skipped). Exit 2: no kit in the project, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)"; a `kit.json` that `kitlib.load()` refuses (a key it does not know or a key that is missing, named); a `kit.json`
 that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report is not rewritten and stands. What `check`
 then says of it depends on the file. A `kit.json` that `kitlib.load()` refuses has other bytes than the report read, so the report is stale. A `kit.json` that is a link leading to the same bytes leaves the report
@@ -2482,7 +2888,7 @@ Rows, in this order:
 - `kit:links`: every relative link of a `.md` file (`](target)`, outside fenced code blocks and code spans), a `.html` file (`src=`, `href=`, `xlink:href=` and `srcset=` of a tag, so not a comment or a script; a `srcset` is read by the HTML rule for it: a URL is the run up to the next white space, a comma ends the candidate when it ends the URL or follows its descriptor, so `a.svg 1x,b.svg 2x` and `a.svg, b.svg` hold two targets and `a.svg,b.svg 2x` one) and a `.css` file
   (`url(...)`, comments left out) anywhere in the kit resolves to an existing file inside the kit, with the letter case that is there (a Mac finds `Mark.svg` for `mark.svg`, Linux does not) and no link on the way. The target is
   percent-decoded and resolved from the folder of the file that holds it. A fragment, a `?query`, an empty target, `//host` and a target with a URL scheme (`http:`, `https:`, `mailto:`, `data:`, `tel:`) are not relative links and are
-  not judged. Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or a folder. A target that names a folder
+  not judged; nor is a target that holds a template's `{{...}}` field (`{{logo_url}}` in a print or ad template, filled where the template is used; since 0.11.1), which a passing row counts ("1 template placeholder ({{...}}) is no link and is left as it is"). Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or a folder. A target that names a folder
   (`../brand/site/pricing/`, with or without the last slash) is the folder's `index.html` when the kit has one there, as a web server answers it; a folder without one fails ("a folder, not a file"). The first 6 are listed as
   `<file>:<line> -> <target>` with the reason. A link to a font that `kit.json` lists in `fonts.not_copied` (the path in the kit is `brand/<its project path>`, spelled letter for letter, and the font is not in the kit) is no broken
   link and no pass: the row is a warning (exit 0) that says the font must be supplied under its own licence, copied into the product from where it was licensed, and lists the first 6 as
@@ -2493,6 +2899,7 @@ Rows, in this order:
   `approved_edition` ("the kit is of edition X, the brand is at Y: run `brand-creator kit build --yes`").
 - `kit:plugin`: warn when `plugin_version` is not the running plugin's (pass otherwise). It never changes the status.
 - `kit:sources`: skipped (not verified) when `kitlib.sources(project)` differs from `kit.json` `sources`, naming the keys that changed (`masters` when a master was changed, added or taken away) and "run `brand-creator kit build --yes`"; also when a source cannot be read.
+- `kit:behind`: a warning, and a row only when it has something to say: the tokens (`tokens`, `tokens_css`), FACTS.md (`facts`) or the state the adapters read (`state_sha`) changed since the last build (`kitlib.source_changes`, restricted to `kitlib.BRAND_SOURCES`) and an owner file is still the sha256 `kit.json` `owned` recorded (`kitlib.behind_files`: nobody touched it since the build, so it was written against the brand the kit was built from). The detail names every file (never "and N more"; `EXTENDING.md`, the plugin's guide, is left out) and the changed sources by file name (tokens.json, tokens.css, FACTS.md; `state_sha` also hashes FACTS.md and the motion spec, so it is named "BRAND-STATE.md or the motion spec", and when FACTS.md changed too only "(and possibly BRAND-STATE.md or the motion spec)", `kitlib.behind_names`); a `kit build` that cannot read the existing `kit.json` prints a note that which owner files are behind is not verified; it never edits a file. `kit:sources`, when the brand changed, says to read those files before building. A file edited after the build is `kit:owned`'s and is not named here (which brand it was written against is not known). A source that cannot be read adds no row (`kit:sources` says so). The next `kit build --yes` records the files and the sources again, which clears the row; so it prints one `note:` line naming those files before it does (read from the old `kit.json`), and records them as they are, never edited. `kit build` itself never overwrites an owner file (it is scaffolded once) and stops on a generated file or applied-skill `SKILL.md` edited by hand, unless `--replace` moves it aside
 - `kit:owned`: warn when an owner file differs from `kit.json` `owned` (`kitlib.owned_changes`: the five scaffolded files first, then the others sorted): "changed since the last build: `brand-creator kit build --yes` records it and moves the version on", "was added since the last build"
   (a file of the owner's `owned` does not list) and "was removed since the last build" (one of hers, other than the five, that `owned` lists and the kit lacks), both with the same advice, "is missing" (one of the five: the build writes the scaffold again), or
   "is no file the kit can read" (a folder or a link, never read through). It never changes the status. Pass: "the <n> owner files are as the last build recorded them".
@@ -2532,7 +2939,7 @@ Rows, in this order:
      used (... is outside the project ...): `brand-creator kit build --yes` after fixing it", and not hashed, even when the file it leads to holds the same bytes.
   2. Skipped, "not verified: the tokens or rules changed since this page was checked: run `brand-creator page-check site/<id>/index.html` and `brand-creator capture site/<id>/index.html`, then `brand-creator kit build --yes`":
      the page-check report is stale, that is a file it was made from is gone or changed (`stale_inputs`, the one rule `check` applies, over every file the report lists: the built tokens, `qa/rules.json`, `FACTS.md`, the G4 rules
-     of `BRAND-STATE.md`, the logo files, the page, and each project file the browser was served for it, such as its stylesheets, images and fonts; so an edit of the page's own `site.css` gives this message too).
+     of `BRAND-STATE.md`, `brief/BRIEF.md` and `research/cliches.md` when they exist, the logo files, the page, and each project file the browser was served for it, such as its stylesheets, images and fonts; so an edit of the page's own `site.css` gives this message too).
   3. Skipped, "not verified: the page-check report of site/<id>/index.html cannot be used (...)": it is missing, cannot be read, is the report of another target (`target.page`) or does not list the page among its inputs.
   4. Fail, "site/<id>/index.html fails its page check (<the failing rows>; see <report>)": the report is current and its status is `fail`. A failure is not hidden behind a stale `capture.json`, nor behind inputs that differ from the kit's.
   5. The same two skips for `capture.json` ("not verified: the stills of site/<id>/index.html cannot be used (...)": missing, unreadable, the capture of another page, or the page not among its inputs).
@@ -2554,8 +2961,10 @@ report is a failing or not verified `check`. The row `kit:checked` says not veri
 ### kit status
 
 `kit status [--repo DIR[=LABEL]]... [--json]` (`scripts/kit.py`; the comparison is `kitlib.compare(kit_dir, installed_dir)`) says whether the copy of the kit in each product repository is current. It reads
-`<DIR>/.claude/skills/<slug>-brand/` and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
-implementer from the copy list this command prints ([ADR-0011](../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md)); a script never writes outside the project. `DIR` is read as `survey --repo` reads it
+`<root>/.claude/skills/<slug>-brand/`, `<root>` being the root of the git work tree `DIR` is in (`kitcopy.repo_root`: the nearest folder at or above it holding `.git`, where `install.py` copies the kit), or `DIR` itself
+when it is in none, and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
+kit's own installer, `install.py`, which judges by this very comparison (`kitcopy.compare`; see kit: install.py below,
+[ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)); the plugin's own scripts never write outside the project. `DIR` is read as `survey --repo` reads it
 (a label after the last `=`, the folder's name when there is none; a relative `DIR` is relative to the working folder). Without `--repo`, every repository that has a `kit` row in `adoption.json` is read, each once, at the
 path the adoption list stores for it; with no such row the exit is 2, "pass --repo DIR (repeatable)".
 
@@ -2570,12 +2979,24 @@ Per repository, one of three states (`--json`: `state`):
   The list of files left over says what to do with them: they are not on the copy list; the implementer moves each to `removed-<date>/<kit folder>/<its path in the kit>` in the repository, and nothing is deleted
   (a script never writes there). A copy is current once that is done.
 
-Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an installed kit's owner files are the repository's own, and an update copies one only where the
-repository has none. The owner files are every owner file of the project's kit folder (`kitlib.owner_paths`: the five scaffolded ones and each file the owner added, in a recipe folder or one of her own), read from the folder as it is now, not
-from `kit.json`; a file of another kind than Markdown is among them. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
-so a copy that stops half way is not vouched for), then the owner files the repository lacks: the five in their order (`EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md`, `recipes/web-page.md`), then the others sorted. A file of hers the repository has with other bytes is reported ("owner files that differ (kept on update)") and not copied, as for the five. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
-repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
+Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an owner file the repository changed or added is its own and is never copied over.
+
+The sort of the rules (ADR-0016). `kit.json` `sort` is `{fixed: [line], default: [line], example: [line]}`: the bullets and numbered lines of `golden-rules.md` outside its code fences, each without its list marker and with single spaces, in the order of the file (`kitcopy.sort_of`). The heading a line stands under is its weight (`## Fixed`, `## Defaults`, `## Examples`, in any case; a deeper heading changes nothing); under any other heading of level 1 or 2, or none, the tag decides: a line that cites a rule of the brand is fixed, one that cites only choices of a reference page (`[rule: site:<id>]`) is a default, one tagged `[example]` alone is an example, and a line with no tag is fixed. The build reads the file it records in `owned` (the scaffold where the file is absent). `kit status`, and the kit's `install.py` with it, compare that record with the `golden-rules.md` the repository holds and print, under "rules the repository's golden-rules.md sorts differently (the brand's sort is kit.json `sort`; the file is the repository's and is kept on update)", each line of the brand's sort that has another weight there (`<line> (<weight> in the kit, <weight> in the repository)`) or is no longer there as the brand wrote it (`<line> (<weight> in the kit, not in the repository's file)`), in the order of the brand's sort (`--json`: `sort_differ`, `[{line, kit, repository}]`, `repository` `null` for a line that is gone). A reworded line is one that is gone; a line the repository added is its own and is not listed. Nothing is listed when the project's `kit.json` has no `sort` (a kit built before the key) or the repository has no `golden-rules.md` to read (a file it deleted is listed among the owner files that differ). It changes neither the state nor the exit code, and the file is never copied over: the section names what the repository changed of what binds every product, and whoever maintains the brand decides what follows.
+Each owner file is judged against the `owned` record of the repository's own `kit.json` (`kitcopy.owner_state`, `kitcopy.installed_owned`): one the repository lacks and that record does not list is copied; one that record lists and the repository no longer has was taken out by
+the repository, its own change, and is not copied back (since 0.11.1; listed as "<path> (deleted in the repository)" among the owner files that differ, `--json`: `owner_differ` with `why` `missing`); one whose bytes are the hash that record holds
+(the repository never changed it since it was copied) and differ from the project's is updated ("owner files to update (unchanged in the repository since the last copy)", on the copy list as
+`<path> (owner file, an update)`); anything else is the repository's own. An owner file that record lists, unchanged in the repository, that the project's kit no longer has is left over (`owner_left_over`), and is
+moved like the generated files left over. A repository `kit.json` that is no plain file, no JSON object, of another schema or without an `owned` object counts as no record: no owner file is updated or moved then. The owner files are every owner file of the project's kit folder (`kitlib.owner_paths`: the five scaffolded ones and each file the owner added, in a recipe folder or one of her own), read from the folder as it is now, not
+from `kit.json`; a file of another kind than Markdown is among them. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing), then the owner files the repository lacks:
+the five in their order (`EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md`, `recipes/web-page.md`), then the others sorted, then the owner files to update, and `kit.json` last of all, so a copy that stops half way is
+not vouched for and the next run finishes it (an owner file copied before `kit.json` is then the project's bytes, never taken for the repository's own). A file of hers the repository has with other bytes is reported ("owner files that differ (kept on update)") and not copied, as for the five. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
+repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], sort_differ: [{line, kit, repository}], update_owner, owner_left_over, other_skills, global_skills, copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
 and `copy_owner` names the owner files in it, and `left_over_to` says where the files in `left_over` go in the repository (`removed-<date>/<kit folder>/`, with the literal `<date>`), `null` when none is left over.
+
+It also warns when the repository's `.claude/skills/` holds another skill for the same brand (`kitcopy.other_brand_skills`: a folder other than the kit's whose SKILL.md front matter names the brand in its `name:`
+or `description:` value, as a whole word, case folded and without accents (Lakowo finds Łąkowo), also when the value goes on over several lines (a YAML block); the brand is read from the kit SKILL.md's `# <brand> brand` heading): "warning: .claude/skills/<folder>/ is another skill for <brand>: Claude may
+load either; taking it out is yours" (`--json`: `other_skills`). Since 0.11.1 it also reads `~/.claude/skills/` the same way (`kitcopy.global_brand_skills`, a global copy of the kit itself included): "warning:
+~/.claude/skills/<folder>/ is a global skill for <brand>: Claude loads it in every project; taking it out is yours" (`--json`: `global_skills`). Neither warning changes the state or the exit code.
 
 It proves it read only, as the survey does: the installed kit folder is listed with the path, kind, size and modification time of every entry (`kitlib.folder_state`, no link followed) before and after the comparison, and a
 difference exits 1, naming the repository on stderr, without the "read only" line. Nothing in a link is read: a link where a generated file belongs is a file that differs, and a link in a generated folder is left over.
@@ -2584,7 +3005,27 @@ Exit 0 when every repository is current (and unchanged while read). Exit 1 when 
 `kit.json` that is a link, or one `kitlib.load()` refuses); no `--repo` and no kit row; a folder that does not exist; the project itself or a folder inside it; the user's home folder (`Path.home()`) or any path inside
 `~/.claude` ("the kit goes into one product repository at a time, never into a global skills folder"), also when the repository's kit folder leads there through a link; a repository whose kit folder is a link. Exit 3: the kit
 in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records, or a link sits among the owner's files), because a copy cannot be judged against a kit that is not what it says: run
-`kit check`, then `kit build --yes`.
+`kit check`, then `kit build --yes`; and an owner file `kit.json` `owned` does not record with its bytes ("changed since the last build", "was added since the last build"), because the copy's `kit.json` would not record it
+as copied and a later update would take it for the repository's own: run `kit build --yes` first.
+
+### kit: install.py
+
+`python3 <kit folder>/install.py REPO [--yes] [--json]` is `scripts/adaptlib/kitcopy.py`, copied into every kit by the build: the Python standard library only (no plugin module, which a test checks), so a copy of the kit, or a
+clone of a brand project's mirror, installs with no plugin present. REPO is any folder inside a local git clone (the nearest folder at or above it holding `.git`); the kit goes to `<repository root>/.claude/skills/<kit>/`, `<kit>` being the name its `kit.json` states
+(`kitcopy.kit_name`), whatever the folder the kit was copied into is called.
+Without `--yes` it prints what `kit status --repo` prints for that repository and "run again with --yes to copy", or, where `--yes` would refuse (a folder that is no kit, a newer version installed), "--yes refuses this: <why>" (exit 0 when current, 1 otherwise). With `--yes` it copies by the copy list, in its order, each file written to a
+temporary name beside it and then moved into place, `kit.json` last; it first moves aside, into `removed-<date>/` of the repository (the first of `removed-<date>-2/`, `-3/` in which none of the paths is taken), keeping each path
+below the kit folder: the files left over (`left_over`, `owner_left_over`), a file the repository's own `kit.json` records as an owner file where this kit now writes a generated one, a file other than `kit.json` where this
+kit writes a generated one that the repository's `kit.json` does not record as generated (every such file when that `kit.json` cannot be read) and whose bytes are not the kit's (the repository's own), and a folder or
+link where a file goes. Nothing is deleted. It then compares again: current with nothing left to copy prints `installed: <kit folder> (version V)` and `next: review and commit it in <repository>` (exit 0); otherwise what is left (exit 1). `--json` prints one
+repository's entry of `kit status --json` with `applied` and `moved` added. The date is `BRAND_CREATOR_TODAY` when set, else today's. It never commits, never makes a branch and never pushes.
+
+Exit 2, with nothing written: a URL (clone it first), a REPO that is no folder, the kit's own folder or a folder in it, for a kit that sits in `<project>/.claude/skills/<name>/` that project or a folder in it,
+the git repository the kit sits in ("is the repository this kit sits in", a brand project inside a larger repository included), a kit whose `kit.json` states no kit name, one outside any git work tree, the home folder or a path inside
+`~/.claude` (never a global skills folder), a kit folder in the repository that is a link, and, with `--yes`: a kit folder that is there but holds no `kit.json` and is no first copy of this kit that stopped before
+`kit.json` (`kitcopy.partial_copy`: nothing but folders and this kit's files with its bytes; that one is finished), a repository whose `kit.json` states a newer version than this kit's ("holds version A, newer than
+this kit's B: update this clone of the brand project first (git pull)"; to go back on purpose, the owner moves the kit folder away; without `--yes` the plan says it), or a link anywhere on the way of a file it would write or move (`.claude`, `.claude/skills`, the kit folder or a folder in it, the `removed-<date>/` folder): every path is checked before the first file
+is moved or written, and nothing is written or moved through a link. Each file is written through a new temporary file of its own (`tempfile.mkstemp`), never a name that was there before, and gets the permissions of a new file (0666 less the umask; 0777 less it when the kit's file is executable), never mkstemp's owner-only 0600. A file that cannot be moved aside (another install at the same time, a folder that cannot be written) stops the run with exit 1 and a line naming it, never a traceback; nothing of the kit is written by then. Exit 3: no `kit.json` beside it, or a kit that is not whole or whose owner files changed since its last build (as for `kit status`). `/brand-creator:brand-adopt` runs it for a Brand kit row ([ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)).
 
 ### launch-todo
 
@@ -2658,7 +3099,8 @@ is the Icon Composer layout canvas and stays the ictool export size for `--previ
 carries `UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): ` and a person must check the size in Xcode before the pack is relied on.
 
 **`emit profiles`** (`emitters/profiles.py`, template `templates/profile/banner.html`, report `emit-profiles`; every tier: the Quick tier writes the two avatars only and an info row says the banners are Standard; gate G3). It writes under
-`assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred) and one image per platform at its row's size
+`assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred on the ground of `qa/rules.json` `icons.ground`; with
+`drawing` the drawing sits on its own ground at the largest share up to 1.0 whose ink stays inside the safe circle, unless `--content-fraction` is given, and the safe-circle gate measures only what sits on its own ground) and one image per platform at its row's size
 (`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the brand's drawn lettering, plus one FACTS.md line with `--tagline`,
 laid out inside the row's `safe` rectangle, 24-bit PNG). The lettering is `--logo-svg`, else `assets/logo/lockup.svg` (it stands alone), else `assets/logo/wordmark.svg`
 (set next to the mark), shown as an image (`{{lettering}}`, `{{layout}}` = `lockup`, `wordmark` or `type`). Whether a file is a lockup or a wordmark comes from
@@ -2672,7 +3114,7 @@ pixel stays square: the mark (card.html's `{{mark_size}}`, the banner's `{{mark_
 side-by-side image; at a fixed icon size the band's drawing decides. The accent line under the name has square ends too: the cards
 (`card.html`), the banners (`banner.html`) and the side-by-side image (`lineup.html`) take `{{rule_radius}}` for its `border-radius`, which
 is 0 when everything drawn on the card is pixel art (the mark unless a lockup stands alone, the lettering unless the name is typed; on the
-side-by-side image every mark) and the template's own round ends otherwise (`1vh` on a card, the line's height on a banner and the image).
+side-by-side image every mark) or when the brand's corner radius tokens (`radius.*` in `tokens.json` `other`) are all 0, and the template's own round ends otherwise (`1vh` on a card, the line's height on a banner and the image).
 A template of a project that has no `{{rule_radius}}` keeps its own `border-radius`. With several marks, each follows the rules of Several marks. Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
 
 - **The gate comes before the files.** The avatar's ink must lie inside the `safe_circle` share of the circle (default box: the largest, up to 0.7 of the canvas, that fits; `--content-fraction` sets it
@@ -2701,12 +3143,14 @@ case folder that holds another proof's stills; 3: it could not run) leaves no fa
 idempotence reports (a book built before them is stale once they are rewritten, and `check` says "not verified") and the kit holds `book.pdf`; the book's file list leaves the kit out. A value set for a step the tier does
 not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 before any step runs. Every emit step except the press kit is in the idempotence run.
 
-**The last lint.** After the press kit, the chain lints the board of the latest round again (`board-lint rounds/rN/board.html` of the highest N, the board `check` looks for; when that round has no `board.html`, no step), then runs `staleness --write` and `check`. The lint report of a pick
+**The adapter files.** After the press kit and before the last lint, the chain writes the brand's generated adapter files again (opt-in at G5): `check` treats BRAND.md, DESIGN.md, the applied skill and the kit as generated, so a token, `FACTS.md`, `BRAND-STATE.md` or `motion/motion.json` that changed after they were written leaves each report stale and `check` not verified until the matching command is run by hand. Four commands, each only for what the project has: `adapters` with the options of `ADAPTERS_ARGS` (a variable of block 2, split on spaces, for example `--brand-md --design-md --primary accent`; an environment variable of the same name overrides it) when BRAND.md or DESIGN.md is in the project; then `applied-skill --yes` when `.claude/skills/<slug>-brand/SKILL.md` is there and `kit.json` is not, or, when the skill folder holds a `kit.json`, `kit build --yes` and, once the build exited 0, `kit check` (a built kit makes the last `kit-check` report stale, and `check` expects one). The folder is the slug's, as `check` finds it: a skill folder of another name is not the brand's. The slug is read with `state --get slug`: a slug that is not set (exit 1, "slug is not set in BRAND-STATE.md") means no skill folder; any other failure of that command (a `BRAND-STATE.md` that cannot be read, a usage error) is a failed step said with state's own message, so nothing is guessed about the skill, `check` still runs and the chain ends with a non-zero exit code, as for a refusing refresh. The options of `adapters` (`--primary`, `--bm-type`, `--bm-architecture`) are the owner's choices and nothing records them, so a BRAND.md or DESIGN.md with an empty `ADAPTERS_ARGS` is not written again and the step says which variable to set (`adapters: skipped (...)`); a project with none of the four runs no command and says so (`adapters, applied skill, kit: skipped (...)`). A command that refuses (a hand-edited file, a package that is not installed, an exit 3 that is not verified, no approved edition) is a failed step, like a board the lint refuses: its output is shown, then `finish.sh: step failed: <command> stopped with exit N: <its own message>.` (the last `error:` line of its output, else `the reason is printed above`) `The chain goes on, so that check still writes the pack report`; a refused `kit build` is not followed by `kit check`; the chain runs `staleness --write` and `check --refresh`, and ends with the exit code of `check` when that is not 0, else (`finish.sh: check passed, but a step failed (<command>): the chain ends with exit N`) with the exit code of the first failed step of the chain, so that a refused step never ends in a pass and a refused board, which comes later, does not hide it.
+
+**The last lint.** After the press kit, the chain lints the board of the latest round again (`board-lint rounds/rN/board.html` of the highest N, the board `check` looks for; when that round has no `board.html`, no step), then runs `staleness --write` and `check --refresh`, so that a report this chain's own steps made stale (page-check, contrast, book-lint, kit-check, board-lint; see check --refresh) is run again before `check` judges it and the chain never ends on it (a failed step still ends the chain non-zero, as below). The lint report of a pick
 board lists `FACTS.md`, `brief/BRIEF.md` and `research/cliches.md` as inputs and `check` wants a report that is current for the latest round, so an edit of the facts or the brief since the last lint would otherwise turn `check` not verified. A lint that exits 1 or 3
 after it printed `report: <path>` goes on (`finish.sh: board-lint failed on <page> (see above); ...` or `finish.sh: board-lint could not verify <page> (see above); ...`), and `check` fails the report or says why; any other exit (a board the lint refuses with exit 2, such as a `board.html` that is a link to a file outside the project,
 or a lint that wrote no report, such as one that crashes) leaves no report of this board for `check` to gate. That does not stop the chain, which would leave no pack report at all: it says
 `finish.sh: step failed: board-lint <page> stopped with exit N and left no report of this board: <the lint's own message>. The chain goes on, so that check still writes the pack report`,
-runs `staleness --write` and `check` (which says the board is not verified), and ends with the exit code of `check` when that is not 0, else (`finish.sh: check passed, but a step failed (board-lint <page>): the chain ends with exit N`) with the exit code of the lint,
+runs `staleness --write` and `check --refresh` (which says the board is not verified), and ends with the exit code of `check` when that is not 0, else (`finish.sh: check passed, but a step failed (board-lint <page>): the chain ends with exit N`) with the exit code of the lint,
 so a refused board never ends in a pass.
 
 ## Agents and workflows
@@ -2732,6 +3176,21 @@ so a refused board never ends in a pass.
   the arguments, an agent would run above the session model or an agent type is unknown, 2 = usage. `fleet-plan --check`
   runs the static checks over every workflow and agent file (exit 1 on any problem). It writes no report: it is a plan, not a
   gate over project artefacts.
+- **Costs in tokens** (`skills/brand-creator/references/fleet-costs.json`, schema 1; `fleet-plan --costs <file>` reads another table). The
+  table is `{"schema": 1, "note"?, "rows": [...]}`; a row is `{id, agent, workflow, what, per, tokens_k, calls?, measured, source}`: `id` a
+  lower-case slug used once; `agent` an agent of `agents/`; `workflow` one of `workflows/` or `null` (a fleet that runs in the thread, with no
+  plan to print); `what` the use that was measured; `per` `"call"` or `"round"` (a row of a workflow is `"call"`); `tokens_k` `[low, high]`
+  in thousands of tokens with `0 < low <= high` (one figure has both the same); `calls` the number of calls measured, a whole number from 1;
+  `measured` a real date `YYYY-MM-DD`; `source` the run it came from, in words (no client name or path: the table ships). An unknown key
+  anywhere, or two rows for one agent in one workflow, is a problem. The plan gives each call the row whose `workflow` is the planned
+  workflow, whose `agent` is the call's agent and whose `per` is `"call"`: its line ends `tokens: about <low>-<high>k (measured <date>)`
+  (`about <n>k` when low and high are equal), and every other call says `tokens: not measured`; a figure of one use of an agent is never
+  printed for another. The `rough cost:` line adds up the measured calls (`about <low>-<high>k tokens in total (<n> agents)`, or `... for
+  the <m> measured agents, <n-m> not measured`, or `tokens are not measured for any of the <n> agents`) and the plan names each row it used
+  (`token estimates: <id> (measured <date>: <source>)`). `--json` carries `calls[].tokens` (`{row, low_k, high_k, measured, source}` or
+  `null`) and `tokens` (`{low_k, high_k, measured_agents, not_measured_agents}`, the two figures `null` when nothing is measured). A table that
+  cannot be read, is not JSON, or breaks a rule above exits 2 naming the file and each problem, before any plan is printed;
+  `fleet-plan --check` reports each as `FAIL <file>: <problem>` (exit 1) and keeps its `PASS|FAIL: <n> agents, <m> workflows checked` line.
 
 ## Agents and workflows: snapshots, fix runs and the verifier
 
@@ -2785,7 +3244,10 @@ commands. Conventions:
   that the gate now fails. A mutation that did not apply proves nothing.
 - **Skips are not passes.** A test whose prerequisite is missing is skipped with a loud NOT VERIFIED banner;
   `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure. Tests marked `requires_network` hit real services, are
-  not part of the default run (they are deselected, not skipped) and run only with `BRAND_CREATOR_LIVE=1`.
+  not part of the default run (they are deselected, not skipped) and run only with `BRAND_CREATOR_LIVE=1`. Tests marked
+  `costs_money` (a paid API: OpenRouter image generation, a billed run) are deselected unless `BRAND_CREATOR_PAID=1`; without it no
+  test, and no program a test or `tests/run-all.sh` starts, sees an `OPENROUTER_*` or `USE_LLM_DESIGN_*` variable, and a lookup of
+  `openrouter.ai` from a test fails.
 - **Network** is never touched by the default suite: HTTP, whois and DNS answers are replayed from `tests/fixtures/names/`.
 - **Not automatable here** (a person or a real session must look) goes to `docs/internals/manual-checks.md`; a manual check is never
   reported as passed by the suite.
@@ -2811,7 +3273,7 @@ commands. Conventions:
 ## Linux validation and CI
 
 - **Image.** `tests/docker/Dockerfile` is Debian 13 (pinned by version tag) with the distribution's Python 3.13, the official Node 24
-  tarball (SHA-256 checked), uv from its official image, resvg, ImageMagick, Ghostscript, poppler, ripgrep, potrace, fonts and the shared
+  tarball (SHA-256 checked), uv from its official image, resvg, ImageMagick, Ghostscript, poppler, ripgrep, rsync, potrace, fonts and the shared
   libraries of Chromium's headless shell, and a non-root user. The plugin and its data directory are not in the image.
 - **Run.** `tests/docker/run.sh` builds it and runs `tests/docker/in-container.sh` on a read-only mount of the checkout: copy to a
   scratch folder, `prereq --for full` (only `xcode` may be MISSING once setup ran), `setup --yes` into a data directory inside the
@@ -2819,13 +3281,11 @@ commands. Conventions:
   at the deadline `BRAND_CREATOR_SUITE_MINUTES`), then `tests/docker/verify_log.py`, which also fails a part that was asked for and left
   no summary. `docker run --init --ipc=host`; with `BRAND_CREATOR_TEST_OUT` the run log and pytest's JUnit file are kept.
 - **What counts as passing off macOS.** pytest and node:test have no failure, the smoke printed `SMOKE PASSED` (`emit apple` exit 3 with its
-  message), and every skip is a NOT VERIFIED skip with an expected reason: `not macOS`, `actool is not available`, `the claude CLI is not on
-  PATH`, and the missing denylist when `BRAND_CREATOR_DENYLIST` was not mounted. Any other skip is a bug. The exact counts and the banner
+  message), and every skip is a NOT VERIFIED skip with an expected reason: `not macOS`, `actool is not available`, the missing Android SDK and `the claude CLI is not on
+  PATH`. Any other skip is a bug. The exact counts and the banner
   are printed.
 - **Off-macOS opt-ins.** `downscale` needs `--renderer=pillow|resvg` (or a recorded opt-in), `emit tauri` needs `--renderer pillow`; tests, the
   smoke and `finish.sh` (`DOWNSCALE_RENDERER`, `ICNS_RENDERER`) name them. Usage errors (exit 2) are reported before "cannot measure here"
   (exit 3), so a bad call gives the same answer on every OS.
-- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started by a push to `main` or a pull request that changes that folder or the file, never by a tag): `linux-suite` (the Docker run, one job per part: pytest, node, smoke), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
-  it fails when the CLI cannot be installed), `macos-suite` (one job for the `requires_macos` and `requires_actool` tests with REQUIRE_ALL=1,
-  and one for each half of the Acme smoke, `ACME_SMOKE_PART=finish` and `rest`), and `brand-creator`, the verdict: it passes only when every other
-  job passed, and a release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed. It never runs `claude plugin eval`.
+- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started by a push to `main` or a pull request that changes that folder, the file or the release run's file, never by a tag): `validate` (`claude plugin validate --strict`, then the quick tests with REQUIRE_ALL=1, the one that needs a set-up data directory deselected by name;
+  it fails when the CLI cannot be installed) and `brand-creator`, the verdict: it passes only when every other job passed, and a release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed. No job of it runs on macOS or builds the Docker image; the full suite runs before each release (`docs/internals/manual-checks.md`, "Release run"), on a Mac with Docker or in `.github/workflows/brand-creator-release.yml`, which starts only by hand (`workflow_dispatch`): `macos` (on `macos-26`, REQUIRE_ALL=1: pytest in three shares of the test files from `tests/tiering.py shard`, then node:test and the smoke; no test left out), `linux` (`tests/docker/run.sh`: pytest, then node:test and the smoke) and its verdict `brand-creator-release`. Neither workflow runs `claude plugin eval`.

@@ -84,8 +84,9 @@ import re  # noqa: E402
 from helpers import mutate, mutate_json, report  # noqa: E402
 
 KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mark-animated.svg", "mark-dark.svg", "mark.svg", "wordmark-dark.svg", "wordmark.svg"]
-KIT_FILES = sorted(["SKILL.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
+KIT_FILES = sorted(["SKILL.md", "brand.md", "checklist.md", "install.py", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
                     *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
+KIT_N = len(KIT_FILES)                                                                   # the generated files of a plain Acme kit
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
 OWNER_FILES = sorted(["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"])   # the owner's files: scaffolded once, not generated, not in KIT_FILES
 
@@ -129,11 +130,11 @@ def test_the_kit_needs_g5_and_yes_and_writes_nothing_without_them(acme):
     assert bc("state", "--record", "G5", "approved (test)", project=acme).returncode == 0
     r = bc("kit", "build", project=acme)
     assert r.returncode == 2 and "--yes" in r.stderr and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
-    assert "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
+    assert f"would write {KIT_N} generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
     r = bc("kit", "build", "--plan", project=acme)
     assert r.returncode == 0 and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
     lines = r.stdout.splitlines()
-    assert lines[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)"
+    assert lines[0] == f"would write {KIT_N} generated files into .claude/skills/acme-brand/ (version 1.1)"
     kinds = [re.fullmatch(r"(generated|scaffold) (\S+) \((\d+) bytes(?:, written once, never overwritten)?\)", ln) for ln in lines[1:]]
     assert all(kinds), [ln for ln, m in zip(lines[1:], kinds) if not m]                      # every line after the first is a generated line or a scaffold line, nothing else
     assert sorted(m.group(2) for m in kinds if m.group(1) == "generated") == KIT_FILES
@@ -149,7 +150,7 @@ def test_the_kit_core_is_the_applied_skill_with_paths_inside_the_kit(pack):
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == KIT_FILES
-    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8") + (kit_of(pack) / "brand.md").read_text(encoding="utf-8")
     paths = re.findall(r"`(brand/[^`]+)`", skill)
     assert {"brand/assets/tokens/tokens.json", "brand/assets/logo/mark.svg", "brand/assets/logo/grid-mark.svg"} <= set(paths)
     for path in paths:
@@ -174,7 +175,7 @@ def test_the_kit_core_is_the_applied_skill_with_paths_inside_the_kit(pack):
     assert rep["kit_version"] == "1.1" and rep["version"] == kj["plugin_version"]          # the report's own `version` stays the plugin's
     assert sorted(rep["outputs"]) == KIT_FILES and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in rep["outputs"].items())
     assert rep["adapter_state_sha"] and rep["kit_sources_sha"]
-    assert written_row(pack)["detail"] == "15 generated files: 15 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: {KIT_N} written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.css", "assets/tokens/tokens.json", "qa/rules.json", "FACTS.md",
                                                   *[f"assets/logo/{n}" for n in KIT_LOGOS]}
 
@@ -185,7 +186,7 @@ def test_a_second_build_with_nothing_changed_is_byte_identical_and_keeps_the_ver
     r = build(pack)
     assert r.returncode == 0, r.stderr
     assert kit_state(pack) == first                                   # the same bytes, and no file was written again
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 0 written, {KIT_N} unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.1"
     assert not list(pack.glob("removed-*"))
 
@@ -225,7 +226,7 @@ def test_a_hand_edited_kit_file_stops_the_build_and_replace_moves_it_aside(pack)
     kept = pack / KIT_REMOVED / "brand/assets/tokens/tokens.css"
     assert kept.is_file() and "#f9f7ef" in kept.read_text(encoding="utf-8")
     assert list(pack.glob("removed-*/**/*")) and [p.relative_to(pack).as_posix() for p in pack.glob("removed-*/**/*") if p.is_file()] == [kept.relative_to(pack).as_posix()]
-    assert written_row(pack)["detail"] == "15 generated files: 1 written, 14 unchanged, 1 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 1 written, {KIT_N - 1} unchanged, 1 moved to removed-2026-10-17/; version 1.1"
     assert build(pack).returncode == 0                                # and the next build is quiet again
 
 
@@ -255,7 +256,7 @@ def test_a_file_put_into_a_generated_folder_stops_the_build(pack):
         assert not (kit_of(pack) / rel).exists() and (pack / KIT_REMOVED / rel).read_text(encoding="utf-8") == "mine\n"
     assert (kit_of(pack) / "my-notes.md").is_file() and not (kit_of(pack) / "reference-pages").exists()          # an emptied folder goes ...
     assert sorted(f.name for f in (kit_of(pack) / "snippets").iterdir()) == ["logo.html"]                       # ... one that still holds a generated file stays
-    assert written_row(pack)["detail"] == "15 generated files: 2 written, 13 unchanged, 3 moved to removed-2026-10-17/; version 1.2"      # SKILL.md and kit.json: my-notes.md is an owner file, recorded now
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 2 written, {KIT_N - 2} unchanged, 3 moved to removed-2026-10-17/; version 1.2"      # SKILL.md and kit.json: my-notes.md is an owner file, recorded now
     assert sorted(kit_json(pack)["owned"]) == sorted([*OWNER_FILES, "my-notes.md"])
 
 
@@ -269,11 +270,11 @@ def test_a_finder_ds_store_in_a_generated_folder_is_not_a_foreign_file(pack):
         (kd / rel).parent.mkdir(parents=True, exist_ok=True)
         (kd / rel).write_bytes(b"\x00\x00\x00\x01Bud1")
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and "DS_Store" not in r.stdout + r.stderr and r.stdout.splitlines()[0].startswith("would write 15 generated files")
+    assert r.returncode == 0 and "DS_Store" not in r.stdout + r.stderr and r.stdout.splitlines()[0].startswith(f"would write {KIT_N} generated files")
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "DS_Store" not in r.stdout + r.stderr and not list(pack.glob("removed-*"))
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 0 written, {KIT_N} unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert all((kd / rel).read_bytes() == b"\x00\x00\x00\x01Bud1" for rel in finder)                          # left where Finder put them
     assert not [rel for rel in report(pack, "kit")["outputs"] if "DS_Store" in rel] and not [rel for rel in kit_json(pack)["generated"] if "DS_Store" in rel]
     assert kit_json(pack)["version"] == "1.1"
@@ -306,7 +307,7 @@ def test_replace_moves_a_link_in_a_generated_folder_and_never_the_file_it_points
     assert (pack / "FACTS.md").read_bytes() == facts and outside.read_text(encoding="utf-8") == "outside\n"      # what the links pointed at stays where it was
     assert not (kit_of(pack) / "brand" / "notes.md").is_symlink() and not (kit_of(pack) / "snippets" / "far.txt").is_symlink()
     assert (pack / KIT_REMOVED / "brand" / "notes.md").is_symlink() and (pack / KIT_REMOVED / "snippets" / "far.txt").is_symlink()      # the links are in the backup folder
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 2 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 0 written, {KIT_N} unchanged, 2 moved to removed-2026-10-17/; version 1.1"
 
 
 def test_a_link_to_a_folder_inside_a_generated_folder_is_a_foreign_file_and_is_never_followed(pack):
@@ -327,7 +328,7 @@ def test_a_link_to_a_folder_inside_a_generated_folder_is_a_foreign_file_and_is_n
     assert (pack / KIT_REMOVED / "brand" / "linked-folder").is_symlink() and (pack / KIT_REMOVED / "brand/assets/tokens/tokens.css").is_symlink()
     assert not (kd / "brand" / "linked-folder").exists() and (kd / "brand/assets/tokens/tokens.css").is_file() and not (kd / "brand/assets/tokens/tokens.css").is_symlink()
     assert before == {f.relative_to(pack).as_posix(): file_sha(f) for f in assets.rglob("*") if f.is_file() and "_checks" not in f.parts}      # the project's own files, all there
-    assert kit_files(pack) == KIT_FILES and written_row(pack)["detail"] == "15 generated files: 1 written, 14 unchanged, 2 moved to removed-2026-10-17/; version 1.1"
+    assert kit_files(pack) == KIT_FILES and written_row(pack)["detail"] == f"{KIT_N} generated files: 1 written, {KIT_N - 1} unchanged, 2 moved to removed-2026-10-17/; version 1.1"
     shutil.rmtree(pack / "removed-2026-10-17")
     stale = {"brand/assets/tokens/stale.txt": "0" * 64}                                                  # recorded by the last build, no longer planned, and seen again through a link:
     (assets / "tokens" / "stale.txt").write_text("mine\n", encoding="utf-8")                              # the project's own file, not the kit's
@@ -463,7 +464,7 @@ def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
     assert "wordmark-dark.svg" in r.stdout and "removed-2026-10-17" in r.stdout          # said, not done quietly
     assert not gone.exists() and (pack / KIT_REMOVED / "brand/assets/logo/wordmark-dark.svg").read_bytes() == bytes_before
     assert kit_files(pack) == [f for f in KIT_FILES if f != "brand/assets/logo/wordmark-dark.svg"]
-    assert written_row(pack)["detail"].startswith("14 generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
+    assert written_row(pack)["detail"].startswith(f"{KIT_N - 1} generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.2"
 
 
@@ -492,7 +493,7 @@ def test_a_deleted_kit_report_keeps_the_version_and_blames_nobody_for_an_edit(pa
     r = build(pack)                                                                      # no change in the brand
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_json(pack)["version"] == "1.2" and kit_state(pack) == first and not list(pack.glob("removed-*"))
-    assert report(pack, "kit")["kit_version"] == "1.2" and written_row(pack)["detail"].endswith("0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.2")
+    assert report(pack, "kit")["kit_version"] == "1.2" and written_row(pack)["detail"].endswith(f"0 written, {KIT_N} unchanged, 0 moved to removed-2026-10-17/; version 1.2")
     report_file.unlink()
     mutate(pack / "FACTS.md", "tools are made in batches of 250", "tools are made in batches of 300")
     r = build(pack)                                                                      # a change in the brand: the build number goes up by 1
@@ -553,8 +554,8 @@ def test_a_kit_with_unbuilt_tokens_cannot_be_written(pack):
 
 
 # ---------------------------------------------------------------- fonts: OFL copied with the licence, the others listed
-# TEST_FONT is an Inter subset (OFL by its name table; family Inter, weight 400, style normal, read by hand); tests/fixtures/fonts/OFL.txt is the Inter OFL text.
-from helpers import TEST_FONT  # noqa: E402
+# TEST_FONT is an Inter subset (OFL by its name table; family Inter, weight 400, style normal, a variable font whose `wght` axis runs from 100 to 900, read by hand); tests/fixtures/fonts/OFL.txt is the Inter OFL text.
+from helpers import TEST_FONT, font_variant  # noqa: E402
 
 OFL_TEXT = ROOT / "tests" / "fixtures" / "fonts" / "OFL.txt"
 FONT_KIT = ["brand/assets/fonts/OFL.txt", "brand/assets/fonts/TestFont-subset.ttf", "snippets/fonts.css"]
@@ -566,9 +567,11 @@ FONT_FACE = ('/* generated by brand-creator from assets/fonts/ and the fontcheck
              '@font-face {\n'
              '  font-family: "Inter";\n'
              '  src: url("../brand/assets/fonts/TestFont-subset.ttf") format("truetype");\n'
-             '  font-weight: 400;\n'
+             '  font-weight: 100 900;\n'
              '  font-style: normal;\n'
+             '  font-display: swap;\n'
              '}\n')
+STATIC_FACE = FONT_FACE.replace("  font-weight: 100 900;\n", "  font-weight: 400;\n")       # the same font as a static instance: one weight
 
 
 def with_font(p, *, fontcheck=True, licence=True):
@@ -593,7 +596,7 @@ def kit_json(p) -> dict:
 def test_an_ofl_font_is_copied_with_its_licence_and_gets_a_font_face(pack):
     with_font(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 3} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT])
@@ -604,7 +607,7 @@ def test_an_ofl_font_is_copied_with_its_licence_and_gets_a_font_face(pack):
                                                    "licence_files": ["brand/assets/fonts/OFL.txt"]}], "not_copied": []}
     assert all(file_sha(kit_of(pack) / rel) == sha for rel, sha in kit_json(pack)["generated"].items()) and set(FONT_KIT) <= set(kit_json(pack)["generated"])
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in FONT_KIT)
+    assert "| the fonts | `snippets/fonts.css` |" in skill                                  # the map names the snippet; kit.json lists every font file
     row = fonts_row(pack)
     assert row["status"] == "pass" and row["detail"] == "1 font copied with its licence text; snippets/fonts.css written"
     rep = report(pack, "kit")
@@ -697,16 +700,16 @@ def set_weight_class(font, value: int) -> None:
 
 
 def test_a_font_that_stores_an_invalid_weight_class_gets_font_weight_400(pack):
-    """OS/2 usWeightClass 0 (or one over 1000) is no weight: fontcheck takes it as 400 and the kit's @font-face never says `font-weight: 0`."""
+    """OS/2 usWeightClass 0 (or one over 1000) is no weight: fontcheck takes it as 400 and the kit's @font-face never says `font-weight: 0`. A static font: a variable one declares its range."""
     with_font(pack, fontcheck=False)
-    font = pack / "assets" / "fonts" / TEST_FONT.name
+    font = font_variant(pack / "assets" / "fonts" / TEST_FONT.name, static=True)
     for stored in (0, 1001, 65535):
         set_weight_class(font, stored)
         r = bc("fontcheck", "--lang", "en", "--no-platform", project=pack)
         assert r.returncode == 0, r.stdout + r.stderr
         r = build(pack)
         assert r.returncode == 0, (stored, r.stdout + r.stderr)
-        assert (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8") == FONT_FACE, stored
+        assert (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8") == STATIC_FACE, stored
         assert fonts_row(pack)["status"] == "pass"
     set_weight_class(font, 1000)                                                    # the edge of the range is a weight
     assert bc("fontcheck", "--lang", "en", "--no-platform", project=pack).returncode == 0
@@ -726,10 +729,68 @@ def test_a_fontcheck_report_with_a_weight_that_is_no_weight_copies_no_font(pack)
         assert kit_files(pack) == KIT_FILES and not (kit_of(pack) / "snippets" / "fonts.css").exists(), stored
         assert kit_json(pack)["fonts"]["not_copied"] == [{"file": "assets/fonts/TestFont-subset.ttf",
                                                           "reason": "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"}], stored
+    mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight_range", None))      # as fontcheck reads a static font
     for stored in (1, 1000):                                                        # the edges are weights
         mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight", stored))
         assert build(pack).returncode == 0
         assert f"  font-weight: {stored};\n" in (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8")
+
+
+def test_a_variable_font_declares_its_weight_range_and_every_font_swaps(pack):
+    """The first adoption of a kit: a variable font declared with one weight is held at that weight by the browser, which fakes the bolder ones. fontcheck reads the `wght` axis and the
+    @font-face says `font-weight: <lowest> <highest>`. A report from before fontcheck read it (no `weight_range`) copies no font and says to run fontcheck again: the one weight it
+    holds would be written as if nothing were wrong. A range CSS would not take copies no font either, and says so."""
+    with_font(pack)
+    path = pack / "assets" / "_checks" / "fontcheck.json"
+    row = "licence:assets/fonts/TestFont-subset.ttf"
+    css = kit_of(pack) / "snippets" / "fonts.css"
+    assert report(pack, "fontcheck")["results"] and next(r for r in report(pack, "fontcheck")["results"] if r["id"] == row)["weight_range"] == [100, 900]
+    assert build(pack).returncode == 0 and css.read_text(encoding="utf-8") == FONT_FACE
+    for stored, line in (([1, 1000], "  font-weight: 1 1000;\n"), ([400, 700], "  font-weight: 400 700;\n"), (None, "  font-weight: 400;\n")):
+        mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight_range", stored))
+        assert build(pack).returncode == 0, stored
+        assert line in css.read_text(encoding="utf-8") and "  font-display: swap;\n" in css.read_text(encoding="utf-8"), stored
+    not_copied = lambda why: [{"file": "assets/fonts/TestFont-subset.ttf", "reason": why}]                                # noqa: E731
+    mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).pop("weight_range"))                      # a report from before: the key is not there
+    assert build(pack).returncode == 0 and not css.exists() and fonts_row(pack)["status"] == "warn"
+    assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report was written before fontcheck read the weight range of a variable font: run `brand-creator fontcheck` again")
+    for stored in ([900, 100], [400, 400], [0, 900], [100, 1001], [400], [100, 400, 900], "100 900", [100.0, 900.0], [True, 900], 400):
+        mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight_range", stored))
+        assert build(pack).returncode == 0, stored
+        assert not css.exists(), stored
+        assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report holds a weight range for it that CSS does not take: run `brand-creator fontcheck` again"), stored
+
+
+def test_a_variable_font_with_a_slant_axis_declares_its_oblique_range(pack):
+    """A variable font that slants, declared `font-style: normal`, gets its italics faked by the browser as its bold was. fontcheck reads the `slnt` axis and the @font-face says
+    `font-style: oblique <lowest>deg <highest>deg` (measured in Chromium 149: upright text stays upright, italic text takes the font's own slant). A font the file itself calls
+    italic stays `italic`. A report from before fontcheck read the axis (no `slant_range`) copies no font and says to run fontcheck again; so does a range CSS would not take."""
+    with_font(pack)
+    path = pack / "assets" / "_checks" / "fontcheck.json"
+    row = "licence:assets/fonts/TestFont-subset.ttf"
+    css = kit_of(pack) / "snippets" / "fonts.css"
+
+    def store(key, value):
+        mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__(key, value))
+
+    for stored, line in (([0, 10], "  font-style: oblique 0deg 10deg;\n"), ([-10, 0], "  font-style: oblique -10deg 0deg;\n"), ([-90, 90], "  font-style: oblique -90deg 90deg;\n"),
+                         (None, "  font-style: normal;\n")):
+        store("slant_range", stored)
+        assert build(pack).returncode == 0, stored
+        assert line in css.read_text(encoding="utf-8") and "  font-weight: 100 900;\n" in css.read_text(encoding="utf-8"), stored
+    store("slant_range", [0, 10])
+    store("style", "italic")                                                        # the file calls itself italic: that is its style, whatever it can slant
+    assert build(pack).returncode == 0 and "  font-style: italic;\n" in css.read_text(encoding="utf-8")
+    store("style", "normal")
+    not_copied = lambda why: [{"file": "assets/fonts/TestFont-subset.ttf", "reason": why}]                                # noqa: E731
+    mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).pop("slant_range"))                       # a report from before: the key is not there
+    assert build(pack).returncode == 0 and not css.exists() and fonts_row(pack)["status"] == "warn"
+    assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report was written before fontcheck read the slant range of a variable font: run `brand-creator fontcheck` again")
+    for stored in ([10, 0], [0, 0], [-91, 0], [0, 91], [10], [0, 5, 10], "0 10", [0.0, 10.0], [True, 10], 10):
+        store("slant_range", stored)
+        assert build(pack).returncode == 0, stored
+        assert not css.exists(), stored
+        assert kit_json(pack)["fonts"]["not_copied"] == not_copied("the fontcheck report holds a slant range for it that CSS does not take: run `brand-creator fontcheck` again"), stored
 
 
 def test_a_band_drawing_that_is_missing_or_outside_the_project_stops_the_build(pack, tmp_path):
@@ -936,7 +997,7 @@ def test_the_kit_is_searched_by_the_cascade(pack):
     cas = next(x for x in report(pack, "check")["results"] if x["id"] == "cascade:#4cd7c8")
     kit_hits = [h for h in cas["hits"] if h.startswith(".claude/skills/acme-brand/brand/")]
     assert cas["status"] == "fail" and any(h.startswith(".claude/skills/acme-brand/brand/assets/tokens/tokens.css:") for h in kit_hits), cas["hits"]
-    assert any(h.startswith(".claude/skills/acme-brand/SKILL.md:") for h in cas["hits"])
+    assert any(h.startswith(".claude/skills/acme-brand/brand.md:") for h in cas["hits"])                             # the colour table moved there from SKILL.md
 
 
 # ---------------------------------------------------------------- motion: the spec, its hand-off text and the demo page
@@ -964,7 +1025,7 @@ def motion_hash(p, rels) -> str:
 def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     moving(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 3} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT])                    # the proof itself (motion/proof.json) is a test file, not the brand's
@@ -974,13 +1035,13 @@ def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     assert json.loads((kit_of(pack) / "brand/motion/motion.json").read_text(encoding="utf-8"))["signature"]["name"] == " Settle "      # the bytes, not a tidied copy
     assert set(MOTION_KIT) <= set(kit_json(pack)["generated"]) and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in kit_json(pack)["generated"].items())
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in MOTION_KIT)
+    assert "| the signature move | `brand/motion/SPEC.md` |" in skill                     # the map names the spec; kit.json lists every motion file
     assert kit_json(pack)["sources"]["motion"] == motion_hash(pack, ["motion/motion.json", "motion/SPEC.md", "motion/demo.html"])
     assert kit_json(pack)["sources"]["motion"] != file_sha(pack / "motion" / "motion.json")
     rep = report(pack, "kit")
     assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MOTION_KIT])
     assert {"motion/motion.json", "motion/SPEC.md", "motion/demo.html"} <= {i["path"] for i in rep["inputs"]}
-    assert written_row(pack)["detail"] == "18 generated files: 18 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N + 3} generated files: {KIT_N + 3} written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
 
@@ -1194,7 +1255,7 @@ def test_rules_json_lists_the_g4_rules_with_ids_and_the_pairs_with_their_ratios(
     assert {"rules.json", "facts.json"} <= set(kj["generated"]) and kj["generated"]["rules.json"] == file_sha(kit_of(pack) / "rules.json")
     assert "rules.json" in report(pack, "kit")["outputs"] and "facts.json" in report(pack, "kit")["outputs"]
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert "- `rules.json`" in skill and "- `facts.json`" in skill                                                    # both are listed in the kit section
+    assert "| the rules and the facts as data | `rules.json`, `facts.json` |" in skill                                # both are on the map
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first                                                   # a second build writes nothing
 
@@ -1428,7 +1489,7 @@ def test_each_named_ground_gets_a_scope_that_maps_the_page_roles_to_its_own(pack
     build_tokens(pack)
     assert (json.loads((pack / "assets/tokens/tokens.json").read_text(encoding="utf-8"))["grounds"]["named_by_owner"]) == NAMED
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 16 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 1} generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, ON_GROUND])
@@ -1438,7 +1499,7 @@ def test_each_named_ground_gets_a_scope_that_maps_the_page_roles_to_its_own(pack
     assert used and all(re.search(rf"^\s*{re.escape(v)}:", css, re.M) for v in used), sorted(v for v in used if f"{v}:" not in css)      # every name is one tokens.css declares
     assert {"--color-text", "--color-accent", "--color-on-accent", "--color-focus", "--color-border", "--color-panel", "--color-on-dusk-action"} <= used
     assert ON_GROUND in kit_json(pack)["generated"] and file_sha(kit_of(pack) / ON_GROUND) == kit_json(pack)["generated"][ON_GROUND]
-    assert f"- `{ON_GROUND}`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert f"| the colours text may sit on | `{ON_GROUND}` |" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
     row = grounds_row(pack)
     assert row["status"] == "pass" and row["detail"] == "2 grounds scoped in snippets/on-ground.css; the page ground is color.bg"
     assert report(pack, "kit")["status"] == "pass" and ON_GROUND in report(pack, "kit")["outputs"]
@@ -1659,7 +1720,7 @@ def test_the_logo_snippet_pairs_each_mark_with_its_dark_twin_and_switches_like_t
         assert (kit_of(pack) / "snippets" / src).resolve().is_file(), src
         assert filecmp.cmp(pack / "assets" / "logo" / src.rsplit("/", 1)[1], kit_of(pack) / "snippets" / src, shallow=False)
     assert "snippets/logo.html" in kit_json(pack)["generated"] and file_sha(kit_of(pack) / "snippets" / "logo.html") == kit_json(pack)["generated"]["snippets/logo.html"]
-    assert "- `snippets/logo.html`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "`snippets/logo.html`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
     assert "snippets/logo.html" in report(pack, "kit")["outputs"]
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
@@ -1730,16 +1791,17 @@ def test_the_first_build_scaffolds_the_owner_files_once(pack):
         text = (kd / name).read_text(encoding="utf-8")
         assert text.startswith(head + "\n\n") and text.count("[[fill: ") == 1 and "{{" not in text, name
         assert re.search(r"^\[\[fill: [^\[\]]+\]\]$", text, re.M), name                                              # one marker, its note has no square bracket
-    assert "[[fill: up to ten rules, each tagged with a rule id from rules.json or as an example]]" in (kd / "golden-rules.md").read_text(encoding="utf-8")
+    assert ("[[fill: the brand's rules sorted under the headings `## Fixed`, `## Defaults` and `## Examples`, up to ten under Fixed, each line tagged with a rule id from rules.json or as an "
+            "example]]") in (kd / "golden-rules.md").read_text(encoding="utf-8")
     assert (kd / "recipes" / "web-page.md").read_text(encoding="utf-8").startswith("# Web page\n")
     kj = kit_json(pack)
     assert sorted(kj["owned"]) == OWNER_FILES and all(file_sha(kd / rel) == sha for rel, sha in kj["owned"].items())
     assert not set(OWNER_FILES) & set(kj["generated"]) and not set(OWNER_FILES) & set(report(pack, "kit")["outputs"])    # not generated: check's kit:file never reads them
     assert owned_row(pack) == "5 owner files scaffolded this run, 0 kept as they are"
     skill = (kd / "SKILL.md").read_text(encoding="utf-8")
-    assert "Yours to extend; how: `EXTENDING.md`. A build writes each of these once and never overwrites or moves it." in skill
-    assert all(f"- `{rel}`" in skill for rel in OWNER_FILES)
-    assert skill.index("- `brand/assets/tokens/tokens.css`") < skill.index("Yours to extend") < skill.index("## Colour")
+    assert "Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`" in skill
+    assert all(f"`{rel}`" in skill for rel in ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/"))      # the map names the owner's files (recipes/ as its folder)
+    assert skill.index("## How to work") < skill.index("Your own files") < skill.index("## Map")
     # a second build has nothing to scaffold: the plan names none, and nothing is touched
     owner_before, kit_before = owner_state(pack), kit_state(pack)
     r = bc("kit", "build", "--plan", project=pack)
@@ -1757,7 +1819,7 @@ def test_the_kit_skill_works_beside_the_web_skill_and_the_recipe_arrives_whole(p
     skill = (kd / "SKILL.md").read_text(encoding="utf-8")
     line = ("It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use from `brand/` "
             "into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps.")
-    assert skill.count(line) == 1 and skill.index("This folder is a brand kit.") < skill.index(line) < skill.index("Generated. Never edit these here")
+    assert skill.count(line) == 1 and skill.index("This folder is a brand kit") < skill.index(line) < skill.index("## Rules the owner decided")
     recipe = (kd / "recipes" / "web-page.md").read_text(encoding="utf-8")
     assert re.findall(r"(?m)^(\d+)\. ", recipe) == ["1", "2", "3", "4", "5", "6", "7"] and "[[fill" not in recipe and "{{" not in recipe
     assert "into the product's own public or static folder and link them from there" in recipe and "`[data-sample]`" in recipe and "page-check" in recipe
@@ -1807,14 +1869,14 @@ def test_a_changed_scaffold_leaves_an_owner_file_that_is_already_in_the_kit(pack
     assert r.returncode == 0, r.stdout + r.stderr
     f = kit_of(pack) / "golden-rules.md"
     first = f.read_bytes()
-    mutate(plugin_copy / "templates" / "kit" / "golden-rules.md", "The few rules", "Some other words about the rules")
+    mutate(plugin_copy / "templates" / "kit" / "golden-rules.md", "What every piece", "Some other words about what every piece")
     r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
     assert r.returncode == 0, r.stdout + r.stderr
     assert f.read_bytes() == first and kit_json(pack)["version"] == "1.1" and owned_row(pack) == "0 owner files scaffolded this run, 5 kept as they are"
     f.unlink()                                                          # absent: the scaffold of today is written
     r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "Some other words about the rules" in f.read_text(encoding="utf-8") and kit_json(pack)["version"] == "1.2"
+    assert "Some other words about what every piece" in f.read_text(encoding="utf-8") and kit_json(pack)["version"] == "1.2"
 
 
 def test_the_kit_scaffolds_keep_their_placeholder_guard(pack, plugin_copy):
@@ -1926,7 +1988,7 @@ def test_kit_json_must_list_the_five_scaffolded_owner_files(pack):
 ALL_PASS = {"kit:files": "pass", "kit:links": "pass", "kit:fill": "pass", "kit:versions": "pass", "kit:plugin": "pass", "kit:sources": "pass", "kit:owned": "pass",
             "kit:tags": "pass", "kit:numbers": "pass"}
 FRESH_LINKS = 7
-FRESH_FILES = 8
+FRESH_FILES = 10
 OUTSIDE_KIT = "points outside the kit: it will not resolve in a product repository"
 
 
@@ -1979,6 +2041,18 @@ def test_a_fresh_kit_fails_on_its_fill_markers_until_the_owner_files_are_filled(
                                                               "`brand-creator kit build --yes` records it and moves the version on")
     assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2"  # the build records the owner's words and moves the version on
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+
+def test_a_template_placeholder_is_no_link_and_is_not_judged(pack):
+    filled_kit(pack)
+    visual = kit_of(pack) / "visual.md"
+    mutate(visual, "Keep it short. [example]", "Keep it short. [example]\n\n[logo]({{logo_url}})")
+    r = kit_check(pack)
+    row = check_report_rows(pack)["kit:links"]
+    assert row["status"] == "pass", r.stdout
+    assert row["detail"] == (f"{FRESH_LINKS} relative links in {FRESH_FILES} .md, .html and .css files resolve inside the kit; "
+                             "1 template placeholder ({{...}}) is no link and is left as it is"), row
 
 
 def test_a_link_that_leaves_the_kit_fails(pack):
@@ -2182,6 +2256,65 @@ def test_a_kit_of_an_older_edition_fails_kit_check(pack):
     assert (kit_json(pack)["edition"], kit_json(pack)["version"]) == ("2", "2.1")
 
 
+def test_an_owner_file_nobody_touched_since_the_build_is_named_as_behind_once_the_brand_changed_and_is_never_edited(pack):
+    """kit:behind lists each owner file (the five and the owner's own, a recipe added by hand) that is still as the last build recorded it once FACTS.md, the tokens or BRAND-STATE.md changed;
+    a file the owner edited after the build is kit:owned's, not named as behind; the check edits nothing."""
+    filled_kit(pack)
+    (kit_of(pack) / "recipes" / "ad.md").write_text("# Ad\n\nA headline on the accent. [example]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert kit_check(pack).returncode == 0 and "kit:behind" not in statuses(pack)           # the brand has not moved: nothing is behind
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")
+    mutate(kit_of(pack) / "voice.md", "Keep it short. [example]", "Keep it very short. [example]")   # edited after the build: kit:owned's
+    before = {p: p.read_bytes() for p in kit_of(pack).rglob("*") if p.is_file()}
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr                                         # kit:sources is still "not verified"; the warning does not hide it
+    row = check_report_rows(pack)["kit:behind"]
+    assert row["status"] == "warn" and "recipes/ad.md" in row["detail"] and "voice.md" not in row["detail"] and "(state_sha, facts)" not in row["detail"] and "FACTS.md (and possibly BRAND-STATE.md or the motion spec) changed after it" in row["detail"] and "EXTENDING.md" not in row["detail"]
+    assert "[WARN] kit:behind" in r.stdout and "never edits your files" in row["detail"]
+    assert {p: p.read_bytes() for p in kit_of(pack).rglob("*") if p.is_file()} == before     # no file of the kit was touched
+    assert build(pack).returncode == 0 and "kit:behind" not in (kit_check(pack) and statuses(pack))   # the build records the files against the brand as it is
+
+
+def test_kit_behind_names_every_owner_file_and_a_tokens_change_alone_counts_and_the_build_says_what_it_records(pack):
+    filled_kit(pack)
+    for n in ("ad", "presentation"):
+        (kit_of(pack) / "recipes" / f"{n}.md").write_text(f"# {n}\n\nA line. [example]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    tokens = pack / "assets" / "tokens" / "tokens.css"
+    tokens.write_text(tokens.read_text(encoding="utf-8") + "\n:root { --zz-extra: 1px; }\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 3
+    detail = check_report_rows(pack)["kit:behind"]["detail"]
+    for rel in ("voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md", "recipes/ad.md", "recipes/presentation.md"):
+        assert rel in detail
+    assert "more" not in detail and "EXTENDING.md" not in detail and "tokens.css changed after it" in detail
+    assert "recipes/presentation.md" in check_report_rows(pack)["kit:sources"]["detail"]
+    b = build(pack)
+    assert b.returncode == 0 and "recipes/presentation.md" in b.stdout and "never edits them" in b.stdout
+
+
+def test_kit_behind_names_a_brand_state_change_without_claiming_facts_and_facts_without_claiming_brand_state(pack):
+    filled_kit(pack)
+    assert build(pack).returncode == 0
+    assert bc("state", "--set", "name=Acme Tools", project=pack).returncode == 0
+    assert kit_check(pack).returncode == 3
+    detail = check_report_rows(pack)["kit:behind"]["detail"]
+    assert "BRAND-STATE.md or the motion spec changed after it" in detail and "FACTS.md" not in detail
+
+
+def test_a_kit_build_says_when_it_cannot_tell_which_owner_files_are_behind(pack):
+    filled_kit(pack)
+    assert build(pack).returncode == 0
+    (kit_of(pack) / "kit.json").write_text("{not json", encoding="utf-8")
+    b = build(pack)
+    assert "not verified" in b.stdout and "owner files are behind" in b.stdout, b.stdout + b.stderr
+
+
+def test_a_change_the_kit_does_not_take_from_the_brand_names_no_file_as_behind(pack):
+    filled_kit(pack)
+    shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")   # a logo is a source of the kit, not a brand input an owner file is written against
+    assert kit_check(pack).returncode == 3 and "kit:behind" not in statuses(pack)
+
+
 def test_a_brand_change_after_the_build_makes_kit_check_not_verified(pack):
     filled_kit(pack)
     assert kit_check(pack).returncode == 0
@@ -2189,9 +2322,10 @@ def test_a_brand_change_after_the_build_makes_kit_check_not_verified(pack):
     r = kit_check(pack)
     assert r.returncode == 3, r.stdout + r.stderr                               # not verified, never a pass
     assert report(pack, "kit-check")["status"] == "not-verified"
-    assert statuses(pack) == {**ALL_PASS, "kit:sources": "skipped"}             # the files are the bytes the build wrote; it is the brand that moved on
+    assert statuses(pack) == {**ALL_PASS, "kit:sources": "skipped", "kit:behind": "warn"}   # the files are the bytes the build wrote; it is the brand that moved on, and the owner's files with it
     assert check_report_rows(pack)["kit:sources"]["detail"] == ("not verified: the brand changed after the kit was built (state_sha, facts); "
-                                                                "run `brand-creator kit build --yes`")
+                                                                "read the owner's files kit:behind names (voice.md, visual.md, golden-rules.md, recipes/web-page.md) against the brand first, "
+                                                                "the build records them as they are; run `brand-creator kit build --yes`")
     assert build(pack).returncode == 0
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
     shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")      # a new logo is a source too
@@ -2446,8 +2580,8 @@ import os  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
 
-COPY_ORDER = sorted(r for r in KIT_FILES if r != "kit.json") + ["kit.json"]                      # the copy list: the generated files, kit.json last (as the build writes it) ...
-OWNER_ORDER = ["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"]   # ... then the owner files the repository lacks
+COPY_ORDER = sorted(r for r in KIT_FILES if r != "kit.json")                                       # the copy list: the generated files ...
+OWNER_ORDER = ["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"]   # ... then the owner files the repository lacks, then kit.json last
 READ_ONLY_LINE = "read only: nothing in the installed kit folders changed while they were read"
 
 
@@ -2478,6 +2612,38 @@ def listed(out: str, title: str) -> list[str]:
     return items
 
 
+SORTED_RULES = ("# Acme golden rules\n\nWhat every piece keeps.\n\n## Fixed\n\n- The mark is never redrawn [rule: mark]\n- Text is never set in the accent [rule: accent]\n\n"
+                "## Defaults\n\n- Cards are square [example]\n")
+
+
+def test_the_build_records_the_sort_of_the_rules_and_status_names_what_a_repository_sorts_differently(pack, tmp_path):
+    """ADR-0016. The sort of golden-rules.md says what binds every product, and the file is an owner file: a repository that edits its copy keeps it, and the copy still reads as
+    current. So the build writes the sort into kit.json (`sort`, its last key), and `kit status` names every line of it that the repository's file gives another weight or no
+    longer holds, in text and with --json. The copy stays current and the file stays the repository's."""
+    assert build(pack).returncode == 0
+    fill_owned(kit_of(pack))
+    (kit_of(pack) / "golden-rules.md").write_text(SORTED_RULES, encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["sort"] == {"fixed": ["The mark is never redrawn [rule: mark]", "Text is never set in the accent [rule: accent]"], "default": ["Cards are square [example]"], "example": []}
+    assert list(kit_json(pack))[-1] == "sort"
+    repo = install(pack, tmp_path)
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and "golden-rules.md sorts differently" not in r.stdout, r.stdout + r.stderr
+    assert json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]["sort_differ"] == []
+    moved = SORTED_RULES.replace("- The mark is never redrawn [rule: mark]\n", "").replace("- Text is never set in the accent [rule: accent]\n", "")
+    moved = moved.replace("## Defaults\n\n", "## Defaults\n\n- Text is never set in the accent [rule: accent]\n- A rule of our own [example]\n")
+    (installed_of(repo) / "golden-rules.md").write_text(moved, encoding="utf-8")
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and f"site: current (version {kit_json(pack)['version']})" in r.stdout.splitlines(), r.stdout + r.stderr
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["golden-rules.md"]
+    assert listed(r.stdout, "rules the repository's golden-rules.md sorts differently") == [
+        "The mark is never redrawn [rule: mark] (fixed in the kit, not in the repository's file)",
+        "Text is never set in the accent [rule: accent] (fixed in the kit, default in the repository)"]
+    assert json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]["sort_differ"] == [
+        {"line": "The mark is never redrawn [rule: mark]", "kit": "fixed", "repository": None},
+        {"line": "Text is never set in the accent [rule: accent]", "kit": "fixed", "repository": "default"}]
+
+
 def paths_of(items: list[str]) -> list[str]:
     return [i.split(" (")[0] for i in items]
 
@@ -2504,8 +2670,8 @@ def test_kit_status_says_not_installed_and_lists_what_to_copy(pack, tmp_path):
     lines = r.stdout.splitlines()
     assert lines[0] == "kit acme-brand, version 1.1" and "site: not installed" in lines and lines[-1] == READ_ONLY_LINE
     items = listed(r.stdout, "copy list")
-    assert paths_of(items) == COPY_ORDER + OWNER_ORDER                                  # fifteen generated files, kit.json last, then the five owner files
-    assert not any("owner file" in i for i in items[:len(COPY_ORDER)]) and all("owner file" in i for i in items[len(COPY_ORDER):])
+    assert paths_of(items) == COPY_ORDER + OWNER_ORDER + ["kit.json"]                   # the generated files, the five owner files, kit.json last
+    assert not any("owner file" in i for i in items[:len(COPY_ORDER)]) and all("owner file" in i for i in items[len(COPY_ORDER):-1]) and items[-1] == "kit.json"
     assert tree_of(pack) == project_before and tree_of(repo) == repo_before             # nothing written, in the project or in the repository
     assert not list((pack / "assets" / "_checks").glob("*status*"))                      # and no report
 
@@ -2519,7 +2685,7 @@ def test_kit_status_says_when_the_kit_folder_is_there_but_holds_no_kit(pack, tmp
     assert r.returncode == 1, r.stdout + r.stderr
     assert "site: not installed" in r.stdout.splitlines()
     assert ".claude/skills/acme-brand/ is there but holds no kit.json: it is not a kit, so look at it before you copy over it" in r.stdout
-    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER
+    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + ["kit.json"]
 
 
 def test_a_byte_copy_of_the_kit_is_current(pack, tmp_path):
@@ -2543,16 +2709,16 @@ def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_cha
     (kd / "brand/assets/logo/old-mark.svg").write_text("<svg/>", encoding="utf-8")        # a file of an older kit, which this kit no longer has
     voice = kd / "voice.md"
     voice.write_text(voice.read_text(encoding="utf-8") + "\nOur own words.\n", encoding="utf-8")   # the repository's own voice file
-    (kd / "visual.md").unlink()                                                           # an owner file the repository lacks
+    (kd / "visual.md").unlink()                                                           # an owner file the repository took out: its own change (0.11.1)
     r = kit_status(pack, repo)
     assert r.returncode == 1, r.stdout + r.stderr
     assert "site: not current (version 1.1 on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)" in r.stdout.splitlines()
     assert listed(r.stdout, "generated files that differ") == ["brand/assets/tokens/tokens.css (not the same bytes)"]
     assert listed(r.stdout, "generated files that are missing") == ["snippets/logo.html"]
     assert listed(r.stdout, "left over from an older kit") == ["brand/assets/logo/old-mark.svg"]
-    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md", "visual.md (deleted in the repository)"]
     copy = paths_of(listed(r.stdout, "copy list"))
-    assert copy == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"]        # the generated files that need copying, then the owner file it lacks; voice.md is not in it
+    assert copy == ["brand/assets/tokens/tokens.css", "snippets/logo.html"]                    # the generated files that need copying; neither voice.md nor the deleted visual.md is in it
     for rel in copy:                                                                       # the copy the list asks for, and the old file taken out
         shutil.copy2(kit_of(pack) / rel, kd / rel)
     r = kit_status(pack, repo)                                                             # the copy is whole now, and only the old file is left: that alone is not current
@@ -2564,7 +2730,7 @@ def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_cha
     r = kit_status(pack, repo)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "site: current (version 1.1)" in r.stdout.splitlines() and "copy list" not in r.stdout
-    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]    # still the repository's own, and current all the same
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md", "visual.md (deleted in the repository)"]    # still the repository's own, and current all the same
     assert "Our own words." in voice.read_text(encoding="utf-8")
 
 
@@ -2585,7 +2751,7 @@ def test_a_copy_becomes_current_again_after_a_brand_change_removed_a_generated_f
     assert ("  left over from an older kit (not in this kit, so not on the copy list; move each to removed-<date>/.claude/skills/acme-brand/ in the repository, "
             "keeping its path; nothing is deleted):") in r.stdout.splitlines()
     copy = paths_of(listed(r.stdout, "copy list"))
-    assert gone not in copy and copy == ["SKILL.md", "snippets/logo.html", "kit.json"]            # the files that changed, kit.json last: the old file is not among them
+    assert gone not in copy and copy == ["SKILL.md", "brand.md", "snippets/logo.html", "kit.json"]   # the files that changed, kit.json last: the old file is not among them
     shown = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
     assert shown["left_over"] == [gone] and shown["left_over_to"] == "removed-<date>/.claude/skills/acme-brand/" and shown["copy"] == copy
     for rel in copy:                                                                       # exactly the copy list
@@ -2803,12 +2969,12 @@ def test_kit_status_json_holds_the_same_facts_as_the_text(pack, tmp_path):
     assert [k for k in doc] == ["kit", "version", "repos", "current"] and doc["kit"] == "acme-brand" and doc["version"] == "1.1" and doc["current"] is False
     a, b = doc["repos"]
     assert (a["label"], a["state"], a["installed_version"], a["project_version"]) == ("fresh", "not installed", None, "1.1")
-    assert a["copy"] == COPY_ORDER + OWNER_ORDER and a["copy_owner"] == OWNER_ORDER and a["read_only"] is True
+    assert a["copy"] == COPY_ORDER + OWNER_ORDER + ["kit.json"] and a["copy_owner"] == OWNER_ORDER and a["read_only"] is True
     assert (b["label"], b["state"], b["installed_version"], b["project_version"]) == ("stale", "not current", "1.1", "1.1")
     assert b["differ"] == [{"file": "brand/assets/tokens/tokens.css", "why": "not the same bytes"}] and b["missing"] == ["snippets/logo.html"]
-    assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}]
+    assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}, {"file": "visual.md", "why": "missing"}]
     assert b["left_over_to"] == "removed-<date>/.claude/skills/acme-brand/" and a["left_over_to"] is None      # where the files left over go in the repository; none left over, none said
-    assert b["copy"] == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"] and b["copy_owner"] == ["visual.md"]
+    assert b["copy"] == ["brand/assets/tokens/tokens.css", "snippets/logo.html"] and b["copy_owner"] == []          # visual.md was taken out by the repository: not copied back
     assert os.path.realpath(b["path"]) == os.path.realpath(stale)
     r = kit_status(pack, install(pack, tmp_path, "same"), extra=("--json",))
     assert r.returncode == 0 and json.loads(r.stdout)["current"] is True
@@ -2996,8 +3162,8 @@ def test_the_eval_kit_snapshot_is_what_kit_build_writes_for_acme(pack):
 # `kit check` judges the owner's recipes (recipes/**/*.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md in two rows. kit:tags: a bullet (and, in golden-rules.md and
 # visual.md, a numbered line) outside a code fence carries `[example]` or a `[rule: <id>]` of a rule the kit knows. kit:numbers: a value (a number with a unit, a ratio, a hex colour, rgb( hsl( oklch()
 # has a citation on its own line, code fences included: `[example]`, a known rule id, or a token that exists in the kit's own tokens.css (`var(--name)`) or tokens.json (`{dotted.path}`).
-# After `filled_kit` the owner files hold the one line `Keep it short. [example]` at line 5 (golden-rules.md, visual.md, voice.md), and the Acme recipe is 19 lines long, ending
-# "The other pages follow the same steps." The tokens Acme builds include --dimension-space-1 (4px), --dimension-space-2 (8px) and --color-bg, and tokens.json names dimension.space-2 and color.bg.
+# After `filled_kit` the owner files hold the one line `Keep it short. [example]` at line 5 (golden-rules.md, visual.md, voice.md), and the Acme recipe is 33 lines long: its steps end on line 29,
+# "The other pages follow the same steps.", and `## Examples` closes the file. The tokens Acme builds include --dimension-space-1 (4px), --dimension-space-2 (8px) and --color-bg, and tokens.json names dimension.space-2 and color.bg.
 TAG_HINT = "tag each with `[example]` or `[rule: <id>]`, an id of rules.json (a rule of the brand written bare, `page:<id>`, `site:<id>`)"
 VALUE_HINT = "cite a token (`var(--name)` of tokens.css, `{dotted.path}` of tokens.json) or a known `[rule: <id>]`, or tag the line `[example]`"
 KEPT = "Keep it short. [example]"
@@ -3037,6 +3203,25 @@ def test_an_untagged_rule_in_golden_rules_fails_and_a_tagged_one_passes(pack):
     assert check_report_rows(pack)["kit:tags"]["detail"] == "2 line(s) carry `[example]` or a rule id the kit knows"
     assert statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
     assert build(pack).returncode == 0 and kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS      # the build records the owner's words; the tags stay
+
+
+
+def test_kit_check_all_lists_every_untagged_line_and_every_uncited_value(pack):
+    filled_kit(pack)
+    rules = kit_of(pack) / "golden-rules.md"
+    mutate(rules, KEPT, KEPT + "\n\n" + "\n".join(f"- Rule number {n}." for n in range(1, 9)) + "\n\nThe gap is 12px.\n")
+    r = kit_check(pack)
+    assert r.returncode == 1 and "and 2 more" in check_report_rows(pack)["kit:tags"]["detail"] and "golden-rules.md:14 untagged" not in r.stdout, r.stdout
+    detail_before = check_report_rows(pack)["kit:tags"]["detail"]
+    r = bc("kit", "check", "--all", project=pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    every = r.stdout.split("every line kit:tags fails (8):\n", 1)[1]
+    assert [ln.strip() for ln in every.splitlines()[:8]] == [f"golden-rules.md:{n} untagged" for n in range(7, 15)], r.stdout
+    assert "every line kit:numbers fails (1):\n  golden-rules.md:16 (" in r.stdout
+    assert check_report_rows(pack)["kit:tags"]["detail"] == detail_before                     # the report is the same with --all: only the printout lists more
+    mutate(rules, "\n".join(f"- Rule number {n}." for n in range(1, 9)) + "\n\nThe gap is 12px.\n", "")
+    r = bc("kit", "check", "--all", project=pack)
+    assert "every line kit:tags fails" not in r.stdout and "--all: no tag or value problem to list" in r.stdout, r.stdout
 
 
 def test_which_lines_need_a_tag_and_which_do_not(pack):
@@ -3107,12 +3292,12 @@ def test_a_rule_tag_that_names_no_rule_fails_on_any_line_even_one_that_needs_no_
     recipe, golden = kit_of(pack) / "recipes" / "web-page.md", kit_of(pack) / "golden-rules.md"
     kit_check(pack)
     assert statuses(pack) == ALL_PASS
-    recipe_was, golden_was = recipe.read_text(encoding="utf-8"), golden.read_text(encoding="utf-8")      # the recipe ends on line 19, golden-rules.md on line 5: the line to try is 21, or 7
-    for file, was, last, body, where in ((recipe, recipe_was, RECIPE_LAST, "8. Keep the clear space. [rule: nope]", "recipes/web-page.md:21"),              # a numbered step of a recipe: no tag needed, no value
+    recipe_was, golden_was = recipe.read_text(encoding="utf-8"), golden.read_text(encoding="utf-8")      # the recipe's steps end on line 29, golden-rules.md on line 5: the line to try is 31, or 7
+    for file, was, last, body, where in ((recipe, recipe_was, RECIPE_LAST, "8. Keep the clear space. [rule: nope]", "recipes/web-page.md:31"),              # a numbered step of a recipe: no tag needed, no value
                                          (golden, golden_was, KEPT, "Keep the clear space. [rule: nope]", "golden-rules.md:7"),                              # a plain sentence: no bullet, no value
                                          (golden, golden_was, KEPT, "## Clear space [rule: nope]", "golden-rules.md:7"),                                    # a heading
                                          (golden, golden_was, KEPT, "> Keep the clear space. [rule: nope]", "golden-rules.md:7"),                           # a quote
-                                         (recipe, recipe_was, RECIPE_LAST, "```\nKeep the clear space. [rule: nope]\n```", "recipes/web-page.md:22")):    # a line of a code fence, where no bullet needs a tag
+                                         (recipe, recipe_was, RECIPE_LAST, "```\nKeep the clear space. [rule: nope]\n```", "recipes/web-page.md:32")):    # a line of a code fence, where no bullet needs a tag
         mutate(file, last, last + "\n\n" + body)
         r = kit_check(pack)
         assert r.returncode == 1, (body, r.stdout + r.stderr)
@@ -3199,11 +3384,11 @@ def test_a_value_in_a_recipe_needs_a_token_a_rule_or_the_example_tag(pack):
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
     assert check_report_rows(pack)["kit:numbers"]["detail"] == NO_VALUES
     recipe = kit_of(pack) / "recipes" / "web-page.md"
-    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n- Hero padding 48px")                                                      # line 21
+    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n- Hero padding 48px")                                                      # line 31
     r = kit_check(pack)
     assert r.returncode == 1, r.stdout + r.stderr
-    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "recipes/web-page.md:21 untagged")
-    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "recipes/web-page.md:31 untagged")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:31 (48px has no citation)")
     assert statuses(pack) == {**ALL_PASS, "kit:tags": "fail", "kit:numbers": "fail", "kit:owned": "warn"}
     mutate(recipe, "- Hero padding 48px", "- Hero padding 48px [example]")
     r = kit_check(pack)
@@ -3214,12 +3399,12 @@ def test_a_value_in_a_recipe_needs_a_token_a_rule_or_the_example_tag(pack):
     assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
     mutate(recipe, f"48px [rule: {CLEAR_SPACE}]", "48px [rule: page:nope]")                                                   # an id the kit does not know cites nothing
     assert kit_check(pack).returncode == 1
-    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "recipes/web-page.md:21 unknown rule id page:nope")
-    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation; unknown rule id page:nope)")
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "recipes/web-page.md:31 unknown rule id page:nope")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:31 (48px has no citation; unknown rule id page:nope)")
     mutate(recipe, "- Hero padding 48px [rule: page:nope]", "Hero padding 48px")                                                # a plain line is no bullet, but its value still needs a citation
     assert kit_check(pack).returncode == 1
     assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS
-    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:31 (48px has no citation)")
     mutate(recipe, "Hero padding 48px", "Hero padding 48px (var(--dimension-space-2) doubled)")                              # a token cites it
     assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
 
@@ -3227,7 +3412,7 @@ def test_a_value_in_a_recipe_needs_a_token_a_rule_or_the_example_tag(pack):
 def test_a_token_reference_must_exist_in_the_kit_tokens(pack):
     filled_kit(pack)
     recipe = kit_of(pack) / "recipes" / "web-page.md"
-    before = mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\nA placeholder line.")                                             # the line to try is line 21, after a blank line 20
+    before = mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\nA placeholder line.")                                             # kept for what the file was before; each line to try is appended to the end of the file: line 35, after a blank line 34
     for line in ("Pad the hero with 8px: var(--dimension-space-2).", "Pad the hero with 8px: {dimension.space-2}.", "Text on {color.bg} in dark, {modes.dark.color.bg}, 8px.",
                  "Pad the hero with 4px: var( --dimension-space-1 ) and 8px.", "- Pad the hero with 8px: {other.dimension.space-2}. [example]", "A {{placeholder.name}} and ${a.b} and {nothing} are no references.",
                  "```jsx\nexport const Hero = (props) => <h1>{props.title}</h1>;\n```",                                          # a component sample with no value on the line: braces are the language
@@ -3258,37 +3443,37 @@ def test_a_token_reference_must_exist_in_the_kit_tokens(pack):
                       ("Pad the hero with 8px: {modes.light.color.bg.ref}.", f"8px has no citation; {{modes.light.color.bg.ref}} {json_gone}"),
                       ("Pad the hero with 8px: {primitives.nope}.", f"8px has no citation; {{primitives.nope}} {json_gone}")):
         recipe.write_text(before + f"\n{line}\n", encoding="utf-8")
-        at = 22 if line.startswith("```") else 21                                                                                # a fence opens on line 21, its sample is line 22
+        at = 36 if line.startswith("```") else 35                                                                                # a fence opens on line 35, its sample is line 36
         assert kit_check(pack).returncode == 1, line
         assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(f"recipes/web-page.md:{at} ({why})"), line
     recipe.write_text(before + "\nPad the hero with 8px: var(--dimension-space-2).\n", encoding="utf-8")
     (kit_of(pack) / "brand" / "assets" / "tokens" / "tokens.css").unlink()                                                   # it is the kit's copy that is read, not the project's
     assert kit_check(pack).returncode == 1
     assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(
-        f"recipes/web-page.md:21 (8px has no citation; var(--dimension-space-2) {css_gone} (that file is missing))")
+        f"recipes/web-page.md:35 (8px has no citation; var(--dimension-space-2) {css_gone} (that file is missing))")
 
 
 def test_numbered_steps_need_no_tag_but_their_values_do(pack):
     filled_kit(pack)
     recipe = kit_of(pack) / "recipes" / "web-page.md"
-    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n8. Pad the hero with 48px.\n   1) Then look at it.")                         # lines 21 and 22
+    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n8. Pad the hero with 48px.\n   1) Then look at it.")                         # lines 31 and 32
     r = kit_check(pack)
     assert r.returncode == 1, r.stdout + r.stderr
     assert check_report_rows(pack)["kit:tags"]["status"] == "pass" and check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS      # a numbered step of a recipe needs no tag
-    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:31 (48px has no citation)")
     mutate(recipe, "8. Pad the hero with 48px.", "8. Pad the hero with 48px, that is var(--dimension-space-2) six times.")
     assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
     mutate(recipe, "var(--dimension-space-2) six times.", "a lot.")
     assert kit_check(pack).returncode == 1
-    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:31 (48px has no citation)")
     mutate(recipe, "a lot.", "a lot. [example]")
     assert kit_check(pack).returncode == 0
-    step = "8. Pad the hero with 48px, that is a lot. [example]"                                                              # line 21 as it stands
+    step = "8. Pad the hero with 48px, that is a lot. [example]"                                                              # line 31 as it stands
     for written, value in (("8. Pad the hero 32-48px.", "48px"), ("8. Pad the hero 400-700ms.", "700ms"), ("8. Keep the measure to 60-75ch.", "75ch"), ("8. Pad the hero 1-2rem.", "2rem")):
         mutate(recipe, step, written)                                                                                         # a value written as a range is a value: the last number carries the unit
         step = written
         assert kit_check(pack).returncode == 1, written
-        assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(f"recipes/web-page.md:21 ({value} has no citation)"), written
+        assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(f"recipes/web-page.md:31 ({value} has no citation)"), written
         assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS
     mutate(recipe, step, step + " [example]")
     assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
@@ -3305,10 +3490,10 @@ def test_a_value_in_a_code_fence_needs_a_citation_on_its_own_line(pack):
     filled_kit(pack)
     recipe = kit_of(pack) / "recipes" / "web-page.md"
     mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n```css\n.hero { padding: 48px; }\n.hero { margin: var(--dimension-space-2); }\n.hero { gap: 2rem; } /* [example] */\n- keep 3px\n```")
-    r = kit_check(pack)                                                                                                       # lines 22 to 25 sit in the fence opened on line 21
+    r = kit_check(pack)                                                                                                       # lines 32 to 35 sit in the fence opened on line 31
     assert r.returncode == 1, r.stdout + r.stderr
     assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS                                                           # a bullet in a fence is no bullet
-    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:22 (48px has no citation)", "recipes/web-page.md:25 (3px has no citation)")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:32 (48px has no citation)", "recipes/web-page.md:35 (3px has no citation)")
     mutate(recipe, ".hero { padding: 48px; }", ".hero { padding: 48px; } /* [example] */")                                  # the tag of another line would not have counted
     mutate(recipe, "- keep 3px", "- keep 3px [example]")
     assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
@@ -3438,6 +3623,8 @@ Stills: [1440-light](../../brand/site/start/shots/1440-light.png), [1440-dark](.
 
 ## Choices
 
+What was chosen for this page. A choice tagged `[rule: site:<id>]` is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. A choice tagged `[example]` is an example, as the page itself is.
+
 - The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)
 - Plans sit under the steps [example]
 """
@@ -3497,7 +3684,7 @@ def pages_pass(*ids) -> dict:
 def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack):
     with_site(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 27 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 12} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     untouched(pack)
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -3517,7 +3704,7 @@ def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack
     folder = [rel.removeprefix("brand/") for rel in PAGE_KIT if rel.startswith("brand/site/")]
     assert kit_json(pack)["sources"]["pages"] == motion_hash(pack, ["site/site.json", *folder, *loaded])
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in PAGE_KIT)
+    assert "| approved pages to learn from | `reference-pages/` |" in skill                    # the map names the folder; kit.json lists every page file
     row = pages_row(pack)
     assert row["status"] == "pass" and row["detail"] == ("1 approved reference page copied with its stills and the files it loads (start); "
                                                          "notes in reference-pages/<id>/notes.md"), row
@@ -3819,10 +4006,11 @@ def test_each_choice_of_a_reference_page_is_tagged_in_its_notes(pack):
     assert r.returncode == 0, r.stdout + r.stderr
     notes = lambda pid: (kit_of(pack) / "reference-pages" / pid / "notes.md").read_text(encoding="utf-8")        # noqa: E731
     start, pricing = notes("start"), notes("pricing")
-    assert start.split("## Choices\n\n")[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
+    lead = "What was chosen for this page. A choice tagged `[rule: site:<id>]` is a default: use it, or do better, unless one of the brand's own files lists it under Fixed. A choice tagged `[example]` is an example, as the page itself is.\n\n"
+    assert start.split("## Choices\n\n" + lead)[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
                                               "- Plans sit under the steps [example]\n"
                                               "- Every page ends with the contact line [example]\n")
-    assert pricing.split("## Choices\n\n")[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
+    assert pricing.split("## Choices\n\n" + lead)[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
                                                 "- Prices keep two decimals [rule: site:c3] (decided in DECISIONS.md, the pricing page)\n"
                                                 "- Every page ends with the contact line [example]\n"
                                                 "- The hero image is 640px wide [example]\n")
@@ -4527,7 +4715,7 @@ def masters_row(p) -> dict:
 def test_a_master_and_its_picture_are_copied_byte_for_byte_and_listed(pack):
     with_masters(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 20 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 5} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     assert f"generated brand/assets/masters/ad/ad.png ({len(MASTER_PNG)} bytes)" in r.stdout.splitlines()
     assert not (pack / ".claude").exists()
     r = build(pack)
@@ -4542,13 +4730,13 @@ def test_a_master_and_its_picture_are_copied_byte_for_byte_and_listed(pack):
     assert kj["sources"]["masters"] == expected                                          # one sha256 over the sorted pairs `<project path>\0<sha256>\n`, as the other sources are made
     assert kj["fonts"] == {"copied": [], "not_copied": []} and kj["version"] == "1.1"
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in MASTERS_KIT)
+    assert "| the approved ads and decks | `brand/assets/masters/` |" in skill             # the map names the folder; kit.json lists every master
     rep = report(pack, "kit")
     assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MASTERS_KIT])
     assert set(MASTERS) <= {i["path"] for i in rep["inputs"]}                            # a changed master makes the `kit` report stale
     assert masters_row(pack)["status"] == "pass"
     assert masters_row(pack)["detail"] == "5 master files copied byte for byte from assets/masters/ to brand/assets/masters/"
-    assert written_row(pack)["detail"] == "20 generated files: 20 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N + 5} generated files: {KIT_N + 5} written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
     mutate(pack / "assets/masters/ad/index.html", "<body>", "<body class=\"changed\">")                       # a deliberate break: one master changes, and its copy, its hash and the version follow
@@ -4743,7 +4931,7 @@ def test_a_project_without_the_masters_folder_builds_the_same_bytes_as_before(pa
     plain = (kit_of(pack) / "kit.json").read_bytes()
     snapshot = json.loads((EVAL_KIT / "kit.json").read_text(encoding="utf-8"))
     got = kit_json(pack)
-    assert list(got) == ["schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages"]
+    assert list(got) == ["schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages", "sort"]
     assert list(got["sources"]) == ["state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages"]
     assert got["generated"] == snapshot["generated"] and got["sources"] == snapshot["sources"] and got["fonts"] == snapshot["fonts"] and got["version"] == snapshot["version"] == "1.2"
     assert not any(r["id"] == "kit:masters" for r in report(pack, "kit")["results"])
@@ -4752,7 +4940,7 @@ def test_a_project_without_the_masters_folder_builds_the_same_bytes_as_before(pa
     (pack / "assets" / "masters" / ".DS_Store").write_bytes(b"Finder")
     (pack / "assets" / "masters" / "ad" / ".DS_Store").write_bytes(b"Finder")
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N} generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout
     assert build(pack).returncode == 0
     assert (kit_of(pack) / "kit.json").read_bytes() == plain and kit_json(pack)["version"] == "1.2"
     assert not any(r["id"] == "kit:masters" for r in report(pack, "kit")["results"]) and report(pack, "kit")["kit_sources_sha"] == rep_before["kit_sources_sha"]
@@ -4874,13 +5062,13 @@ def test_a_recipe_the_owner_adds_is_hashed_moves_the_version_is_on_the_copy_list
     assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.3"             # recorded: the same content keeps the version
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
     assert check_report_rows(pack)["kit:owned"]["detail"] == "the 6 owner files are as the last build recorded them"
-    # the copy list: the generated files that changed (SKILL.md carries the version, kit.json last), then the owner file the repository lacks
+    # the copy list: the generated files that changed (SKILL.md carries the version), then the owner file the repository lacks, kit.json last
     r = kit_status(pack, repo)
     assert r.returncode == 1, r.stdout + r.stderr
     items = listed(r.stdout, "copy list")
-    assert paths_of(items) == ["SKILL.md", "kit.json", EMAIL_KIT] and items[-1] == f"{EMAIL_KIT} (owner file, the repository has none)"
+    assert paths_of(items) == ["SKILL.md", EMAIL_KIT, "kit.json"] and items[1] == f"{EMAIL_KIT} (owner file, the repository has none)"
     res = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
-    assert res["copy"] == ["SKILL.md", "kit.json", EMAIL_KIT] and res["copy_owner"] == [EMAIL_KIT]
+    assert res["copy"] == ["SKILL.md", EMAIL_KIT, "kit.json"] and res["copy_owner"] == [EMAIL_KIT]
     for rel in ("SKILL.md", "kit.json", EMAIL_KIT):                                       # the copy the list asks for
         (installed_of(repo) / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(kd / rel, installed_of(repo) / rel)
@@ -4891,9 +5079,9 @@ def test_a_recipe_the_owner_adds_is_hashed_moves_the_version_is_on_the_copy_list
     r = kit_status(pack, repo)
     assert r.returncode == 0 and listed(r.stdout, "owner files that differ (kept on update)") == [EMAIL_KIT] and "copy list" not in r.stdout
     assert (installed_of(repo) / EMAIL_KIT).read_text(encoding="utf-8") == "The repository's own email recipe.\n"
-    (installed_of(repo) / EMAIL_KIT).unlink()                                             # and where it has none, it is on the list again
+    (installed_of(repo) / EMAIL_KIT).unlink()                                             # and where the repository took it out, it stays out (0.11.1): current, nothing to copy
     r = kit_status(pack, repo)
-    assert r.returncode == 0 and paths_of(listed(r.stdout, "copy list")) == [EMAIL_KIT]
+    assert r.returncode == 0 and "copy list" not in r.stdout and listed(r.stdout, "owner files that differ (kept on update)") == [f"{EMAIL_KIT} (deleted in the repository)"]
 
 
 def test_a_page_the_owner_adds_is_never_judged_for_words_but_its_dead_link_fails_kit_links(pack):
@@ -4936,8 +5124,8 @@ def test_a_file_the_owner_adds_that_is_not_markdown_travels_and_is_never_judged(
     repo = tmp_path / "site"
     repo.mkdir()
     r = kit_status(pack, repo)
-    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + wanted
-    assert all(i.endswith("(owner file, the repository has none)") for i in listed(r.stdout, "copy list")[len(COPY_ORDER):])
+    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + wanted + ["kit.json"]
+    assert all(i.endswith("(owner file, the repository has none)") for i in listed(r.stdout, "copy list")[len(COPY_ORDER):-1])
     # a changed one is a changed owner file: kit:owned warns, the next build records it and moves the version
     mutate(kd / "notes" / "palette.txt", "16px", "17px")
     assert kit_check(pack).returncode == 0 and check_report_rows(pack)["kit:owned"]["detail"].startswith("notes/palette.txt changed since the last build")
@@ -5140,3 +5328,626 @@ def test_kit_json_names_its_owner_files_as_plain_paths_of_the_owner_part_of_the_
                 kitlib.load(pack)
             assert e.value.code == 2 and needle in e.value.message, where
         f.write_bytes(good)
+
+
+def test_kit_behind_names_the_ad_and_deck_recipes_after_new_masters_and_not_the_other_files(pack):
+    """0.10.0: approved masters that change after the build make the recipes that use them behind (by default recipes/ad.md and recipes/presentation.md,
+    and any owner file that names assets/masters/); a change to the masters alone does not name voice.md or the web page recipe."""
+    filled_kit(pack)
+    for n in ("ad", "presentation"):
+        (kit_of(pack) / "recipes" / f"{n}.md").write_text(f"# {n}\n\nA line. [example]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    m = pack / "assets" / "masters" / "reklama" / "a.html"
+    m.parent.mkdir(parents=True)
+    m.write_text("<p>ad</p>", encoding="utf-8")
+    assert kit_check(pack).returncode == 3
+    detail = check_report_rows(pack)["kit:behind"]["detail"]
+    assert "recipes/ad.md" in detail and "recipes/presentation.md" in detail and "assets/masters/ changed after it" in detail
+    assert "voice.md" not in detail and "recipes/web-page.md" not in detail
+
+
+# ---------------------------------------------------------------- owner files a repository never changed are updated (ADR-0014)
+
+def test_kit_status_names_the_owner_files_to_update(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert listed(r.stdout, "owner files to update (unchanged in the repository since the last copy)") == ["voice.md"]
+    items = listed(r.stdout, "copy list")
+    assert items[-2:] == ["voice.md (owner file, an update)", "kit.json"]
+    res = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
+    assert res["update_owner"] == ["voice.md"] and res["owner_differ"] == [] and res["owner_left_over"] == []
+    for rel in res["copy"]:
+        shutil.copy2(kit_of(pack) / rel, installed_of(repo) / rel)
+    assert kit_status(pack, repo).returncode == 0
+
+
+# ---------------------------------------------------------------- the kit's entry page: steps, the rules and a map; the values and facts in brand.md (G8 A1)
+import re  # noqa: E402
+
+BRAND_MD = "brand.md"
+APPLIED_GOLDEN = ROOT / "tests" / "fixtures" / "applied-skill-acme.md"   # the applied skill of a project without a kit, as 0.10.0 wrote it for this fixture
+
+
+def headings(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith("## ")]
+
+
+def section_text(text: str, heading: str) -> str:
+    return text.split(heading + "\n", 1)[1].split("\n## ", 1)[0]
+
+
+def test_the_kits_skill_has_steps_rules_never_and_a_map_and_no_file_list(pack):
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert headings(text) == ["## How to read the kit", "## How to work", "## The kit", "## Rules the owner decided", "## Never", "## Map"]
+    read = section_text(text, "## How to read the kit")                                    # the three weights, what is never made up, and who "the owner" is
+    assert all(f"\n| {w} | " in read for w in ("Fixed", "Default", "Example")) and "ask the owner" not in text
+    assert section_text(text, "## Rules the owner decided").startswith("\n`golden-rules.md` sorts these by weight; a rule it does not sort is fixed.\n\n")
+    assert "never made up: a new brand colour, a claim that `facts.json` does not hold, and a redrawn logo" in read and "is whoever maintains the brand" in read
+    assert ("a line tagged `[rule: <id>]` is fixed, numbered or not; a choice made for a reference page (`[rule: site:<id>]`) is a default; a line tagged `[example]` is an example. "
+            "Numbered steps with no tag are practice.") in read
+    assert "the other token values (spacing, radius, motion timing)" in read and "or with a visible placeholder marked as a sample" in read
+    assert "| what every piece keeps, and what it may change | `golden-rules.md` |" in section_text(text, "## Map")
+    brand = (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8")                          # the kit's brand.md sends no choice to the owner either, where the tokens lack a value
+    assert "A value that is not listed is not defined: choose one in line with these, and say what you chose." in brand and "ask the owner" not in brand
+    how = section_text(text, "## How to work")                                             # the steps are the brand's practice, not a gate
+    assert how.startswith("\nThis is the brand's own practice. Follow it, or use a better way of your own: the fixed parts hold either way.\n\n1. ")
+    assert "is yours to decide, in line with the fixed parts: say what you decided." in how and "tell whoever maintains the brand" in how
+    assert "\n# Acme brand\n" in text and text.startswith("---\nname: acme-brand\n")
+    assert "## Colour" not in text and not any(line.startswith("- `brand/") for line in text.splitlines())
+    assert "Kit version 1.1 (kit.json)." in text and "{{" not in text
+    assert "1. Name what you are making and the moment it is for" in section_text(text, "## How to work")
+
+
+def test_brand_md_holds_colour_type_mark_and_claims_with_kit_paths(pack):
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8")
+    assert text.startswith("# Acme brand: values and facts\n") and "{{" not in text
+    assert [h for h in headings(text) if h in ("## Colour", "## Type", "## Mark", "## What may be claimed")] == ["## Colour", "## Type", "## Mark", "## What may be claimed"]
+    assert "`brand/assets/tokens/tokens.json`" in text and "../../../" not in text and "- `brand/assets/logo/mark.svg`" in text
+    assert kit_json(pack)["generated"][BRAND_MD] == file_sha(kit_of(pack) / BRAND_MD)
+
+
+def test_every_path_the_steps_and_the_map_name_is_in_the_kit(pack):
+    with_masters(pack)
+    assert build(pack).returncode == 0, "build"
+    kd = kit_of(pack)
+    text = (kd / "SKILL.md").read_text(encoding="utf-8")
+    named = re.findall(r"`([^`\s]+)`", section_text(text, "## How to work") + section_text(text, "## Map"))
+    paths = [n for n in named if "/" in n or "." in n]
+    assert "brand.md" in paths and "brand/assets/masters/" in paths and "snippets/logo.html" in paths
+    for rel in paths:
+        assert (kd / rel).is_dir() if rel.endswith("/") else (kd / rel).is_file(), rel
+
+
+def test_the_map_and_the_steps_name_masters_only_when_the_kit_has_them(pack):
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "masters" not in text and "reference-pages/" not in text
+    with_masters(pack)
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "Ads and decks start from an approved master in `brand/assets/masters/`." in section_text(text, "## How to work")
+    assert "| the approved ads and decks | `brand/assets/masters/` |" in section_text(text, "## Map")
+
+
+
+def test_the_map_names_the_owners_own_folders_and_files(pack):
+    assert build(pack).returncode == 0
+    assert "the owner's own folders and files" not in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")   # only the scaffolded ones: no row
+    kd = kit_of(pack)
+    for rel, text in (("guides/components.md", "# Components\n"), ("guides/motion.md", "# Motion\n"), ("code/status.html", "<p>status</p>\n"),
+                      ("notes.md", "# Notes\n"), ("recipes/email.md", "# E-mail\n")):
+        (kd / rel).parent.mkdir(parents=True, exist_ok=True)
+        (kd / rel).write_text(text, encoding="utf-8")
+    assert build(pack).returncode == 0
+    text = (kd / "SKILL.md").read_text(encoding="utf-8")
+    assert "| the owner's own folders and files | `code/`, `guides/`, `notes.md` |" in section_text(text, "## Map")   # recipes/ has its own row
+    assert kit_json(pack)["generated"]["SKILL.md"] == file_sha(kd / "SKILL.md")
+
+
+def test_without_a_kit_the_applied_skill_keeps_its_bytes(pack):
+    r = bc("applied-skill", "--yes", project=pack)
+    assert r.returncode == 0, r.stderr
+    assert (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_bytes() == APPLIED_GOLDEN.read_bytes()
+
+
+def test_an_owner_file_where_brand_md_now_goes_stops_the_build_and_replace_moves_it(pack):
+    assert build(pack).returncode == 0
+    (kit_of(pack) / BRAND_MD).write_text("my own notes\n", encoding="utf-8")
+    r = build(pack)
+    assert r.returncode == 1 and "brand.md (edited by hand)" in r.stderr, r.stdout + r.stderr
+    assert (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8") == "my own notes\n"
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (pack / KIT_REMOVED / BRAND_MD).read_text(encoding="utf-8") == "my own notes\n"
+    assert (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8").startswith("# Acme brand: values and facts\n")
+
+
+# ---------------------------------------------------------------- the review checklist, built from rules.json (G8 A2)
+CHECKLIST = "checklist.md"
+CHECKLIST_FIXED = ["- [ ] The logo comes from its files in `brand/assets/logo/`, used as they are.",
+                   "- [ ] Every colour is a token role from `brand/assets/tokens/tokens.css`, in both themes where the material has them.",
+                   "- [ ] Every number, feature, price, client and date is in `facts.json`; a missing one is left out, or is a visible placeholder.",
+                   "- [ ] Sample data is labelled as sample data.",
+                   "- [ ] Anything the brand has not decided was decided in line with the fixed parts, and the hand-over says what was decided.",
+                   "- [ ] Every fixed rule in `golden-rules.md` holds, and each default that was left has a reason you can state."]
+
+
+def checklist_of(p) -> str:
+    return (kit_of(p) / CHECKLIST).read_text(encoding="utf-8")
+
+
+def test_the_checklist_lists_every_rule_with_its_id_every_band_and_every_pair_floor(pack):
+    record_rules(pack, "The mark keeps its clear space", "A button says at most three words, always")
+    mutate(pack / "brief" / "BRIEF.md", "FORBIDDEN count in every page shot. -->", "FORBIDDEN count in every page shot. -->\n\n- synergy\n- `leverage`")
+    assert build(pack).returncode == 0
+    text = checklist_of(pack)
+    assert text.startswith("# Acme checklist\n\nGo through it before you hand anything over. A \"no\" on a fixed line is fixed, never waved through; a \"no\" on a default is a choice "
+                           "with a reason you can state (`golden-rules.md` says which rules are defaults; a rule it does not sort is fixed). Generated from `rules.json`: never edit it here.\n")
+    assert headings(text) == ["## Logo", "## Colour", "## The owner's rules", "## Words", "## Claims", "## New things"]
+    lines = text.splitlines()
+    assert "- [ ] The mark keeps its clear space (`the-mark-keeps-its-clear-space`)." in lines
+    assert "- [ ] A button says at most three words, always (`a-button-says-at-most-three`)." in lines
+    assert "- [ ] Up to 32 px the small mark uses `brand/assets/logo/grid-mark.svg`." in lines
+    assert "- [ ] At larger sizes the large mark uses `brand/assets/logo/mark.svg`." in lines
+    assert "- [ ] At 32 px and below the accent holds a solid 4 x 4 px square." in lines
+    assert "- [ ] Every ui-text pair reaches at least 4.5:1 (`brand.md` lists the pairs and their ratios)." in lines
+    assert "- [ ] None of these: synergy, leverage." in lines
+    assert all(line in lines for line in CHECKLIST_FIXED)
+
+
+def test_the_checklist_has_no_rules_words_or_page_section_without_them_and_one_with_a_page_block(pack):
+    assert build(pack).returncode == 0
+    assert headings(checklist_of(pack)) == ["## Logo", "## Colour", "## Claims", "## New things"]
+    record_rules(pack, "One mark per screen")
+    block = {"rules": [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}]}
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", block))
+    assert build(pack).returncode == 0
+    assert headings(checklist_of(pack)) == ["## Logo", "## Colour", "## The owner's rules", "## Page rules", "## Claims", "## New things"]
+    assert "- [ ] `one-mark`: one mark per screen." in checklist_of(pack).splitlines()
+
+
+def test_the_checklist_is_generated_hashed_named_in_the_steps_and_the_map_and_its_links_resolve(pack):
+    filled_kit(pack)
+    kj = kit_json(pack)
+    assert kj["generated"][CHECKLIST] == file_sha(kit_of(pack) / CHECKLIST) and CHECKLIST in report(pack, "kit")["outputs"]
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "Before you hand anything over, go through `checklist.md`." in section_text(skill, "## How to work")
+    assert "| the check before handing over | `checklist.md` |" in skill
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+def test_every_checklist_line_comes_from_rules_json_or_the_fixed_lines(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    assert build(pack).returncode == 0
+    rules = rules_of(pack)
+    sources = [r["id"] for r in rules["g4"]] + [b["drawing"] for b in rules["bands"]] + [p["kind"] for p in rules["pairs"]] + rules["forbidden"]
+    items = [line for line in checklist_of(pack).splitlines() if line.startswith("- [ ] ") and line not in CHECKLIST_FIXED]
+    assert items and all(any(s in line for s in sources) or "the accent holds a solid" in line for line in items), items
+
+
+# ---------------------------------------------------------------- approved ad and deck masters scaffold their recipes (G8 A3)
+AD_ENTRY = {"file": "ad/index.html", "kind": "ad", "canvas": [1080, 1350]}
+DECK_ENTRY = {"file": "deck/deck.pptx", "kind": "deck-pptx"}
+
+
+def with_manifest(p, *entries):
+    with_masters(p)
+    (p / "assets" / "masters" / "masters.json").write_text(json.dumps({"entries": list(entries)}), encoding="utf-8")
+
+
+def test_ad_masters_scaffold_the_ad_recipe_only(pack):
+    with_manifest(pack, AD_ENTRY)
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    ad = (kd / "recipes" / "ad.md").read_text(encoding="utf-8")
+    assert ad.startswith("# Ads\n") and ad.count("[[fill: ") == 1 and "{{" not in ad and re.findall(r"(?m)^(\d+)\. ", ad) == ["1", "2", "3", "4", "5"]
+    assert not (kd / "recipes" / "presentation.md").exists()
+    assert sorted(kit_json(pack)["owned"]) == sorted([*OWNER_FILES, "recipes/ad.md"]) and owned_row(pack) == "6 owner files scaffolded this run, 0 kept as they are"
+
+
+def test_a_deck_scaffolds_the_presentation_recipe_and_names_powerpoint(pack):
+    with_manifest(pack, DECK_ENTRY)
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "recipes" / "presentation.md").read_text(encoding="utf-8")
+    assert text.startswith("# Presentations\n") and "PowerPoint" in text and "Keynote" in text and not (kit_of(pack) / "recipes" / "ad.md").exists()
+
+
+def test_a_master_scaffold_is_never_overwritten_and_comes_back_when_deleted(pack):
+    with_manifest(pack, AD_ENTRY, DECK_ENTRY)
+    assert build(pack).returncode == 0
+    ad = kit_of(pack) / "recipes" / "ad.md"
+    ad.write_text("# Ads\n\nMine.\n", encoding="utf-8")
+    assert build(pack).returncode == 0 and ad.read_text(encoding="utf-8") == "# Ads\n\nMine.\n"
+    ad.unlink()
+    assert build(pack).returncode == 0 and ad.read_text(encoding="utf-8").startswith("# Ads\n\nWhat an ad for this brand keeps, and how we usually make one.")
+
+
+def test_without_masters_json_no_master_recipe_is_scaffolded(pack):
+    with_masters(pack)                                                                     # masters placed by hand: no masters.json
+    assert build(pack).returncode == 0
+    assert not (kit_of(pack) / "recipes" / "ad.md").exists() and not (kit_of(pack) / "recipes" / "presentation.md").exists()
+    assert sorted(kit_json(pack)["owned"]) == OWNER_FILES
+
+
+def test_a_masters_json_with_a_problem_stops_the_build_naming_it(pack):
+    with_manifest(pack, {"file": "ad/index.html", "kind": "poster"})
+    r = build(pack)
+    assert r.returncode == 1 and "assets/masters/masters.json: ad/index.html: kind 'poster' is not one of" in r.stderr and "masters approve" in r.stderr, r.stdout + r.stderr
+    assert not (kit_of(pack) / "recipes" / "ad.md").exists()
+
+
+def test_the_master_scaffolds_hold_one_fill_marker_each_and_kit_check_names_them(pack):
+    with_manifest(pack, AD_ENTRY, DECK_ENTRY)
+    filled_kit(pack)                                                                       # fills the five, not the two master recipes
+    r = kit_check(pack)
+    assert r.returncode == 1 and statuses(pack) == {**ALL_PASS, "kit:fill": "fail"}, r.stdout + r.stderr
+    detail = check_report_rows(pack)["kit:fill"]["detail"]
+    assert "recipes/ad.md" in detail and "recipes/presentation.md" in detail
+
+
+# ---------------------------------------------------------------- install.py: the installer the kit carries (G8 A5, ADR-0014)
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import kitlib  # noqa: E402
+
+INSTALL = "install.py"
+
+
+def git_repo(tmp_path, name="shop"):
+    repo = tmp_path / name
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    return repo
+
+
+def run_install(script, repo, *args, cwd=None):
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH",)}
+    env["BRAND_CREATOR_TODAY"] = "2026-10-17"
+    return subprocess.run([sys.executable, "-I", str(script), str(repo), *args], capture_output=True, text=True, cwd=cwd, env=env)
+
+
+def test_the_kits_install_py_is_kitcopy_byte_for_byte(pack):
+    assert build(pack).returncode == 0
+    assert (kit_of(pack) / INSTALL).read_bytes() == (ROOT / "scripts" / "adaptlib" / "kitcopy.py").read_bytes()
+    assert kit_json(pack)["generated"][INSTALL] == file_sha(kit_of(pack) / INSTALL)
+
+
+def test_install_plans_then_copies_then_says_current(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 1 and "shop: not installed" in r.stdout and "run again with --yes to copy" in r.stdout, r.stdout + r.stderr
+    assert not (repo / ".claude").exists()
+    (repo / "sub").mkdir()
+    r = run_install(kit_of(pack) / INSTALL, repo / "sub", "--yes")                         # any folder inside the clone: the kit goes to the repository's root
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"installed: {os.path.realpath(installed_of(repo))} (version 1.1)" in r.stdout and f"next: review and commit it in {os.path.realpath(repo)}" in r.stdout
+    assert kit_status(pack, repo).returncode == 0
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 0 and "shop: current (version 1.1)" in r.stdout
+
+
+def test_install_and_kit_status_give_the_same_answer(pack, tmp_path):
+    assert build(pack).returncode == 0
+    fresh, same = git_repo(tmp_path, "fresh"), git_repo(tmp_path, "same")
+    assert run_install(kit_of(pack) / INSTALL, same, "--yes").returncode == 0
+    older = git_repo(tmp_path, "older")
+    assert run_install(kit_of(pack) / INSTALL, older, "--yes").returncode == 0
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    for repo in (fresh, same, older):
+        mine = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+        theirs = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
+        assert mine.pop("applied") is False and mine.pop("moved") == []
+        for key in ("label", "path"):
+            mine.pop(key), theirs.pop(key)
+        assert mine == theirs, repo.name
+    assert json.loads(run_install(kit_of(pack) / INSTALL, older, "--json").stdout)["update_owner"] == ["voice.md"]
+
+
+def test_install_updates_an_unchanged_owner_file_and_keeps_a_changed_one(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (installed_of(repo) / "visual.md").write_text("the shop's own visual notes\n", encoding="utf-8")
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    mutate(kit_of(pack) / "visual.md", "\n", "\nAnother line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (installed_of(repo) / "voice.md").read_bytes() == (kit_of(pack) / "voice.md").read_bytes()
+    assert (installed_of(repo) / "visual.md").read_text(encoding="utf-8") == "the shop's own visual notes\n"
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["visual.md"]
+
+
+def test_install_moves_left_over_files_to_removed_and_deletes_nothing(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (pack / "assets" / "logo" / "wordmark-dark.svg").unlink()
+    assert build(pack).returncode == 0
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    gone = "brand/assets/logo/wordmark-dark.svg"
+    assert not (installed_of(repo) / gone).exists() and (repo / "removed-2026-10-17" / ".claude/skills/acme-brand" / gone).is_file()
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_install_moves_a_repository_owner_file_aside_before_a_generated_file_takes_its_path(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    kd = installed_of(repo)
+    (kd / "checklist.md").write_text("the shop's own checklist, from an older kit\n", encoding="utf-8")   # a 0.10-era kit: checklist.md was an owner file
+    mutate_json(kd / "kit.json", lambda d: (d["generated"].pop("checklist.md"), d["owned"].__setitem__("checklist.md", file_sha(kd / "checklist.md"))))
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/checklist.md").read_text(encoding="utf-8") == "the shop's own checklist, from an older kit\n"
+    assert (kd / "checklist.md").read_bytes() == (kit_of(pack) / "checklist.md").read_bytes()
+
+
+def test_install_is_refused_for_its_own_repository_the_project_home_dot_claude_and_no_git(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    no_git = tmp_path / "plain"
+    no_git.mkdir()
+    cases = {installed_of(repo) / INSTALL: (repo, "is the brand project itself or a folder inside it"),        # the copy in the shop, pointed at the shop
+             kit_of(pack) / INSTALL: (pack, "is the brand project itself or a folder inside it")}
+    for script, (target, why) in cases.items():
+        before = kitlib.folder_state(target)
+        r = run_install(script, target, "--yes")
+        assert r.returncode == 2 and why in r.stderr and kitlib.folder_state(target) == before, r.stdout + r.stderr
+    r = run_install(kit_of(pack) / INSTALL, no_git, "--yes")
+    assert r.returncode == 2 and "is not inside a git work tree" in r.stderr and not (no_git / ".claude").exists()
+    r = run_install(kit_of(pack) / INSTALL, "https://github.com/example/shop.git")
+    assert r.returncode == 2 and "is a URL: clone it first" in r.stderr
+    assert kitcopy_refuses_home()
+
+
+def kitcopy_refuses_home() -> bool:
+    import kitcopy
+    home = Path(os.path.realpath(Path.home()))
+    return "home folder" in kitcopy.refusal(Path("/nowhere"), home) and "inside ~/.claude" in kitcopy.refusal(Path("/nowhere"), home / ".claude")
+
+
+def test_an_install_stopped_before_kit_json_is_finished_by_the_next_run(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    plan = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    for rel in plan["copy"][:-1]:                                                            # the copy stops just before kit.json
+        shutil.copyfile(kit_of(pack) / rel, installed_of(repo) / rel)
+    again = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    assert again["copy"] == ["kit.json"] and again["owner_differ"] == []
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0 and kit_status(pack, repo).returncode == 0
+
+
+def test_install_runs_from_a_copy_of_the_kit_with_no_plugin(pack, tmp_path):
+    assert build(pack).returncode == 0
+    elsewhere = tmp_path / "mirror" / ".claude" / "skills" / "acme-brand"
+    shutil.copytree(kit_of(pack), elsewhere)
+    repo = git_repo(tmp_path)
+    r = run_install(elsewhere / INSTALL, repo, "--yes", cwd=tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_status(pack, repo).returncode == 0
+
+
+# ---------------------------------------------------------------- the final review's findings (0.11.0)
+
+def test_install_moves_aside_a_repository_file_where_a_newer_kit_first_writes_a_generated_one(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    kd = installed_of(repo)
+    (kd / "brand.md").write_text("the shop's own brand notes\n", encoding="utf-8")       # an older kit that did not write brand.md, and a file the shop added there
+    mutate_json(kd / "kit.json", lambda d: d["generated"].pop("brand.md"))
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/brand.md").read_text(encoding="utf-8") == "the shop's own brand notes\n"
+    assert (kd / "brand.md").read_bytes() == (kit_of(pack) / "brand.md").read_bytes()
+
+
+def test_install_moves_aside_a_differing_file_when_the_repositorys_kit_json_cannot_be_read(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    kd = installed_of(repo)
+    (kd / "checklist.md").write_text("the shop's own checklist\n", encoding="utf-8")
+    (kd / "kit.json").write_text("{not json", encoding="utf-8")
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/checklist.md").read_text(encoding="utf-8") == "the shop's own checklist\n"
+    assert not (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/SKILL.md").exists()     # a file with the kit's own bytes stays where it is
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_a_first_install_stopped_before_kit_json_is_finished_by_the_next_run(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    plan = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    for rel in plan["copy"][:-1]:                                                            # the first copy stops just before kit.json
+        dest = installed_of(repo) / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(kit_of(pack) / rel, dest)
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_a_kit_folder_with_a_file_of_its_own_and_no_kit_json_is_still_refused(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    (installed_of(repo)).mkdir(parents=True)
+    shutil.copyfile(kit_of(pack) / "SKILL.md", installed_of(repo) / "SKILL.md")
+    (installed_of(repo) / "notes.md").write_text("a hand-made skill's notes\n", encoding="utf-8")
+    before = kitlib.folder_state(repo)
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 2 and "holds no kit.json" in r.stderr and kitlib.folder_state(repo) == before, r.stdout + r.stderr
+
+
+def test_an_owner_file_edited_since_the_last_build_stops_the_copy_until_the_kit_is_built(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line, not built yet.\n", count=1)
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 3 and "voice.md (changed since the last build)" in r.stderr and "kit build --yes" in r.stderr, r.stdout + r.stderr
+    assert not (repo / ".claude").exists()
+    assert kit_status(pack, repo).returncode == 3
+    (kit_of(pack) / "recipes" / "email.md").write_text("# E-mail\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (kit_of(pack) / "recipes" / "social.md").write_text("# Social\n", encoding="utf-8")   # added since the last build: not recorded either
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 3 and "recipes/social.md (was added since the last build)" in r.stderr, r.stdout + r.stderr
+
+
+def test_install_refuses_to_put_an_older_kit_over_a_newer_one(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    mutate_json(installed_of(repo) / "kit.json", lambda d: d.__setitem__("version", "1.10"))
+    before = kitlib.folder_state(repo)
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 1 and "holds version 1.10, newer than this kit's 1.1" in r.stdout, r.stdout + r.stderr
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 2 and "holds version 1.10, newer than this kit's 1.1" in r.stderr and "git pull" in r.stderr, r.stdout + r.stderr
+    assert kitlib.folder_state(repo) == before
+
+
+def test_install_runs_from_a_kit_copied_out_of_its_project_and_renamed(pack, tmp_path):
+    assert build(pack).returncode == 0
+    elsewhere = tmp_path / "Downloads" / "acme-brand-main"
+    shutil.copytree(kit_of(pack), elsewhere)
+    (tmp_path / "work").mkdir()
+    repo = git_repo(tmp_path / "work")
+    r = run_install(elsewhere / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (repo / ".claude" / "skills" / "acme-brand-main").exists()                    # the name is the kit's, from its kit.json
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_install_refuses_the_repository_its_kit_sits_in_when_the_project_is_a_folder_of_it(pack, tmp_path):
+    assert build(pack).returncode == 0
+    brands = git_repo(tmp_path, "brands")
+    kit = brands / "acme" / ".claude" / "skills" / "acme-brand"
+    shutil.copytree(kit_of(pack), kit)
+    before = kitlib.folder_state(brands)
+    r = run_install(kit / INSTALL, brands, "--yes")
+    assert r.returncode == 2 and "is the repository this kit sits in" in r.stderr and kitlib.folder_state(brands) == before, r.stdout + r.stderr
+
+
+def test_kit_status_reads_the_repository_root_as_install_does(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    (repo / "apps" / "web").mkdir(parents=True)
+    assert run_install(kit_of(pack) / INSTALL, repo / "apps" / "web", "--yes").returncode == 0
+    r = kit_status(pack, repo / "apps" / "web")
+    assert r.returncode == 0 and "current (version 1.1)" in r.stdout, r.stdout + r.stderr
+
+
+
+def run_install_home(script, repo, home, *args):
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH",)}
+    env.update({"BRAND_CREATOR_TODAY": "2026-10-17", "HOME": str(home)})
+    return subprocess.run([sys.executable, "-I", str(script), str(repo), *args], capture_output=True, text=True, env=env)
+
+
+def test_an_owner_file_the_repository_deleted_stays_deleted_and_the_copy_is_current(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (installed_of(repo) / "visual.md").unlink()                                               # the product took it out on purpose
+    plan = run_install(kit_of(pack) / INSTALL, repo)
+    doc = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    assert plan.returncode == 0 and "shop: current (version 1.1)" in plan.stdout and "visual.md (deleted in the repository)" in plan.stdout, plan.stdout
+    assert doc["state"] == "current" and doc["copy"] == [] and doc["copy_owner"] == [] and {"file": "visual.md", "why": "missing"} in doc["owner_differ"], doc
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0 and not (installed_of(repo) / "visual.md").exists(), r.stdout + r.stderr
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_the_plan_says_why_yes_would_refuse_instead_of_asking_for_it(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    mutate_json(installed_of(repo) / "kit.json", lambda d: d.__setitem__("version", "1.10"))
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 1 and "run again with --yes to copy" not in r.stdout and "--yes refuses this: " in r.stdout and "git pull" in r.stdout, r.stdout
+    other = git_repo(tmp_path, "other")
+    (installed_of(other)).mkdir(parents=True)
+    (installed_of(other) / "notes.md").write_text("a hand-made skill's notes\n", encoding="utf-8")
+    r = run_install(kit_of(pack) / INSTALL, other)
+    assert r.returncode == 1 and "run again with --yes to copy" not in r.stdout and "--yes refuses this: " in r.stdout and "move it away yourself" in r.stdout, r.stdout
+
+
+def test_install_and_kit_status_warn_about_a_global_skill_for_the_brand(pack, tmp_path):
+    assert build(pack).returncode == 0
+    home = tmp_path / "home"
+    for folder, head in (("acme", "name: acme\ndescription: The Acme brand, made by hand\n"), ("acme-brand", "name: acme-brand\ndescription: An old copy\n"),
+                         ("unrelated", "name: unrelated\ndescription: Something else\n")):
+        (home / ".claude" / "skills" / folder).mkdir(parents=True)
+        (home / ".claude" / "skills" / folder / "SKILL.md").write_text(f"---\n{head}---\n# x\n", encoding="utf-8")
+    repo = git_repo(tmp_path)
+    r = run_install_home(kit_of(pack) / INSTALL, repo, home)
+    for folder in ("acme", "acme-brand"):
+        assert f"warning: ~/.claude/skills/{folder}/ is a global skill for Acme: Claude loads it in every project; taking it out is yours" in r.stdout, r.stdout
+    assert "unrelated" not in r.stdout
+    doc = json.loads(run_install_home(kit_of(pack) / INSTALL, repo, home, "--json").stdout)
+    assert doc["global_skills"] == ["acme", "acme-brand"], doc
+    env = {**os.environ, "HOME": str(home)}
+    r = kit_status(pack, repo, env=env)
+    assert "warning: ~/.claude/skills/acme/ is a global skill for Acme" in r.stdout, r.stdout + r.stderr
+    plain = run_install_home(kit_of(pack) / INSTALL, repo, tmp_path / "nohome")              # no ~/.claude/skills at all: no warning
+    assert "global skill" not in plain.stdout and json.loads(run_install_home(kit_of(pack) / INSTALL, repo, tmp_path / "nohome", "--json").stdout)["global_skills"] == []
+
+
+def test_the_kit_text_says_kit_build_never_overwrites_the_owners_files_and_install_updates_only_unchanged_ones():
+    text = kitlib.section("1.0")
+    assert "are never overwritten." not in text                                                # since 0.11.0 install.py updates the unchanged ones
+    assert "Your own files (`EXTENDING.md` says which) are never overwritten by `kit build`" in text, text
+    assert "`install.py` updates one only while that repository has not changed it" in text, text
+
+
+# ---------------------------------------------------------------- 0.12.0: the web icons, the social images and the profile pictures go into the kit
+
+def platform_files(p) -> dict[str, bytes]:
+    """The files emit web, social and profiles recorded in the manifest, as project paths with their bytes."""
+    rows = json.loads((p / "assets/manifest.json").read_text())["artefacts"]
+    return {a["path"]: (p / a["path"]).read_bytes() for a in rows if a["emitter"] in ("web", "social", "profiles")}
+
+
+@pytest.mark.requires_resvg
+def test_the_web_icons_social_images_and_profile_pictures_go_into_the_kit_byte_for_byte(pack):
+    for cmd in (("emit", "web"), ("emit", "social", "--tagline", "Dependable small-batch tools"), ("emit", "profiles")):
+        r = bc(*cmd, project=pack)
+        assert r.returncode == 0, (cmd, r.stdout + r.stderr)
+    plat = platform_files(pack)
+    assert {"assets/web/apple-touch-icon.png", "assets/web/icons/maskable-512.png", "assets/profiles/avatar-400.png"} <= set(plat)
+    assert any(rel.startswith("assets/social/og-") for rel in plat)
+    filled_kit(pack)
+    for rel, data in plat.items():
+        assert (kit_of(pack) / "brand" / rel).read_bytes() == data, rel
+    assert not any("/_proof/" in rel or "/_build/" in rel for rel in kit_files(pack))       # the proofs and the card pages are never shipped
+    kj = kit_json(pack)
+    assert {"brand/" + rel for rel in plat} <= set(kj["generated"]) and "platform" in kj["sources"]
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "| the web icons, social images and profile pictures | `brand/assets/web/`, `brand/assets/social/`, `brand/assets/profiles/` |" in skill
+    assert set(plat) <= {i["path"] for i in report(pack, "kit")["inputs"]}
+    r = kit_check(pack)
+    assert r.returncode == 0 and statuses(pack) == ALL_PASS, r.stdout + r.stderr
+    with (pack / "assets/web/apple-touch-icon.png").open("ab") as fh:                     # a file changed after it was emitted: the manifest no longer vouches for it
+        fh.write(b"\x01")
+    assert kit_check(pack).returncode == 3 and "(platform)" in check_report_rows(pack)["kit:sources"]["detail"]
+    r = build(pack)
+    assert r.returncode == 1 and "assets/web/apple-touch-icon.png" in r.stderr and "emit web" in r.stderr, r.stdout + r.stderr

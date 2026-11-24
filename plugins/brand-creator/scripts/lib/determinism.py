@@ -75,8 +75,53 @@ def normalise_pdf(data: bytes) -> bytes:
 
     data = re.sub(rb"(/(?:CreationDate|ModDate)\s*\()([^)]*)(\))", fixed(PDF_FIXED_DATE), data)
     data = re.sub(rb"(<xmp:(?:CreateDate|ModifyDate|MetadataDate)>)([^<]*)(</)", fixed(PDF_FIXED_XMP), data)
-    return re.sub(rb"(/ID\s*\[\s*)<([0-9A-Fa-f]*)>(\s*)<([0-9A-Fa-f]*)>",
-                  lambda m: m.group(1) + b"<" + b"0" * len(m.group(2)) + b">" + m.group(3) + b"<" + b"0" * len(m.group(4)) + b">", data)
+    out, last = [], 0
+    for start, end, kind in _pdf_id_spans(data):
+        body = data[start:end]
+        out += [data[last:start], re.sub(rb"[0-9A-Fa-f]", b"0", body) if kind == "hex" else b"0" * len(body)]
+        last = end
+    return b"".join(out) + data[last:]
+
+
+def _pdf_id_spans(data: bytes) -> list[tuple[int, int, str]]:
+    """The byte span of the contents of each string in each /ID array, with its kind: "hex" for <...>, "literal" for (...).
+    Ghostscript writes the ID as a hex string most of the time and as a literal string (with backslash escapes) when that
+    is shorter, so both forms are read. A literal string's contents may hold escaped and balanced parentheses."""
+    spans = []
+    for m in re.finditer(rb"/ID\s*\[", data):
+        pos = m.end()
+        for _ in range(2):
+            while pos < len(data) and data[pos:pos + 1].isspace():
+                pos += 1
+            if data[pos:pos + 1] == b"<":
+                end = data.find(b">", pos)
+                if end < 0:
+                    break
+                spans.append((pos + 1, end, "hex"))
+                pos = end + 1
+            elif data[pos:pos + 1] == b"(":
+                i, depth = pos + 1, 1
+                while i < len(data):
+                    c = data[i:i + 1]
+                    if c == b"\\":
+                        i += 2
+                        continue
+                    depth += {b"(": 1, b")": -1}.get(c, 0)
+                    if depth == 0:
+                        break
+                    i += 1
+                if depth:
+                    break
+                spans.append((pos + 1, i, "literal"))
+                pos = i + 1
+            else:
+                break
+    return spans
+
+
+def pdf_ids(data: bytes) -> list[bytes]:
+    """The raw contents of every /ID string in a PDF (hex digits or literal-string bytes, as written)."""
+    return [data[a:b] for a, b, _ in _pdf_id_spans(data)]
 
 
 def png_chunks(data: bytes) -> list[tuple[str, bytes]]:
@@ -127,8 +172,7 @@ def lint_file(path: Path) -> list[str]:
             if not m.group(1).startswith(PDF_FIXED_XMP.encode()):
                 out.append(f"PDF XMP date {m.group(1).decode('latin-1')!r} is not the fixed date (pdf-dates)")
                 break
-        m = re.search(rb"/ID\s*\[\s*<([0-9A-Fa-f]*)>", data)
-        if m and m.group(1).strip(b"0"):
+        if any(re.sub(rb"\s", b"", i).strip(b"0") for i in pdf_ids(data)):
             out.append("PDF /ID is not zeroed (pdf-dates)")
     return out
 

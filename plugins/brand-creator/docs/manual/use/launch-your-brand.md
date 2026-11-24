@@ -5,17 +5,13 @@ anyone for you.
 
 ## Before you start
 
-- You have a brand project. Run a name check first if the name is open, or the domain and handle rows will say UNKNOWN.
+- You have a brand project, of any tier. Run a name check first if the name is open, or the domain and handle rows will say UNKNOWN.
   See [Name your brand](name-your-brand.md).
 
 ## Do it
 
-1. Type:
-
-   > /brand-creator:launch
-
-   Use `--name <candidate>` when naming screened several names and you want the checklist for one.
-
+1. Ask for it, such as "help me launch" or "give me the launch checklist". When naming screened several names, say which
+   one the checklist is for, such as "the launch checklist for Loaf".
 2. Claude writes `LAUNCH.md` from your local files: trademark first, then domains and handles (with the date each was
    checked), e-mail, deploy, renames and the print hand-off.
 3. Claude hands you one step: the first unticked box. You get the reason in one sentence, the exact click path (the page to

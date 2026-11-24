@@ -42,7 +42,7 @@ Turn the chosen direction into a board the owner approves, in two or three round
    - high and medium findings are fixed, or argued against in one line.
 
    In single-thread you run the review yourself, honestly: if something is fine, say so; do not invent problems.
-3. **Each round is a copy.** `cp -R rounds/r<N-1> rounds/r<N>`, then edit only the new folder. Earlier rounds stay as
+3. **Each round is a copy.** `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` (the old shots, `cold-review.md` and `capture.json` stay behind), then edit only the new folder. Earlier rounds stay as
    they were (the hook enforces it).
 4. **Board structure from round 2.** Opens with "00 What changed since the review", closes with "Weak points".
    Every losing candidate stays with a one-line reason.
