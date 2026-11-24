@@ -119,12 +119,24 @@ test("every spawn line names a tier, and the helper table lists --tier, --effort
   const skill = readSkill();
   const spawns = skill.match(/`puppet spawn [^`]*`/g);
   assert.ok(spawns.length >= 2);
-  for (const s of spawns) assert.match(s, /--tier (creative|<tier>)/, s);
+  for (const s of spawns) assert.match(s, /--tier (creative|mechanical|<tier>)/, s);
   const row = skill.split("\n").find((l) => l.startsWith("| `spawn "));
   assert.match(row, /--tier/);
   assert.match(row, /--effort/);
   assert.match(row, /--model/);
-  assert.match(skill, /`spawn`\s+starts[\s\S]{0,120}refuses\s+without\s+`--tier`\s+or\s+`--effort`/);
+  assert.match(skill, /`spawn`\s+starts[\s\S]{0,120}with\s+no\s+`--tier`,\s+`--model`\s+or\s+`--effort`\s+on\s+the\s+default,\s+Sonnet\s+at\s+medium/);
+});
+
+test("rule 12: Sonnet at medium is the worker default, creative only for design work, only the master starts on Opus high", () => {
+  const rule = read("SKILL.md").match(/12\. \*\*Every job names its tier[\s\S]*?(?=\n13\.)/)[0].replace(/\s+/g, " ");
+  assert.match(rule, /the default is Sonnet at medium/);
+  assert.match(rule, /It is what every worker starts on, the analyst too, and what `assign`, `pick` and `spawn` use when you name no tier/);
+  assert.match(rule, /`creative`[^.]*Opus model at high effort or more, for that job or that part of a job only; move the worker back down at the part's boundary/);
+  assert.match(rule, /Only you, the master, start on Opus high/);
+  const jobs = read("references/jobs.md").replace(/\s+/g, " ");
+  assert.match(jobs, /The default tier is `mechanical`, Sonnet at medium \(the user, 2026-11-24/);
+  assert.match(jobs, /`switch <session> --tier creative` for that part, and `switch <session> --tier mechanical` at the part's boundary/);
+  assert.match(read("references/on-start.md").replace(/\s+/g, " "), /--tier mechanical --job analyst` \(the analyst follows the worker default, Sonnet at medium/);
 });
 
 test("--reuse is measured against the window; --extend adds to an active job; reopen undoes a finish", () => {

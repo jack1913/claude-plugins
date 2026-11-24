@@ -24,7 +24,8 @@ Read this first, when this skill starts, and do it. Read it again when the user 
    reports on this plugin; only when none is open there, another clean session the user named
    (2026-11-23: the analyst put in a project window again while the plugin's window was free).
    `puppet adopt <session> --role analyst`, then send it `analyst-brief.md`, filled in. If none is
-   clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier creative --job analyst`, then
+   clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier mechanical --job analyst` (the
+   analyst follows the worker default, Sonnet at medium: the user, 2026-11-24), then
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
 4. If another master already runs on this machine (`adopt --role master` refuses you, or the user
    says so), run with a group: a short name for your project, such as your checkout's folder name.

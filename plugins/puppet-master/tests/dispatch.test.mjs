@@ -400,6 +400,29 @@ test("assign --tier warns on a mismatch and does not refuse; a fresh session is 
   }
 });
 
+test("assign and pick with no --tier check against the default tier, mechanical (sonnet medium)", async () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2)]);
+  try {
+    adoptSession(t.deps, "u1");
+    adoptSession(t.deps, "u2");
+    t.writeTranscript(t.deps.agents[0].sessionId, request("claude-opus-5-5", "high") + line({ type: "user" }));
+    // pick ranks a session on the default tier before one on Opus high.
+    t.writeTranscript(t.deps.agents[1].sessionId, request("claude-sonnet-5-5", "medium"));
+    assert.equal(pickSession(t.deps, REPO).name, "u2");
+    assert.equal(await main(["assign", "u1", "rename"], t.deps), 0);
+    assert.match(t.out[1], /^MISMATCH u1 tier mechanical needs /);
+    assert.match(t.out[2], /s on the Sonnet row/);
+    assert.equal(t.readRegistry().workers.u1.tier, "mechanical");
+    // --extend keeps the tier the job already has.
+    t.out.length = 0;
+    assert.equal(await main(["assign", "u1", "more", "--extend"], t.deps), 0);
+    assert.equal(t.readRegistry().workers.u1.tier, "mechanical");
+    assert.equal(t.out.some((l) => l.startsWith("MISMATCH")), false);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("pick --tier prefers a clean session that already matches, then an unchecked one", async () => {
   const t = setup([interactive("u1", 1), interactive("u2", 2), interactive("u3", 3)]);
   try {

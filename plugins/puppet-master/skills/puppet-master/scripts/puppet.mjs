@@ -600,14 +600,18 @@ export const TIER_LAUNCH = {
 };
 export const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 
-// The --model and --effort a spawn passes. Explicit flags win over the tier. An effort is
-// always explicit: a no-flag `claude --bg` has started below the user's own default.
+// A job that names no tier runs on this one: Sonnet at medium. Only a design or creative job,
+// or that part of a job, goes up to `creative` (the user, 2026-11-24).
+export const DEFAULT_TIER = "mechanical";
+
+// The --model and --effort a spawn passes. Explicit flags win over the tier, and the tier
+// defaults to DEFAULT_TIER. An effort is always explicit: a no-flag `claude --bg` has started
+// below the user's own default.
 export function launchFlags({ tier, model, effort } = {}) {
   if (tier !== undefined) tierMatch(tier, {});
-  const base = tier === undefined ? {} : TIER_LAUNCH[tier];
+  const base = TIER_LAUNCH[tier ?? DEFAULT_TIER];
   const m = model ?? base.model;
   const e = effort ?? base.effort;
-  if (e === undefined) throw new PuppetError("spawn: name a --tier or --effort", 2);
   if (!EFFORTS.includes(e)) throw new PuppetError(`--effort must be one of ${EFFORTS.join(", ")}, got "${e}"`, 2);
   if (m !== undefined && !m.trim()) throw new PuppetError("--model needs a value", 2);
   return { model: m, effort: e };
@@ -762,6 +766,7 @@ export function assignJob(deps, key, label, { reuse = false, extend = false, sco
   if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; the ${rec.role} takes no jobs`);
   refuseScopeInside(deps, job, rec.checkout);
   if (extend) return extendJob(deps, reg, agents, agent, rec, label, job, tier, git ? true : noGit ? false : undefined);
+  tier ??= DEFAULT_TIER;
   const reusable = reuse && rec.jobState === "done";
   if (rec.jobState !== "clean" && !reusable) {
     const did = rec.jobState === "active" ? `holds "${rec.job}"` : rec.job ? `did "${rec.job}"` : "did other work";
@@ -853,8 +858,8 @@ export function finishJob(deps, key) {
 // would collide with a session already editing that checkout. With a tier, a session that
 // already matches it, or whose mod is on so `switch` can align it, comes first, then one not
 // yet checked; within each, the user's own windows first (an opened window before a worker).
-export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
-  if (tier !== undefined) tierMatch(tier, {});
+export function pickSession(deps, cwd, { scope, noGit = false, tier = DEFAULT_TIER } = {}) {
+  tierMatch(tier, {});
   const job = jobFields(deps, { scope, noGit });
   const checkout = checkoutOf(deps, cwd);
   refuseScopeInside(deps, job, checkout);
@@ -1383,11 +1388,11 @@ const USAGE = [
   "  measure <worker> [--window N] [--json]   (tokens and % of the window; 1000000 unless given)",
   "  list [--name <session>] [--window N] [--json]",
   "  adopt <session> [--role worker|analyst|master] [--window N] [--self-compact]",
-  "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--git | --no-git] [--tier creative|mechanical]   (--git only means something with --extend)",
+  "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--git | --no-git] [--tier creative|mechanical]   (--git only means something with --extend; no --tier = mechanical)",
   "  finish <session>",
   "  reopen <session>",
   "  pick <cwd> [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
-  "  spawn <name> <cwd> <brief-file> (--tier creative|mechanical | --effort <level>) [--model <alias>] [--job <label>] [--scope <dir[,dir]>] [--no-git] [--self-compact]",
+  "  spawn <name> <cwd> <brief-file> [--tier creative|mechanical] [--effort <level>] [--model <alias>] [--job <label>] [--scope <dir[,dir]>] [--no-git] [--self-compact]",
   "  cycle <worker> <focus> [--next <brief-file>]",
   "  compact <session> <focus>   (through the session's own mod; needs --self-compact or the user's yes)",
   "  clear <worker>   (a worker whose job is finished, through its own mod)",
@@ -1561,7 +1566,7 @@ function cmdAssign(deps, positional, flags) {
   const verb = r.extended ? "extended" : "assigned";
   deps.out(`${verb} ${r.name}: ${r.job}${r.scope ? ` (scope ${r.scope.join(",")}${r.git ? "" : ", no git"})` : ""}`);
   if (r.tierCheck) deps.out(r.tierCheck);
-  if (r.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchNext(deps, r.sessionId, r.name, flags.tier));
+  if (r.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchNext(deps, r.sessionId, r.name, flags.tier ?? DEFAULT_TIER));
   return 0;
 }
 
@@ -1703,7 +1708,7 @@ function cmdPick(deps, positional, flags) {
   if (!hit) throw new PuppetError(`no clean session for ${checkoutOf(deps, positional[0])}; spawn one`);
   deps.out(hit.name);
   if (hit.tierCheck) deps.out(hit.tierCheck);
-  if (hit.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchNext(deps, hit.agent.sessionId, hit.name, flags.tier));
+  if (hit.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchNext(deps, hit.agent.sessionId, hit.name, flags.tier ?? DEFAULT_TIER));
   return 0;
 }
 

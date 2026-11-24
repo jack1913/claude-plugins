@@ -52,10 +52,12 @@ Say what the job is:
 Claude picks a clean session of yours in that repository and gives it the job, with the rules you've set (where scratch
 files go, for example). You see a line like `assigned backend-b7: merge payments into test`. If no clean session is free
 there, it starts a background worker instead, on the model and effort the job's tier needs:
-`spawned backend-merge id=<id> in <folder> (model opus, effort high)`.
+`spawned backend-merge id=<id> in <folder> (model sonnet, effort medium)`.
 
-- Each job gets a tier. Design, writing and review are `creative`: an Opus model at high effort or more. Renames,
-  moves and checks are `mechanical`: another model at medium effort or less. Your open windows get the work first.
+- Each job gets a tier, and the default is Sonnet at medium. Renames, moves and checks are `mechanical`: another model
+  at medium effort or less, and what every worker starts on. Design, writing and review are `creative`: an Opus model
+  at high effort or more, only for that job or that part of a job; Claude moves the worker back down when the part
+  ends. Only Claude's own master session starts on Opus at high effort. Your open windows get the work first.
   If a window runs the wrong model or effort and its mod is on, Claude switches it to the job's model and effort
   itself, for that window only: you see `switched backend-b7 to sonnet medium …`. Its status line keeps showing the
   model it started with, and asked which model it is, it names that one too; the mod adds a line under the prompt,

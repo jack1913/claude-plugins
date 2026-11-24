@@ -20,7 +20,8 @@ before a background worker. On a `MISMATCH` where its mod is on, `switch` it to 
 and give it the job. Only when it prints "no clean session", or a session with `MISMATCH` whose
 mod is not on (rule 12), `spawn` a background worker:
 `puppet spawn <name> <cwd> <brief file> --tier <tier> --job "<label>"`. `spawn` starts
-it on the tier's model and effort and refuses without `--tier` or `--effort`. Before you send a
+it on the tier's model and effort, and with no `--tier`, `--model` or `--effort` on the default,
+Sonnet at medium. Before you send a
 job to a picked session, `puppet assign <session> "<label>" --tier <tier>`.
 
 ## Rule 4 in detail: one job per context
@@ -55,6 +56,15 @@ both commit needed your relay of "git is free" (2026-11-03).
 
 ## Rule 12 in detail: every job names its tier
 
+- The default tier is `mechanical`, Sonnet at medium (the user, 2026-11-24: "default level is
+  sonnet medium for workers, changable for deisgn/craetive tasks, and only master starts with opus
+  high"). A worker, the analyst included, starts there; `assign`, `pick` and `spawn` with no `--tier`
+  use it. Name `--tier creative` only for a design or creative job. When only a part of a job is
+  design or creative, give the job on the default, `switch <session> --tier creative` for that part,
+  and `switch <session> --tier mechanical` at the part's boundary (the worker's report of it);
+  `switch --reset` goes back to its launch model. Do the same when a worker you picked runs on
+  Opus high for a job that is not creative: `switch` it down before you send the brief, never leave
+  it up. Only you, the master, start on Opus high.
 - On `MISMATCH` where the session's mod is on, the helper prints "its mod is on: run
   `switch <session> --tier <tier>`". Run `puppet switch <session> --tier <tier>` yourself before
   you send the brief: no paste lines, no new worker. In one turn: `assign`, then `switch`, then
@@ -82,8 +92,8 @@ both commit needed your relay of "git is free" (2026-11-03).
   `/effort <level>`: it saves the user's default for every new session (verified: docs,
   model-config, "Setting your model" and "Adjust effort level", 2026-11-05). You change a
   session's model only through `switch`, never its settings.
-- A spawned worker starts on what `spawn` passed (`creative`: `opus` at `high`; `mechanical`:
-  `sonnet` at `medium`; `--model` and `--effort` override), and the spawn line prints it. It is
+- A spawned worker starts on what `spawn` passed (`creative`: `opus` at `high`; `mechanical`, the
+  default: `sonnet` at `medium`; `--model` and `--effort` override), and the spawn line prints it. It is
   still `unchecked` until its first turn: confirm it as below.
 - On `unchecked` (a fresh session, never a switched one: after a `switch` the session names its
   launch model), the brief asks the worker to state its model first. After

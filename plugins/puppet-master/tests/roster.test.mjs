@@ -140,7 +140,8 @@ test("pick prefers a clean interactive session in the cwd's checkout", async () 
     adoptSession(t.deps, "u3");
     assert.equal(pickSession(t.deps, `${REPO}\\src`).name, "u1");
     assert.equal(await main(["pick", OTHER], t.deps), 0);
-    assert.deepEqual(t.out, ["u3"]);
+    // No --tier: the pick is checked against the default tier (mechanical).
+    assert.deepEqual(t.out, ["u3", "u3 tier mechanical: unchecked (no turn yet); have it state its model, then read its effort with list --name"]);
   } finally {
     t.cleanup();
   }

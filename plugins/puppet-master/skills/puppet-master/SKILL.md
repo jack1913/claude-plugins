@@ -98,9 +98,12 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 11. **Only the commands listed here.** Run only the helper commands in `references/helper.md` and the `claude` calls
     this file names. An unknown `claude <word>` is not an error: it starts a new session with that
     word as its prompt.
-12. **Every job names its tier.** `creative` is design, writing, judgment and review: an Opus model at
-    high effort or more. `mechanical` is renames, moves, reformatting, running checks: a model other
-    than Opus at medium effort or less. `assign --tier` prints the session's model and effort.
+12. **Every job names its tier; the default is Sonnet at medium.** `mechanical` is renames, moves,
+    reformatting, running checks: a model other than Opus at medium effort or less. It is what every
+    worker starts on, the analyst too, and what `assign`, `pick` and `spawn` use when you name no tier.
+    `creative` is design, writing, judgment and review: an Opus model at high effort or more, for that
+    job or that part of a job only; move the worker back down at the part's boundary. Only you, the
+    master, start on Opus high (the user, 2026-11-24). `assign` prints the session's model and effort.
     Detail: `references/jobs.md`, rule 12.
 13. **Never copy, write or print a config file.** Find out a session's model and effort only from
     the helper. Never copy, write or print any `config.json`, settings file or credentials file:
@@ -239,6 +242,7 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - "I'll just build the overlay and compare it myself" → it is a job for a session.
 - "Research can't run while the drawing job edits" → it can, with disjoint `--scope` and `--no-git`.
 - "I'll check the model in the config file" → the helper's `list`; never a config file.
+- "This worker is already on Opus high, the job can run there" → only a design or creative job, or that part of it, runs on Opus: `switch` it to `mechanical` (the default, Sonnet at medium) for the rest, and name `--tier creative` only when the job needs it (2026-11-24).
 - "It's on the wrong tier, I'll give the user `/model opus` to paste" → a typed `/model <name>` saves
   the user's default; `switch` it where its mod is on, else `spawn` on the tier, or give the
   session-only lines the helper prints.

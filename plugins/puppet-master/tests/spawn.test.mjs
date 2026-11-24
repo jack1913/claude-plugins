@@ -57,9 +57,9 @@ test("launches claude --bg --name with the brief verbatim", async () => {
     assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief(brief), "--effort", "high"], t.deps), 0);
     const [call] = bgCalls(t);
     assert.equal(call.cmd, "claude");
-    assert.deepEqual(call.args, ["--bg", "--name", "w9", "--effort", "high", `${brief}\n${WORKER_END}\n`]);
+    assert.deepEqual(call.args, ["--bg", "--name", "w9", "--model", "sonnet", "--effort", "high", `${brief}\n${WORKER_END}\n`]);
     assert.equal(call.opts.cwd, "C:\\work\\repo");
-    assert.deepEqual(t.out, [`spawned w9 id=${t.fresh.id} in C:\\Work\\Repo (effort high)`]);
+    assert.deepEqual(t.out, [`spawned w9 id=${t.fresh.id} in C:\\Work\\Repo (model sonnet, effort high)`]);
   } finally {
     t.cleanup();
   }
@@ -255,14 +255,33 @@ test("explicit --model and --effort win over the tier", async () => {
   }
 });
 
-test("no tier and no --effort is a usage error, and nothing starts", async () => {
+// The user, 2026-11-24: "default level is sonnet medium for workers, changable for
+// design/creative tasks, and only master starts with opus high".
+test("no tier, model or effort starts the worker on the default: sonnet at medium", async () => {
   const t = spawnSetup();
   try {
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 2);
-    assert.match(t.err.join("\n"), /name a --tier or --effort/);
-    assert.equal(bgCalls(t).length, 0);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 0);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "sonnet", "--effort", "medium", `job\n${WORKER_END}\n`]);
+    assert.match(t.out[0], /\(model sonnet, effort medium\)$/);
   } finally {
     t.cleanup();
+  }
+});
+
+test("--effort alone keeps the default model sonnet; --model alone keeps the default effort medium", async () => {
+  const t = spawnSetup();
+  try {
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 0);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "sonnet", "--effort", "high", `job\n${WORKER_END}\n`]);
+  } finally {
+    t.cleanup();
+  }
+  const u = spawnSetup();
+  try {
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", u.brief("job"), "--model", "haiku"], u.deps), 0);
+    assert.deepEqual(bgCalls(u)[0].args, ["--bg", "--name", "w9", "--model", "haiku", "--effort", "medium", `job\n${WORKER_END}\n`]);
+  } finally {
+    u.cleanup();
   }
 });
 
