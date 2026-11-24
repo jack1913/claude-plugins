@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>puppet-master: work-set tasks</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d1d1f; --mut:#6b6b70; --line:#e3e3e6; --card:#fff;
+          --done:#2e7d32; --run:#1565c0; --wait:#c62828; --queue:#8d6e00; --open:#6a1b9a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161618; --fg:#ececef; --mut:#9a9aa2; --line:#2c2c30; --card:#1f1f22;
+            --done:#66bb6a; --run:#64b5f6; --wait:#ef5350; --queue:#ffca28; --open:#ce93d8; }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg);
+         display:flex; flex-direction:column; overflow:hidden; }
+  .mut { color:var(--mut); }
+  code { font-size:12px; word-break:break-all; }
+
+  /* pinned header */
+  header { flex:none; padding:8px 16px; border-bottom:1px solid var(--line); background:var(--bg);
+           display:flex; flex-direction:column; gap:6px; }
+  .hl { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:6px; }
+  .tl { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  h1 { font-size:16px; margin:0; white-space:nowrap; }
+  #meta { font-size:11px; }
+  .banner { padding:6px 10px; border-radius:6px; background:var(--card); border-left:4px solid var(--wait); }
+  .banner.calm { border-left-color:var(--done); }
+  .filters { display:flex; flex-wrap:wrap; gap:4px; }
+  .filters button { border:1px solid var(--line); background:var(--card); color:var(--fg);
+                    border-radius:14px; padding:2px 10px; cursor:pointer; font-size:12px; }
+  .filters button b { margin-left:4px; }
+  .filters button.on { border-color:var(--fg); font-weight:600; }
+  .filters button.hot b { color:var(--wait); }
+  .sessbox { max-width:1000px; }
+  .sessbox table { font-size:12px; table-layout:fixed; }
+  .sessbox th, .sessbox td { padding:2px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sessbox col.s-name { width:170px; } .sessbox col.s-state { width:80px; } .sessbox col.s-model { width:150px; }
+  .sessbox col.s-ctx { width:80px; }
+  .sessbox td.ctx, .sessbox th.ctx { text-align:right; }
+  .sessbox td.job { color:var(--mut); }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; background:var(--mut); }
+  .dot.busy { background:var(--run); } .dot.idle { background:var(--done); } .dot.fresh { background:var(--line); }
+
+  /* body: list + side panel */
+  .split { flex:1; display:flex; min-height:0; }
+  .list { flex:0 0 min(50%, 1000px); overflow:auto; padding:10px 16px 30px; min-width:620px; }
+  aside { display:flex; flex:1 1 auto; min-width:0; border-left:1px solid var(--line); flex-direction:column; background:var(--card); }
+  .empty { flex:1; display:flex; align-items:center; justify-content:center; color:var(--mut); padding:20px; text-align:center; }
+  .split.withpanel .empty { display:none; } .split:not(.withpanel) .ph, .split:not(.withpanel) iframe { display:none; }
+  table.tasks { table-layout:fixed; }
+  table.tasks col.c-id { width:66px; } table.tasks col.c-st { width:112px; }
+  table.tasks col.c-who { width:130px; } table.tasks col.c-rep { width:170px; }
+  table.tasks td.st { white-space:normal; }
+  table.tasks td { overflow-wrap:anywhere; }
+  .epicwrap { overflow-x:auto; }
+  .ph { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--line); }
+  .ph .t { flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ph button, .ph a { border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:6px;
+                      padding:2px 8px; cursor:pointer; font-size:12px; text-decoration:none; }
+  aside iframe { flex:1; border:0; width:100%; background:#fff; }
+
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:6px; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:11px; color:var(--mut); font-weight:600; }
+  .st { font-weight:600; white-space:nowrap; }
+  .done{color:var(--done)} .running{color:var(--run)} .waiting-you{color:var(--wait)}
+  .queued{color:var(--queue)} .open{color:var(--open)}
+  td.id { white-space:nowrap; } td.id small { display:block; color:var(--mut); }
+  td.who { font-size:12px; color:var(--mut); max-width:150px; }
+  td.rep { max-width:190px; font-size:12px; }
+  td.rep .r { display:flex; gap:4px; align-items:baseline; margin-bottom:2px; }
+  td.rep a.doc { color:var(--run); cursor:pointer; text-decoration:underline; }
+  td.rep a.doc.cur { font-weight:700; }
+  td.rep a.nw { font-size:11px; color:var(--mut); text-decoration:none; border:1px solid var(--line); border-radius:4px; padding:0 4px; }
+  ul.sub { margin:3px 0 0 0; padding-left:16px; color:var(--mut); }
+  ul.sub li { margin-bottom:2px; }
+  ul.sub.short li { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  button.more { border:0; background:none; color:var(--run); cursor:pointer; padding:0; font-size:12px; margin-top:2px; }
+  h2 { font-size:14px; margin:18px 0 6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="hl">
+    <div class="tl"><h1>puppet-master: work-set tasks</h1><span class="mut" id="meta"></span></div>
+    <div class="banner" id="waiting"></div>
+    <div class="filters" id="filters"></div>
+  </div>
+  <div class="sessbox"><table>
+    <colgroup><col class="s-name"><col class="s-state"><col class="s-model"><col><col class="s-ctx"></colgroup>
+    <thead><tr><th>Session</th><th>State</th><th>Model / effort</th><th>Job</th><th class="ctx">Context</th></tr></thead>
+    <tbody id="sess"></tbody></table></div>
+</header>
+<div class="split" id="split">
+  <div class="list">
+    <table class="tasks">
+      <colgroup><col class="c-id"><col><col class="c-st"><col class="c-who"><col class="c-rep"></colgroup>
+      <thead><tr><th>#</th><th>Task</th><th>Status</th><th>Who</th><th>Reports</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="epicsec" hidden>
+    <h2>Epics, open</h2>
+    <div class="mut" id="epicsAsOf"></div>
+    <div class="epicwrap"><table>
+      <thead><tr><th>Epic</th><th>Repo</th><th>What</th><th>Status</th><th>Stamps</th><th>Tasks</th><th>PR</th><th>In collector</th><th>Next (owner)</th></tr></thead>
+      <tbody id="epics"></tbody>
+    </table></div>
+    </div>
+    <p class="mut">Data reloads every 90 s without a page reload (the side panel stays). Data: <code>tasks.js</code> beside this page, edited by the master on every change.</p>
+  </div>
+  <aside id="panel">
+    <div class="ph"><span class="t" id="ptitle"></span>
+      <a id="pnew" target="_blank" title="Open in a new window">New window ↗</a>
+      <button id="pclose" title="Close the panel">Close ✕</button></div>
+    <iframe id="pframe"></iframe>
+    <div class="empty">Click a report link in the list to read it here.<br>The ↗ button beside a link opens it in a new window.</div>
+  </aside>
+</div>
+<script>
+  const LABEL = { "done":"done", "running":"running", "waiting-you":"waiting for you", "queued":"queued", "open":"open" };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const fileUrl = p => "file:///" + encodeURI(p).replace(/%23/g, "#");
+  const SHORT = 2;                      // sub lines shown before "show more"
+  const store = {
+    get(k, d) { try { return JSON.parse(localStorage.getItem("pmboard." + k)) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("pmboard." + k, JSON.stringify(v)); } catch {} }
+  };
+  let open = new Set(store.get("open", []));
+  let panel = store.get("panel", null);   // {url, label}
+  const FILTERS = { active: t => t.status !== "done", "waiting-you": t => t.status === "waiting-you",
+                    running: t => t.status === "running", queued: t => t.status === "queued" || t.status === "open",
+                    done: t => t.status === "done", all: () => true,
+                    initial: t => t.origin === "initial", added: t => t.origin === "added" };
+  const NAMES = { active:"Not done", "waiting-you":"Waiting for you", running:"Running", queued:"Queued / open",
+                  done:"Done", all:"All", initial:"Initial", added:"Added later" };
+  // a job shown as a brief path reads as its brief name: ".../brief-ad-pm-default-tier.md" -> "ad-pm-default-tier"
+  const jobName = j => /[\\/]brief-[^\\/]+\.md$/.test(j || "") ? j.replace(/^.*[\\/]brief-/, "").replace(/\.md$/, "") : (j || "-");
+  const stateDot = s => /busy|working/.test(s) && !/fresh/.test(s) ? "busy" : /fresh|clean/.test(s) ? "fresh" : "idle";
+  let cur = location.hash.slice(1) in FILTERS ? location.hash.slice(1) : "active";
+
+  function reportLinks(t) {
+    const r = t.reports || [];
+    if (!r.length) return `<span class="mut">${t.evidence && t.evidence !== "-" ? "no HTML report" : "-"}</span>`;
+    return r.map(x => {
+      if (x.pending) return `<div class="mut">${esc(x.label)}${/\(pending\)/.test(x.label) ? "" : " (pending)"}</div>`;
+      const u = fileUrl(x.path);
+      const isCur = panel && panel.url === u ? " cur" : "";
+      return `<div class="r"><a class="doc${isCur}" data-url="${esc(u)}" data-label="${esc(t.id + ": " + x.label)}">${esc(x.label)}</a>`
+           + `<a class="nw" href="${esc(u)}" target="_blank" title="Open in a new window">↗</a></div>`;
+    }).join("");
+  }
+  function subList(t) {
+    if (!t.sub || !t.sub.length) return "";
+    const expanded = open.has(t.id), many = t.sub.length > SHORT;
+    const lines = expanded ? t.sub : t.sub.slice(0, SHORT);
+    const more = many || t.sub.some(s => s.length > 300)
+      ? `<button class="more" data-t="${t.id}">${expanded ? "show less" : "show more" + (many ? ` (${t.sub.length - SHORT} more)` : "")}</button>` : "";
+    return `<ul class="sub${expanded ? "" : " short"}">${lines.map(s => `<li>${esc(s)}</li>`).join("")}</ul>${more}`;
+  }
+  function render() {
+    const D = window.DASH, T = D.tasks, count = f => T.filter(f).length;
+    document.getElementById("meta").textContent = D.workSet + " · days: " + D.days.join(", ") + " · updated " + D.updated;
+    const w = document.getElementById("waiting");
+    w.innerHTML = "<b>Now:</b> " + esc(D.waitingNow);
+    w.classList.toggle("calm", /^Nothing waits/.test(D.waitingNow));
+    document.getElementById("filters").innerHTML = Object.keys(FILTERS).map(k => {
+      const n = count(FILTERS[k]), cls = [k === cur ? "on" : "", k === "waiting-you" && n ? "hot" : ""].join(" ").trim();
+      return `<button class="${cls}" data-f="${k}">${NAMES[k]}<b>${n}</b></button>`;
+    }).join("");
+    document.getElementById("rows").innerHTML = T.filter(FILTERS[cur]).map(t => `
+      <tr><td class="id"><b>${t.id}</b><small>${t.day} ${t.origin === "initial" ? "initial" : "later"}</small></td>
+      <td>${esc(t.title)}${subList(t)}</td>
+      <td class="st ${t.status}">${LABEL[t.status]}</td>
+      <td class="who">${esc(t.who)}</td><td class="rep">${reportLinks(t)}</td></tr>`).join("");
+    document.getElementById("epicsec").hidden = !(D.epics && D.epics.length);
+    document.getElementById("epicsAsOf").textContent = "As of " + (D.epicsAsOf || "-");
+    document.getElementById("epics").innerHTML = (D.epics || []).map(e =>
+      `<tr><td><b>${esc(e.epic)}</b></td><td>${esc(e.repo)}</td><td>${esc(e.what)}</td><td class="st ${e.status === "shipped" ? "done" : "queued"}">${esc(e.status)}</td><td>${esc(e.stamps)}</td><td>${esc(e.tasks)}</td><td>${esc(e.pr)}</td><td>${esc(e.collector)}</td><td>${esc(e.next)}</td></tr>`).join("");
+    document.getElementById("sess").innerHTML = (D.sessions || []).map(s => {
+      const job = jobName(s.job), ctx = (String(s.context).match(/\(([^)]*)\)/) || [, s.context])[1];
+      return `<tr title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + s.job + " · " + s.context)}">`
+        + `<td><i class="dot ${stateDot(s.state)}"></i>${esc(s.name)}</td><td class="mut">${esc(s.state.replace(/\s*\(.*\)/, ""))}</td>`
+        + `<td>${esc(s.model || "-")}</td><td class="job">${esc(job)}</td><td class="ctx">${esc(ctx)}</td></tr>`;
+    }).join("");
+  }
+  function showPanel() {
+    const split = document.getElementById("split");
+    if (!panel) { split.classList.remove("withpanel"); document.getElementById("pframe").src = "about:blank"; return; }
+    split.classList.add("withpanel");
+    document.getElementById("ptitle").textContent = panel.label;
+    document.getElementById("pnew").href = panel.url;
+    const f = document.getElementById("pframe");
+    if (f.dataset.url !== panel.url) { f.src = panel.url; f.dataset.url = panel.url; }
+  }
+  document.getElementById("filters").addEventListener("click", e => {
+    const f = e.target.dataset.f; if (!f) return; cur = f; location.hash = f; render();
+  });
+  document.getElementById("rows").addEventListener("click", e => {
+    const m = e.target.closest("button.more");
+    if (m) { const id = m.dataset.t; open.has(id) ? open.delete(id) : open.add(id); store.set("open", [...open]); render(); return; }
+    const d = e.target.closest("a.doc");
+    if (d) { e.preventDefault(); panel = { url: d.dataset.url, label: d.dataset.label }; store.set("panel", panel); showPanel(); render(); }
+  });
+  document.getElementById("pclose").addEventListener("click", () => { panel = null; store.set("panel", null); showPanel(); render(); });
+
+  // Data refresh without a page reload: load tasks.js again every 90 s, keep the panel and the expanded rows.
+  function loadData(first) {
+    const s = document.createElement("script");
+    s.src = "tasks.js?t=" + Date.now();
+    s.onload = () => { render(); if (first) showPanel(); s.remove(); };
+    s.onerror = () => s.remove();
+    document.body.appendChild(s);
+  }
+  loadData(true);
+  setInterval(() => loadData(false), 90000);
+</script>
+</body>
+</html>
