@@ -183,6 +183,23 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   its window and what it waits for. A worker parked on a prompt sat from 17:09 to 17:26 and again
   from 17:34 to 18:06 on 2026-11-03 because nobody looked. Give each open question a short id
   (A1, A2). Later status messages say "A2 is still open" and never ask it again.
+  The id goes on every question and every action you ask of the user (a decision, a `!` line,
+  an approval, a step on their device), in chat and in its task's item on the live task page.
+  An ask that comes back keeps its id; ids are not reused within the work set. The user,
+  2026-11-24: "you forgot to assign identifiers for your questions".
+- **The live task page.** The user, 2026-11-23: "lets add also interactive report (updating each
+  time something changes) during puppet-master wroking so i can read where are each of our initial
+  or add later (and how many) tasks". Keep one page per work set (`references/on-start.md`,
+  step 7) and update it in the same turn as every change: a task added, started, blocked or done; a
+  session adopted, assigned, compacted, switched, finished or closed; an ask raised or answered.
+  The sessions list is part of it. The user, 2026-11-24: "for master status page, you must keep
+  updating sessions list same as other elements".
+- **Every ask goes into its task's item on the page.** The user, 2026-11-24: "if you need anything
+  for working tasks it must go into thirs opened/not done tasks items". Whatever you need from the
+  user for a task goes into that open task's item, with its id and the data to decide on: the
+  quoted text, the evidence, the full path or link to the page that shows it. Never in chat only:
+  on 2026-11-24 the user could not answer an ask about a Jira comment because its text was not on
+  the page.
 - **Progress, unasked.** Each time a session reports a finished task, tell the user in one line.
   While a step of yours waits on the user (a download, a device, a login), each reply leads with its
   status: what it waits for and where (2026-11-06: three prompts to learn whether a download had run).
@@ -209,6 +226,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   a `!` line only if your own run is refused (rule 1).
 - "I'll just read the code or fetch to answer" → a read-only job for a session (rule 2).
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
+- "I'll ask it in chat, the page can wait" → the ask goes into its open task's item on the live
+  task page in the same turn, with its id and the data to decide on.
 - "I'll try `claude <something>`" → only the calls this file names.
 - "I'll chain the two `puppet` calls in one command" → one call per command, so each outcome reads
   on its own.

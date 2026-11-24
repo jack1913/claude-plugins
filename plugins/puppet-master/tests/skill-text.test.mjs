@@ -446,6 +446,26 @@ test("questions and answers of 2026-11-12: a design pass, never the master's cal
   assert.match(section(skill, "When a job ends"), /Start\s+the\s+open\s+items\s+the\s+user\s+already\s+approved\s+and\s+that\s+need\s+no\s+decision,\s+and\s+report\s+them\s+in\s+one\s+line/);
 });
 
+test("the live task page: one per work set, sessions list included, every ask in its open task's item with an id (the user, 2026-11-23 and 2026-11-24)", () => {
+  const relay = section(read("SKILL.md"), "Relay protocol");
+  assert.match(relay, /every\s+question\s+and\s+every\s+action\s+you\s+ask\s+of\s+the\s+user/);
+  assert.match(relay, /in\s+chat\s+and\s+in\s+its\s+task's\s+item\s+on\s+the\s+live\s+task\s+page/);
+  assert.match(relay, /An\s+ask\s+that\s+comes\s+back\s+keeps\s+its\s+id/);
+  assert.match(relay, /"you forgot to assign identifiers for your questions"/);
+  assert.match(relay, /\*\*The live task page\.\*\*/);
+  assert.match(relay, /update\s+it\s+in\s+the\s+same\s+turn\s+as\s+every\s+change/);
+  assert.match(relay, /"for master status page, you must keep\s+updating sessions list same as other elements"/);
+  assert.match(relay, /"if you need anything\s+for working tasks it must go into thirs opened\/not done tasks items"/);
+  assert.match(relay, /with\s+its\s+id\s+and\s+the\s+data\s+to\s+decide\s+on/);
+  assert.match(relay, /Never\s+in\s+chat\s+only/);
+  assert.match(section(read("SKILL.md"), "Red flags"), /"I'll ask it in chat, the page can wait" →/);
+  const start = section(readSkill(), "On start");
+  assert.match(start, /7\.\s+Open\s+the\s+live\s+task\s+page\.\s+It\s+is\s+one\s+page\s+per\s+work\s+set,\s+not\s+per\s+day/);
+  assert.match(start, /new comes only when we start new\s+set of work/);
+  assert.match(start, /the\s+sessions\s+list/);
+  assert.match(start, /no\s+helper\s+command\s+builds\s+it/);
+});
+
 test("steps the worker cannot run become `!` lines up front, and the worker waits for them (P-20261109-4, P-20261110-1)", () => {
   const skill = readSkill();
   const relay = relayText();

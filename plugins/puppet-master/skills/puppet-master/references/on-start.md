@@ -41,3 +41,12 @@ Read this first, when this skill starts, and do it. Read it again when the user 
    an earlier day without a `Reviewed:` line at its end: offer to review that report first (see
    Wrap-up). Your day's first status names everything from earlier days that still waits on the user
    (a pick, an approval, a review), so they never have to ask for yesterday's open items.
+7. Open the live task page. It is one page per work set, not per day. The user, 2026-11-23: "this
+   reports holds as long as we continnue each day same work list, new comes only when we start new
+   set of work". When the day goes on with the same work set, keep the page you had; start a new
+   one only for a new set of work, in a folder outside every checkout, and give the user its full
+   path. The page lists every task, from the start or added later, with their count; each with its
+   state and its session. It holds the sessions list (each session in your care: its name, role,
+   job, state and measured context), and in each open task's item, what that task needs from the
+   user: each ask with its id and the data to decide on. The page is your own file: no helper
+   command builds it.

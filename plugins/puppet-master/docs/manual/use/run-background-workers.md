@@ -39,6 +39,9 @@ only does the housekeeping; every decision stays yours.
 3. It sets one of them aside as the **analyst** and gives it no job: a clean session open in the puppet-master
    plugin's own repository when you have one, else another clean session you named. If none of your sessions is
    clean, it starts a background session for that.
+4. It opens a live task page and gives you its full path: every task, from the start or added later, with their
+   count and state, and the sessions it looks after. Claude updates it at every change. The page lasts for the whole
+   set of work, across days; a new set of work gets a new page.
 
 ## Give it a job
 
@@ -85,6 +88,9 @@ there, it starts a background worker instead, on the model and effort the job's 
   - When a short answer such as "a" or "later" could fit more than one open question, Claude names the one it read
     it against and checks before passing it on. Each open question gets an id (A1, A2), and later messages say "A2 is
     still open" instead of asking it again.
+  - Every question and every action Claude asks of you carries its id, in chat and on the live task page. Whatever a
+    task needs from you goes into that task's item on the page, with the text or evidence to decide on, never only in
+    chat.
   - Claude acts on everything in your message before it replies: a "go" starts the job in the same turn, and "if you
     have free workers" starts the second job or says why not. When a job ends, it also starts any item you already
     approved that needs no decision, and says so in one line.
