@@ -29,6 +29,10 @@ failure print the paste line as the fallback: relay that to the user.
 master, the analyst and any session with an active job, and the mod refuses them again. Never
 `clear` your own session. `clear` re-adopts the worker under its new session id as `clean`.
 
+**A switch refused as busy.** When `switch` prints "not at a task boundary", put "switch to <tier>
+at FINAL" in the task's item on the live task page, and run it in the same turn as the worker's
+`measure` at its `FINAL:`. Say in one line that the job ran on the launch tier.
+
 For the user's own session, never `cycle`: it has no remote stop. A message cannot compact a
 session either: a `/compact` sent with SendMessage arrives as plain text and runs no command;
 use `compact`. Where the mod is not on, let its auto-compaction run; pasting compactions by hand

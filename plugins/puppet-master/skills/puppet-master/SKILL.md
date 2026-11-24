@@ -97,7 +97,9 @@ This file holds what you need on every turn. The rest is in `references/`, one f
     Detail: `references/context.md`, rule 10.
 11. **Only the commands listed here.** Run only the helper commands in `references/helper.md` and the `claude` calls
     this file names. An unknown `claude <word>` is not an error: it starts a new session with that
-    word as its prompt.
+    word as its prompt. For a plugin update the user asked for, you may run `claude plugin marketplace
+    update <name>` and `claude plugin update <plugin>@<name>`. The user, 2026-11-24: "Yes, add to
+    rule 11 (Recommended)".
 12. **Every job names its tier; the default is Sonnet at medium.** `mechanical` is renames, moves,
     reformatting, running checks: a model other than Opus at medium effort or less. It is what every
     worker starts on, the analyst too, and what `assign`, `pick` and `spawn` use when you name no tier.
@@ -121,7 +123,10 @@ This file holds what you need on every turn. The rest is in `references/`, one f
    can open it). Add a fresh `?v=<n>` if it is served, and say
    what it replaced, so they never review a stale page. Before you relay a visual deliverable (a
    canvas, a screenshot, an app screen), open it and look at it yourself; an overlap or clipping the
-   worker flagged is fixed before the link goes to the user.
+   worker flagged is fixed before the link goes to the user. Name a button or a menu only after you
+   found its label in the page's source. When the user says they cannot see a deliverable, give its
+   full path again and open it yourself. Before you close a question, list each part of the user's
+   ask against your answer.
 2. At each `FINAL:`, `measure` the worker. If its job goes on and it is at 30% or more, compact it
    now (rule 7's first row). If its job is over, `finish` it, then `close` a background worker, or
    `clear` a window whose row says `mod on`, even with no next job queued (the user's yes of
@@ -142,7 +147,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
    A user's deny rules often refuse a session's delete, and no session deletes one. Build output
    in the repository stays: it is gitignored and part of the checkout.
 5. Start the open items the user already approved and that need no decision, and report them in one
-   line. Rule 1 stands: the user makes every decision.
+   line. Rule 1 stands: the user makes every decision. If a clean session is idle and the task page
+   has queued tasks, start the ones the user already approved there and name the rest in that line.
 
 ## Relay protocol
 
@@ -154,7 +160,11 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   recommendation, the options.
 - **Before you put a question to the user, check its premise** against the repository or the docs,
   and state the evidence in the question. For a trade-off, name the precedent or workaround already
-  in use and the cost of each option, so the user can answer once.
+  in use and the cost of each option, so the user can answer once. A claim that there is "no verb", "no
+  way" or that "the tool cannot" is checked first against memory, the earlier sessions' transcripts
+  and the tool's own help; the question names what was searched, and a two-option "cannot" question
+  never goes to the user. Before you propose a build or a dry run, look in the earlier outputs for
+  the data it would produce.
 - **Before relaying, read the session's latest transcript turn.** If the user already answered
   there, don't relay. Tell the session only where the answer is ("your user answered this in your
   window at <time>"). Never restate it as your own go-ahead.
@@ -231,6 +241,9 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll ask it in chat, the page can wait" → the ask goes into its open task's item on the live
   task page in the same turn, with its id and the data to decide on.
+- "You're right, I missed it" or "I can't compact" in reply to a correction → the reply is the step
+  itself plus one line of what changed. Before you tell the user a command cannot be done, run it
+  and quote its refusal.
 - "I'll try `claude <something>`" → only the calls this file names.
 - "I'll chain the two `puppet` calls in one command" → one call per command, so each outcome reads
   on its own.

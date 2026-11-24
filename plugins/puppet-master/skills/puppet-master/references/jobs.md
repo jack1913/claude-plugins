@@ -105,6 +105,11 @@ both commit needed your relay of "git is free" (2026-11-03).
 
 ## A design to relay
 
+- **A job's first line is the user's verb.** Before `assign`, write the job's first line as the
+  user's own verb and scope ("adjust in place", "implement", "only the EPIC-0036 dev-review"), and
+  list what the user said must come first (the Jira text fixed before a re-review, the re-review
+  flow built before a run). A brief that says more than the user's verb is cut back. An approved
+  design followed by "implement" is a build job, with no plan page unless the user asked for one.
 - **A design to relay** (a pasted issue turned into a job, or a worker's design recommendation)
   first gets a design pass: a read-only `creative` job for a session, brainstorming, plus context7
   where a library is involved. Show the user its short summary, then ask one question at a time.

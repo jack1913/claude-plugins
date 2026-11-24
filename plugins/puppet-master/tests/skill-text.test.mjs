@@ -950,3 +950,26 @@ test("shipped's 'never approved' row says which group's decisions were searched 
   assert.match(row, /`was never approved in group "<g>"` \(or `with no group`\) names the decisions file it searched/);
   assert.match(row, /run `shipped` again with the one that logged it/);
 });
+
+test("the 2026-11-24 text proposals are in the file for their moment (P-20261124-1, -2, -3, -4, -7, -9, -10, -11)", () => {
+  const skill = read("SKILL.md").replace(/\s+/g, " ");
+  const ref = (n) => read(`references/${n}`).replace(/\s+/g, " ");
+  // P-1: the first line of a job is the user's verb, with its prerequisites
+  assert.match(ref("jobs.md"), /A job's first line is the user's verb\.[\s\S]*list what the user said must come first[\s\S]*An approved design followed by "implement" is a build job, with no plan page unless the user asked for one/);
+  // P-2: the day's standing answers, pasted whole into every brief
+  assert.match(ref("briefs.md"), /"standing answers" block on the live task page[\s\S]*unchanged into `\{\{standing_rules\}\}` of every brief that day[\s\S]*each line of the block is in the brief/);
+  // P-3: a "cannot" claim is searched first
+  assert.match(skill, /"no verb", "no way" or that "the tool cannot" is checked first against memory, the earlier sessions' transcripts and the tool's own help[\s\S]*a two-option "cannot" question never goes to the user/);
+  // P-4: labels from the page's source, the whole ask answered
+  assert.match(section(read("SKILL.md"), "When a job ends").replace(/\s+/g, " "), /Name a button or a menu only after you found its label in the page's source[\s\S]*cannot see a deliverable, give its full path again and open it yourself[\s\S]*list each part of the user's ask against your answer/);
+  // P-7: a correction is answered by doing
+  assert.match(section(read("SKILL.md"), "Red flags").replace(/\s+/g, " "), /"You're right, I missed it" or "I can't compact" in reply to a correction → the reply is the step itself plus one line of what changed[\s\S]*run it and quote its refusal/);
+  // P-9: a busy switch is queued on the task page and run at FINAL
+  assert.match(ref("context.md"), /"not at a task boundary", put "switch to <tier> at FINAL" in the task's item[\s\S]*same turn as the worker's `measure` at its `FINAL:`[\s\S]*the job ran on the launch tier/);
+  // P-10: queued work goes to an idle clean session at a job's end
+  assert.match(section(read("SKILL.md"), "When a job ends").replace(/\s+/g, " "), /If a clean session is idle and the task page has queued tasks, start the ones the user already approved there and name the rest/);
+  // P-11: rule 11 names the plugin-update calls, with the user's quote
+  assert.match(rule(11).replace(/\s+/g, " "), /`claude plugin marketplace update <name>` and `claude plugin update <plugin>@<name>`[\s\S]*The user, 2026-11-24: "Yes, add to rule 11 \(Recommended\)"/);
+  // P-8 was rejected by the user: SKILL.md still lists a Railway write among the worker's irreversible steps
+  assert.match(skill, /\(a delete, a Railway write\), ask the user's decision here first/);
+});
