@@ -475,7 +475,7 @@ test("the live task page: one per work set, sessions list included, every ask in
   assert.match(start, /7\.\s+Open\s+the\s+live\s+task\s+page\.\s+It\s+is\s+one\s+page\s+per\s+work\s+set,\s+not\s+per\s+day/);
   assert.match(start, /new comes only when we start new\s+set of work/);
   assert.match(start, /the\s+sessions\s+list/);
-  assert.match(start, /no\s+helper\s+command\s+builds\s+it/);
+  assert.match(start, /copy\s+the\s+template\s+folder/); // the page is built from the template (A45); no longer "no helper command builds it"
 });
 
 test("steps the worker cannot run become `!` lines up front, and the worker waits for them (P-20261109-4, P-20261110-1)", () => {
@@ -972,4 +972,27 @@ test("the 2026-11-24 text proposals are in the file for their moment (P-20261124
   assert.match(rule(11).replace(/\s+/g, " "), /`claude plugin marketplace update <name>` and `claude plugin update <plugin>@<name>`[\s\S]*The user, 2026-11-24: "Yes, add to rule 11 \(Recommended\)"/);
   // P-8 was rejected by the user: SKILL.md still lists a Railway write among the worker's irreversible steps
   assert.match(skill, /\(a delete, a Railway write\), ask the user's decision here first/);
+});
+
+// --- the live task page template and the HTML-only reports rule (2026-11-24, A45) ---
+
+test("the live task page ships as a template: the layout in SKILL.md, the detail and the quotes in on-start step 7", () => {
+  const bullet = read("SKILL.md").replace(/\s+/g, " ");
+  assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*pinned header[\s\S]*side panel[\s\S]*`skills\/puppet-master\/templates\/task-page\/`/);
+  assert.match(bullet, /Run `sync-sessions\.mjs` in the same turn as every page change/);
+  const step7 = read("references/on-start.md").replace(/\s+/g, " ");
+  assert.match(step7, /copy the template folder `skills\/puppet-master\/templates\/task-page\/` to a folder outside every checkout[\s\S]*fill `tasks\.js`/);
+  assert.match(step7, /list items like T39\/41 when get so big they need a shortneing with 'show more' button \+ lets make it more area efficient - current data goes to one side and linked docs opens in side panel \(new window only when clicked in specific button\)/);
+  assert.match(step7, /\+ static pinned header with \[Image #1\] and opened sessions/);
+  assert.match(step7, /sessions table needs ehaders, 3\. tasks list table columns overlaps/);
+  assert.match(step7, /2026-11-24/);
+  assert.match(step7, /Reports are written straight into `tasks\.js`/);
+});
+
+test("every report for the user is one HTML page with its full path", () => {
+  const skill = read("SKILL.md").replace(/\s+/g, " ");
+  assert.match(skill, /\*\*Reports are HTML only\.\*\*[\s\S]*dont show me md files reports and any other text, since i got this html reports it s all i need[\s\S]*note that we dont need new file report for each response, it can be status report, it sgood now/);
+  assert.match(skill, /Every report for the user is one HTML page, given with its full path; a short answer goes on the status page; a scratch `\.md` or `\.txt` file is never handed to the user/);
+  const briefs = read("references/briefs.md").replace(/\s+/g, " ");
+  assert.match(briefs, /`\{\{deliverable\}\}`:[^`]*A report for the user is one HTML page with its full path, never an `\.md` or `\.txt` file/);
 });

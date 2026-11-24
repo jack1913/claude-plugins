@@ -206,7 +206,16 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   step 7) and update it in the same turn as every change: a task added, started, blocked or done; a
   session adopted, assigned, compacted, switched, finished or closed; an ask raised or answered.
   The sessions list is part of it. The user, 2026-11-24: "for master status page, you must keep
-  updating sessions list same as other elements".
+  updating sessions list same as other elements". The page has a pinned header (waiting banner,
+  filters with counts, sessions table) over a tasks table beside an always-visible side panel for
+  report pages; copy it from `skills/puppet-master/templates/task-page/` (layout detail and the
+  user's quotes: `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same turn as
+  every page change.
+- **Reports are HTML only.** The user, 2026-11-24: "dont show me md files reports and any other
+  text, since i got this html reports it s all i need" and "note that we dont need new file report
+  for each response, it can be status report, it sgood now". Every report for the user is one HTML
+  page, given with its full path; a short answer goes on the status page; a scratch `.md` or `.txt`
+  file is never handed to the user.
 - **Every ask goes into its task's item on the page.** The user, 2026-11-24: "if you need anything
   for working tasks it must go into thirs opened/not done tasks items". Whatever you need from the
   user for a task goes into that open task's item, with its id and the data to decide on: the

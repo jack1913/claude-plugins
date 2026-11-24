@@ -45,9 +45,21 @@ Read this first, when this skill starts, and do it. Read it again when the user 
 7. Open the live task page. It is one page per work set, not per day. The user, 2026-11-23: "this
    reports holds as long as we continnue each day same work list, new comes only when we start new
    set of work". When the day goes on with the same work set, keep the page you had; start a new
-   one only for a new set of work, in a folder outside every checkout, and give the user its full
-   path. The page lists every task, from the start or added later, with their count; each with its
-   state and its session. It holds the sessions list (each session in your care: its name, role,
-   job, state and measured context), and in each open task's item, what that task needs from the
-   user: each ask with its id and the data to decide on. The page is your own file: no helper
-   command builds it.
+   one only for a new set of work: copy the template folder `skills/puppet-master/templates/task-page/`
+   to a folder outside every checkout, fill `tasks.js` (its comment names every field), and give the
+   user its full path. The page lists every task, from the start or added later, with their count;
+   each with its state and its session. It holds the sessions list (each session in your care: its
+   name, role, job, state and measured context), and in each open task's item, what that task needs
+   from the user: each ask with its id and the data to decide on. Reports are written straight into
+   `tasks.js` (`reports: [{label, path, pending}]`, HTML pages with full paths). `sync-sessions.mjs`
+   rewrites the sessions list from `puppet list`; from a copy outside the plugin, pass `--puppet <path
+   to puppet.mjs>`. Run it in the same turn as every page change.
+   Layout, as the user asked on 2026-11-24: "list items like T39/41 when get so big they need a
+   shortneing with 'show more' button + lets make it more area efficient - current data goes to one
+   side and linked docs opens in side panel (new window only when clicked in specific button)", then
+   "+ static pinned header with [Image #1] and opened sessions", then "sessions table needs ehaders,
+   3. tasks list table columns overlaps". So: a pinned header with the title, the waiting banner, the
+   filter buttons and the sessions table (with column headers); under it the tasks table (fixed
+   column widths) on one side and a side panel on the other that shows a report when its link is
+   clicked, with a "New window ↗" button for a new window. A task's sub lines show two, with "show
+   more (N more)", each line clamped to three. Expanded tasks and the open panel survive a reload.

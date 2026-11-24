@@ -43,7 +43,8 @@ Read this before you write or send any brief, the worker's or the analyst's.
   the fallback up front.
 - Fill these lines in every worker brief:
   - `{{deliverable}}`: code, a document or a browser run. "Check it in the browser" is a browser
-    run, not tests to write.
+    run, not tests to write. A report for the user is one HTML page with its full path, never an
+    `.md` or `.txt` file.
   - `{{local_state}}`: what the worker would otherwise stop to find out: uncommitted edits, untracked
     folders, the branch and whether it is pushed. Write "none known" when there is none.
   - `{{preconditions}}`: the services, tools, device state and shared tools the job depends on (the
