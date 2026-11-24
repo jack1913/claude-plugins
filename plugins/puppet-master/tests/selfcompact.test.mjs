@@ -174,6 +174,34 @@ test("compact: a refusal ack, a missing boundary and a timeout are each loud", a
   }
 });
 
+test("compact waits up to 5 s for a boundary the mod's ack ran ahead of (P-20261124-5)", async () => {
+  // the ack lands on the first wait; the boundary is written to the file only on the third
+  let calls = 0;
+  const late = setup({
+    mod: (t) => {
+      calls++;
+      if (calls === 1) t.ack({ ok: true, outcome: "compacted", tokensBefore: 50000, tokensAfter: 9000 });
+      if (calls === 3) fs.appendFileSync(t.transcript, boundaryLine("2026-06-01T00:00:05.000Z"));
+    },
+  });
+  try {
+    assert.equal(await main(["compact", "w1", "f"], late.deps), 0);
+    assert.deepEqual(late.out, ["compacted w1: 50000→9000 tokens"]);
+    assert.equal(late.sleeps, 3);
+  } finally {
+    late.cleanup();
+  }
+  // no boundary at all: it still fails, after the ack wait plus 5 waits of 1 s
+  const never = setup({ mod: (t) => t.ack({ ok: true, outcome: "compacted", tokensBefore: 1, tokensAfter: 1 }) });
+  try {
+    assert.equal(await main(["compact", "w1", "f"], never.deps), 1);
+    assert.match(never.err.join("\n"), /gained no new compact_boundary/);
+    assert.equal(never.sleeps, 6);
+  } finally {
+    never.cleanup();
+  }
+});
+
 test("compact will not stack a second request on a waiting one", async () => {
   const t = setup();
   try {

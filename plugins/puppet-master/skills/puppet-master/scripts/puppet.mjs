@@ -1239,6 +1239,19 @@ async function modRequest(deps, sessionId, request, { wait = true } = {}) {
   throw new PuppetError(`no answer from the mod in ${(ACK_WAIT_TRIES * ACK_WAIT_MS) / 1000} s; the request was withdrawn`);
 }
 
+// The mod acks the compaction a moment before the boundary is in the file (two failures came
+// 0.6 to 1 s after the session's own event): read again for up to 5 s before giving up.
+const BOUNDARY_WAIT_TRIES = 5;
+
+async function boundaryAppears(deps, file, since) {
+  const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  for (let i = 0; ; i++) {
+    if (newBoundaries(deps.fs.readFileSync(file, "utf8"), since).length > 0) return true;
+    if (i >= BOUNDARY_WAIT_TRIES) return false;
+    await sleep(ACK_WAIT_MS);
+  }
+}
+
 const pasteLine = (name, text) => `give the user "${name}: ${text}" to paste`;
 
 // Compact a session through its own mod. A master's own compaction cannot wait for an ack
@@ -1263,7 +1276,7 @@ export async function compactSession(deps, key, focus) {
   }
   if (self) return { name: agent.name, requested: true };
   if (!r.ack.ok) throw new PuppetError(`${agent.name} was NOT compacted: ${r.ack.outcome}${r.ack.detail ? ` (${r.ack.detail})` : ""}. Fallback: ${fallback}`);
-  if (newBoundaries(deps.fs.readFileSync(file, "utf8"), new Date(r.requestedAt)).length === 0) {
+  if (!(await boundaryAppears(deps, file, new Date(r.requestedAt)))) {
     throw new PuppetError(`${agent.name}: the mod says compacted, but the transcript gained no new compact_boundary`);
   }
   return { name: agent.name, before: r.ack.tokensBefore ?? null, after: r.ack.tokensAfter ?? null };
