@@ -188,7 +188,7 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 | `already editing` | Another session works in that folder. Wait for it to finish, use a second clone, or give both jobs separate folders |
 | `one job per context` | That session already did a job. Claude can reuse it while it is small; otherwise clear it and tell Claude, or let Claude start a worker |
 | `MISMATCH … tier …` | Where that window's mod is on, Claude switches it. Elsewhere, let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level |
-| The status line shows the old model after a switch | Expected: the status line and the session's own answer keep the model it started with. Look for the line `puppet-master: switched to …` under the prompt; the session list shows the model in use |
+| The status line shows the old model after a switch | Expected: the status line and the session's own answer keep the model it started with. Look for the line `puppet-master: switched to …` under the prompt; the session list shows the model in use. Optional: [show a switch in your status line](show-a-switch-in-your-status-line.md) |
 | `no clean session for <folder>; spawn one` | None of your sessions is free there; Claude starts a worker |
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |
 | `just compacted (auto); its size is known after its next turn` | Wait for that session's next answer, then ask again |

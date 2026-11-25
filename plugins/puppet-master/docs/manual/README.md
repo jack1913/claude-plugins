@@ -5,6 +5,7 @@ How to use puppet-master. New here? Start with the [plugin README](../../README.
 ## Do something
 
 - [Run background workers](use/run-background-workers.md): let one session start, compact and close other sessions, one job each
+- [Show a switch in your status line](use/show-a-switch-in-your-status-line.md): optional, make your own status line show the model and effort puppet-master switched a session to
 
 ## Look it up
 
