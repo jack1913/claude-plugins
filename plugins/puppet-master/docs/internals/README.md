@@ -6,6 +6,7 @@ Notes for people who change puppet-master. For using it, read the [manual](../ma
 | --- | --- |
 | [puppet-master](puppet-master.md) | The master's rules, the verified CLI mechanics, measuring, the roster, groups, the mod that compacts or clears a session, the analyst and its logs, and failure handling |
 | [Compacting or clearing the user's own sessions](clear-compact-options.md) | The options weighed, the evidence and the probe, and why the mod was built |
+| [Deferred proposals](deferred-proposals.md) | Changes the user deferred at a wrap-up or parked mid-day, each with the findings and evidence behind it, and the ones decided since |
 
 ## Where things are
 

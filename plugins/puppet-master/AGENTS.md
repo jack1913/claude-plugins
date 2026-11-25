@@ -25,6 +25,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | Manual index | `docs/manual/README.md` |
 | Every command and option | `docs/manual/reference/commands.md` |
 | How it works | `docs/internals/README.md` |
+| Proposals the user deferred (open, flagged, decided) | `docs/internals/deferred-proposals.md` |
 | Tests (`node:test`, no dependencies) | `tests/*.test.mjs`, fixtures in `tests/fixtures/` |
 | CI workflow | `.github/workflows/puppet-master.yml` |
 | Docs standard | `docs/internals/docs-standard.md` |
