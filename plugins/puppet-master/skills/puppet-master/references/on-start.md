@@ -4,6 +4,11 @@ Read this first, when this skill starts, and do it. Read it again when the user 
 When the user tells you to take over from a master stopped by a usage limit, skip "On start" and
 do "A stand-in master" below.
 
+## Contents
+
+- On start
+- A stand-in master
+
 ## On start
 
 1. If this skill's base directory is a copy under `.claude/skills/` rather than the plugin cache,
@@ -68,9 +73,15 @@ do "A stand-in master" below.
    panel (new window only when clicked in specific button)", then "+ static pinned header with
    [Image #1] and opened sessions", then "sessions table needs ehaders, 3. tasks list table columns
    overlaps"; on 2026-11-26: "questions/tasks/jira tasks should be 3 separate tabs, previouse work
-   status pages go to sidebar" and "all lists and tables must be ordered". So: a pinned header with
-   `waitingNow` over three tabs, Questions, Tasks (sessions, filters, tasks) and Jira tasks; previous
-   work sets in the sidebar; a report side panel; every list sorted; tab and panel kept on reload.
+   status pages go to sidebar" and "all lists and tables must be ordered"; later on 2026-11-26: "all
+   open questions 1 under other, tasks tab dont need sessions and filters (all filters goes to
+   sidebar, right side details must be wider, would be gereat if it s box wide could be live
+   changable". So: a pinned header with `waitingNow` over three tabs, Questions (every open ask as a
+   full card, one under another, oldest first), Tasks (the tasks only) and Jira tasks; the filters
+   with their counts, the sessions and the previous work sets in the sidebar (its collapsed rail's
+   counts filter too); a report side panel, 640 px wide by default, its width dragged on its left
+   edge and kept in the browser; every list sorted; tab, panel and its width kept on reload. Every
+   open question goes into `asks[]` as its own record, so the page shows them all at once.
 
 ## A stand-in master
 

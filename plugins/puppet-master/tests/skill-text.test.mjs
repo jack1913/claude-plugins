@@ -992,7 +992,7 @@ test("the live task page ships as a template: the layout in SKILL.md, the detail
 
 test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar, asks as records, pending report and its seen line (T28, T29, A62, A64)", () => {
   const bullet = read("SKILL.md").replace(/\s+/g, " ");
-  assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*three tabs, Questions, Tasks \(sessions table, filters with counts, the tasks\) and Jira tasks \(epics, their PRs and Jira board status\), a sidebar with the previous work sets/);
+  assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*three tabs, Questions \(every open ask in full, one under another\), Tasks \(the tasks only\) and Jira tasks \(epics, their PRs and Jira board status\), a sidebar with the filters and their counts, the sessions and the previous work sets, and a side panel for report pages whose width the user drags/);
   assert.match(bullet, /goes onto the page as an ask of that open task \(a record in `asks\[\]` of `tasks\.js`, shown in Questions and on the task's item\), with its id and the data to decide on/);
   const step7 = read("references/on-start.md").replace(/\s+/g, " ");
   assert.match(step7, /"questions\/tasks\/jira tasks should be 3 separate tabs, previouse work status pages go to sidebar"/);
@@ -1000,7 +1000,11 @@ test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar
   assert.match(step7, /each ask as its own record in `asks\[\]`, with its id, its task and the data to decide on/);
   assert.match(step7, /is `pending-report`, not counted as waiting[\s\S]*"new list item status, 'pending report' which tells me nothing waits there but it s thing to read"/);
   assert.match(step7, /"button next to it marking showed"[\s\S]*"seen on the task page: T22 \(11-26 23:40\)"; on that line, or when the user says they read it, set it `done`/);
-  assert.match(step7, /three tabs, Questions, Tasks \(sessions, filters, tasks\) and Jira tasks; previous work sets in the sidebar/);
+  // T33, the user after testing it: open asks stacked, the Tasks tab only tasks, filters to the sidebar, a wider panel dragged live
+  assert.match(step7, /"all open questions 1 under other, tasks tab dont need sessions and filters \(all filters goes to sidebar, right side details must be wider, would be gereat if it s box wide could be live changable"/);
+  assert.match(step7, /three tabs, Questions \(every open ask as a full card, one under another, oldest first\), Tasks \(the tasks only\) and Jira tasks; the filters with their counts, the sessions and the previous work sets in the sidebar/);
+  assert.match(step7, /a report side panel, 640 px wide by default, its width dragged on its left edge and kept in the browser/);
+  assert.match(step7, /Every open question goes into `asks\[\]` as its own record, so the page shows them all at once\./);
   // the page's own seen line is the one the skill tells the master to act on
   const page = fs.readFileSync(path.join(SKILL_DIR, "templates", "task-page", "index.html"), "utf8");
   assert.ok(page.includes('"seen on the task page: "'));

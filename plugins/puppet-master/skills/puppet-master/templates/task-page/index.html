@@ -69,6 +69,8 @@
   .srow.on { background:var(--well); font-weight:600; }
   .srow .n { min-width:22px; text-align:center; border-radius:999px; font-size:13px; padding:0 4px; color:var(--text-2); }
   .srow .n.hot { font-weight:600; }
+  .srow.first-origin { margin-top:6px; position:relative; }
+  .srow.first-origin::before { content:""; position:absolute; left:10px; right:10px; top:-4px; border-top:1px solid var(--line); }
   .ssess { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:0 8px; align-items:center; font-size:13.5px; padding:3px 10px; }
   .ssess span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ssess span:last-child { max-width:84px; text-align:right; }
@@ -139,24 +141,18 @@
   .cardh { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
   .cardh h2 { margin:0; font-size:15.5px; }
   .cardh .cap { font-size:13px; color:var(--text-3); }
-  .sg { display:grid; grid-template-columns:250px 150px 170px minmax(0,1fr) 170px; gap:0 22px; align-items:center; min-height:38px; font-size:14px; }
-  .sg.h { min-height:0; font-size:13px; color:var(--text-3); padding:10px 0 4px; }
-  .sg > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .sg .ctx { text-align:right; font-variant-numeric:tabular-nums; }
   .dot { width:9px; height:9px; border-radius:50%; flex:none; display:inline-block; margin-right:9px; vertical-align:0; }
   .dot.busy { background:var(--dot-busy); } .dot.idle { background:var(--dot-idle); } .dot.fresh { box-shadow:inset 0 0 0 1.5px var(--dot-idle); }
   .dot.warn { background:var(--wait); }
-  .filters { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:0 2px; }
-  .filters button { display:inline-flex; gap:7px; align-items:baseline; padding:5px 13px; border-radius:999px; white-space:nowrap; cursor:pointer;
-                    border:0; background:none; color:var(--text-2); }
-  .filters button.on { background:var(--card); box-shadow:var(--shadow); font-weight:600; color:var(--text); }
-  .filters button b { font-variant-numeric:tabular-nums; font-weight:600; }
-  .filters .sep { width:1px; height:18px; background:var(--line); margin:0 8px; }
-  .orderline { font-size:13px; color:var(--text-3); padding:6px 8px 0; }
+  .orderline { font-size:13px; color:var(--text-3); padding:0 8px; }
+  .orderline b { color:var(--text); font-weight:600; }
   .seenbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 16px; border-radius:12px; background:var(--unread-bg); color:var(--unread); font-size:13.5px; }
   .seenbar code { background:var(--card); color:var(--text); padding:2px 8px; border-radius:6px; user-select:all; }
   .btn { border:0; border-radius:8px; padding:3px 10px; cursor:pointer; font-size:13px; font-weight:600; background:var(--card); color:var(--accent); box-shadow:var(--shadow); white-space:nowrap; }
-  .btn.seen { background:var(--unread-bg); color:var(--unread); box-shadow:none; margin-top:8px; }
+  /* Mark seen is a button, not a status: outlined and neutral, never the Pending report pill's colour (the user, 11-26) */
+  .btn.seen { background:transparent; color:var(--text); box-shadow:none; border:1px solid var(--text-3); padding:2px 10px; margin-top:8px; }
+  .btn.seen:hover { background:var(--well); border-color:var(--text-2); }
+  .btn:focus-visible, #pgrip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .tg { display:grid; grid-template-columns:44px minmax(0,1fr) 140px 180px 226px; gap:0 22px; align-items:start; }
   .tg.h { font-size:13px; color:var(--text-3); padding:0 24px 8px; }
   .task { padding:18px 24px; margin-top:10px; scroll-margin-top:12px; }
@@ -203,11 +199,19 @@
   .compact .whou { display:block; }
   .compact .ln { grid-template-columns:minmax(0,1fr) 12px; gap:1px 10px; }
   .compact .ln .lead { grid-column:1 / -1; } .compact .ln .lead:empty { display:none; }
-  .compact .sg { grid-template-columns:196px 150px minmax(0,1fr) 64px; gap:0 16px; }
-  .compact .sg .model, .compact .sg .wide, .sg .short { display:none; }
-  .compact .sg .short { display:inline; }
   .compact .fact { grid-template-columns:96px minmax(0,1fr); }
   .compact .reading .tx.cols { column-count:1; }
+  /* tight: the list under 900 px beside a wide panel or the sidebar; the reports go under the status, the title keeps its room */
+  .tight .tg { grid-template-columns:30px minmax(0,1fr) 170px; gap:0 14px; }
+  .tight .tg.h > span:last-child { display:none; }
+  .tight .task > :nth-child(1) { grid-column:1; grid-row:1; }
+  .tight .task > :nth-child(2) { grid-column:2; grid-row:1 / span 2; }
+  .tight .task > :nth-child(3) { grid-column:3; grid-row:1; }
+  .tight .task > :nth-child(5) { grid-column:3; grid-row:2; margin-top:10px; }
+  .tight .task .reading { grid-column:2 / -1; }
+  #main.tight .ei { grid-template-columns:minmax(0,1fr); gap:4px; }
+  #main.tight .ei .last { font-size:12.5px; }
+  #main.tight .eo { grid-template-columns:132px minmax(0,1fr); gap:0 14px; }
 
   /* Jira tasks: epics, one line per repo and PR */
   .eo { display:grid; grid-template-columns:224px minmax(0,1fr) 112px; gap:0 20px; align-items:start; }
@@ -230,10 +234,16 @@
   .eboardu { display:none; font-size:12.5px; color:var(--text-3); margin-top:4px; }
   .compact .eboardu { display:block; }
 
-  /* side panel for report pages */
-  #panel { width:474px; flex:none; padding:14px 14px 14px 0; display:flex; }
+  /* side panel for report pages; its width (--pw) is dragged on its left edge, kept in this browser, double-click resets */
+  #panel { width:var(--pw, 640px); flex:none; padding:14px 14px 14px 0; display:flex; position:relative; }
+  #pgrip { position:absolute; left:-8px; top:14px; bottom:14px; width:14px; cursor:col-resize; z-index:2; touch-action:none; border-radius:8px; }
+  #pgrip::after { content:""; position:absolute; left:5px; top:calc(50% - 24px); width:4px; height:48px; border-radius:2px; background:var(--line); }
+  #pgrip:hover::after, body.dragging #pgrip::after { background:var(--accent); }
+  body.dragging { cursor:col-resize; user-select:none; }
+  body.dragging #pframe { pointer-events:none; }
   /* under 1200 wide the panel lies over the list instead of squeezing it */
-  body.narrow #panel { position:fixed; top:0; right:0; bottom:0; width:min(560px, 62vw); padding:14px; z-index:5; }
+  body.narrow #panel { position:fixed; top:0; right:0; bottom:0; padding:14px; z-index:5; }
+  body.narrow #pgrip { left:6px; }
   body.narrow #panel .card { box-shadow:0 8px 40px rgba(0,0,0,.28); }
   #panel .card { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
   .ph { display:flex; align-items:center; gap:10px; padding:16px 18px 0; }
@@ -261,7 +271,7 @@
       <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="2.5"/><path d="M7 3v12"/></svg></button>
       <span>puppet-master</span></div>
     <div class="sidesec"><h3>Show</h3><div id="sidefilters"></div></div>
-    <div class="sidesec"><h3 style="display:flex;justify-content:space-between"><span>Sessions</span><span>Context used</span></h3><div id="sidesess"></div></div>
+    <div class="sidesec"><h3 style="display:flex;justify-content:space-between"><span id="sesshead">Sessions</span><span>Context used</span></h3><div id="sidesess"></div></div>
     <div class="sidesec" id="prevsec"><h3 style="display:flex;justify-content:space-between"><span>Previous work sets</span><span>newest first</span></h3><div id="prev"></div></div>
     <div class="sidesec"><h3>Theme</h3><div class="seg" id="themeseg"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
   </div>
@@ -282,6 +292,8 @@
   </div>
 </div>
 <aside id="panel">
+  <div id="pgrip" role="separator" aria-orientation="vertical" tabindex="0" aria-valuemin="380"
+       aria-label="Panel width" title="Drag to change the width (or the arrow keys); double-click resets it"></div>
   <div class="card">
     <div class="ph"><span class="t" id="ptitle"></span>
       <a id="pnew" target="_blank" title="Open in a new window">New window ↗</a>
@@ -292,7 +304,7 @@
 </aside>
 <script>
   // Reads window.DASH from tasks.js (shape: the comment at the top of tasks.js). Writes nothing but the browser's
-  // localStorage: the tab, the filter, expanded tasks, the panel, the theme, and the "seen" marks.
+  // localStorage: the tab, the filter, expanded tasks, the panel and its width, the theme, and the "seen" marks.
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
   const fileUrl = p => /^https?:\/\//.test(p) ? p : "file:///" + encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
   const num = id => Number(String(id).replace(/\D/g, "")) || 0;
@@ -392,16 +404,19 @@
     document.getElementById("tabs").innerHTML = TABS.map(([k, label]) =>
       `<button role="tab" data-tab="${k}" class="${k === tab ? "on" : ""}" aria-selected="${k === tab}">${label}<b class="${tc[k][1] ? "hot" : ""}">${tc[k][0]}</b></button>`).join("");
     for (const [k] of TABS) document.getElementById("pane-" + k).classList.toggle("hide", k !== tab);
-    // rail: open asks, running, blocked and pending report only when above 0, queued
-    const rail = [[nAsk, "for you", "wait", true, "questions"], [M.C.run, "running", "run", true, "run"], [M.C.block, "blocked", "block", false, "block"],
-                  [M.C.pend, "to read", "unread", false, "pend"], [M.C.queue, "queued", "queue", true, "queue"]];
+    // rail (sidebar closed): open tasks, open asks, running, blocked and pending report only when above 0, queued;
+    // each count switches the Tasks filter (open asks: the Questions tab); every other filter is in the opened sidebar
+    const rail = [[M.C.open, "open", "", true, "open"], [nAsk, "for you", "wait", true, "questions"], [M.C.run, "running", "run", true, "run"],
+                  [M.C.block, "blocked", "block", false, "block"], [M.C.pend, "to read", "unread", false, "pend"], [M.C.queue, "queued", "queue", true, "queue"]];
     document.getElementById("railcounts").innerHTML = rail.filter(r => r[3] || r[0] > 0).map(r =>
-      `<button class="rc" data-go="${r[4]}" title="${r[1]}"><i class="${r[0] ? "k-" + r[2] : ""}">${r[0]}</i>${r[1]}</button>`).join("");
-    document.getElementById("sidefilters").innerHTML = FILTERS.filter(f => (f[0] !== "block" || M.C.block > 0) && f[0] !== "initial" && f[0] !== "added").map(f =>
-      `<button class="srow${tab === "tasks" && filter === f[0] ? " on" : ""}" data-go="${f[0]}"><span>${f[1]}</span><span class="n${f[2] && M.C[f[0]] && f[2] !== "done" ? " hot k-" + f[2] : ""}">${M.C[f[0]]}</span></button>`).join("");
+      `<button class="rc" data-go="${r[4]}" title="${r[4] === "questions" ? "Open asks: the Questions tab" : "Show the " + r[1] + " tasks"}"><i class="${r[0] && r[2] ? "k-" + r[2] : ""}">${r[0]}</i>${r[1]}</button>`).join("");
+    // the sidebar holds every filter of the Tasks tab, with its count; Blocked only when a task is blocked
+    document.getElementById("sidefilters").innerHTML = FILTERS.filter(f => f[0] !== "block" || M.C.block > 0).map(f =>
+      `<button class="srow${tab === "tasks" && filter === f[0] ? " on" : ""}${f[0] === "initial" ? " first-origin" : ""}" data-go="${f[0]}"><span>${f[1]}</span><span class="n${f[2] && M.C[f[0]] && f[2] !== "done" ? " hot k-" + f[2] : ""}">${M.C[f[0]]}</span></button>`).join("");
+    document.getElementById("sesshead").textContent = "Sessions" + (D.sessionsAsOf ? " · " + D.sessionsAsOf : "");
     document.getElementById("sidesess").innerHTML = sessions(D).map(s =>
-      `<div class="ssess" title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + s.job + " · " + s.context)}"><i class="dot ${s.dot}" style="margin:0"></i><span>${esc(s.name)}</span><span class="mut">${esc(s.pct)}</span></div>`).join("")
-      || `<div class="mut" style="padding:0 10px;font-size:13px">none listed</div>`;
+      `<div class="ssess" title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + jobName(s.job) + " · " + s.context)}"><i class="dot ${s.dot}" style="margin:0"></i><span>${esc(s.name)}</span><span class="mut">${esc(s.pct)}</span></div>`).join("")
+      || `<div class="mut" style="padding:0 10px;font-size:13px">No session listed yet: run sync-sessions.mjs.</div>`;
     const prev = (D.previous || []).slice().sort((a, b) => String(b.days || b.label).localeCompare(String(a.days || a.label)));
     document.getElementById("prevsec").classList.toggle("hide", !prev.length);
     document.getElementById("prev").innerHTML = prev.map(p =>
@@ -418,7 +433,7 @@
       const m = ctx.match(/^([\d,]+) \(([^)]*)\)$/);
       const fresh = /fresh/.test(ctx) || /fresh|clean/.test(s.state);
       const dot = /^changed|blocked/.test(s.state) ? "warn" : /busy|working|master/.test(s.state) && !/idle/.test(s.state) ? "busy" : fresh ? "fresh" : "idle";
-      return Object.assign({}, s, { dot, pct: m ? (m[1] === "0" ? "fresh" : m[2]) : (ctx || "-"), ctxWide: m ? (m[1] === "0" ? "0 · fresh" : m[1] + " · " + m[2]) : (ctx || "-") });
+      return Object.assign({}, s, { dot, pct: m ? (m[1] === "0" ? "fresh" : m[2]) : (ctx || "-") });
     });
   }
 
@@ -510,23 +525,18 @@
       + `<div>${reportsHtml(x)}</div>`
       + (quiet ? "" : readingRows(x)) + `</div>`;
   }
+  // The Tasks tab holds the task table only: the sessions are in the sidebar, the filters in the sidebar and its rail.
   function renderTasks(D, M) {
-    const ss = sessions(D);
-    let h = `<div class="card scard"><div class="cardh"><h2>Sessions</h2><span class="cap">from puppet list${D.sessionsAsOf ? ", " + esc(D.sessionsAsOf) : ""} · master, working, analyst, clean; by name in each</span></div>`
-      + `<div class="sg h"><span>Session</span><span>State</span><span class="model">Model / effort</span><span>Job</span><span class="ctx"><span class="wide">Context, measured</span><span class="short">Context</span></span></div>`
-      + (ss.map(s => `<div class="sg" title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + s.job + " · " + s.context)}"><span><i class="dot ${s.dot}"></i>${esc(s.name)}</span>`
-        + `<span class="mut">${esc(s.state)}</span><span class="model mut">${esc(s.model || "-")}</span><span class="mut">${esc(jobName(s.job))}</span><span class="ctx"><span class="wide">${esc(s.ctxWide)}</span><span class="short">${esc(s.pct)}</span></span></div>`).join("")
-        || `<div class="mut" style="padding:8px 0">No session listed yet: run sync-sessions.mjs.</div>`) + `</div>`;
+    let h = "";
     const seenIds = Object.keys(seen).filter(id => M.tasks.some(x => x.t.id === id && x.seenHere)).sort((a, b) => num(a) - num(b));
     if (seenIds.length) {
       const line = "seen on the task page: " + seenIds.map(id => id + " (" + seen[id] + ")").join(", ");
       h += `<div class="seenbar"><span>Marked seen here, not yet in tasks.js: ${seenIds.map(esc).join(", ")}. Tell the master:</span><code id="seenline">${esc(line)}</code>`
         + `<button class="btn" data-copy="seenline">Copy</button><span id="copied" class="mut"></span></div>`;
     }
-    h += `<div><div class="filters">` + FILTERS.filter(f => f[0] !== "block" || M.C.block > 0).map((f, i) =>
-      (f[0] === "initial" ? `<span class="sep"></span>` : "")
-      + `<button data-f="${f[0]}" class="${f[0] === filter ? "on" : ""}">${f[1]}<b style="${f[2] && M.C[f[0]] && f[2] !== "done" && f[2] !== "queue" ? "color:var(--" + f[2] + ")" : ""}">${M.C[f[0]]}</b></button>`).join("") + `</div>`
-      + `<div class="orderline">${filter === "open" ? "Order: running, waits for you, queued, pending report; newest first within each. Lines in a task: newest first." : "Order: newest first. Lines in a task: newest first."}</div></div>`;
+    const fl = FILTERS.find(f => f[0] === filter) || FILTERS[0];
+    h += `<div class="orderline">Showing <b>${esc(fl[1])} · ${M.C[fl[0]]}</b> (the filters are in the sidebar). `
+      + `${filter === "open" ? "Order: running, waits for you, queued, pending report; newest first within each. Lines in a task: newest first." : "Order: newest first. Lines in a task: newest first."}</div>`;
     h += `<div><div class="tg h"><span># ↓</span><span>Task</span><span>Status</span><span class="whoh">Who</span><span>Reports</span></div>`;
     const by = M.by[filter] || M.by.open;
     if (filter === "open") {
@@ -597,10 +607,38 @@
       + (x && x.key === "pend" ? `<div class="pn"><span>${esc(x.t.id)} stays Pending report until you mark it seen</span><button class="btn seen" data-seen="${esc(x.t.id)}">Mark seen ✓</button></div>` : "");
   }
 
+  // Panel width: 640 px by default; at least 380; at most what leaves the task list 560 px beside it
+  // (under 1200 wide, where the panel lies over the list: the window less 120 px, the rail stays free). The stored width is the user's
+  // choice; a smaller window only shows it clamped and does not overwrite it.
+  const PW_DEFAULT = 640, PW_MIN = 380, MAIN_MIN = 560;
+  let pw = store.get("panelw", null);
+  function panelMax() {
+    if (window.innerWidth < 1200) return Math.max(PW_MIN, window.innerWidth - 120);
+    const left = document.body.classList.contains("side-open") ? 292 : 72;
+    return Math.max(PW_MIN, window.innerWidth - left - MAIN_MIN);
+  }
+  function applyPanelWidth() {
+    const w = Math.round(Math.min(panelMax(), Math.max(PW_MIN, pw ?? PW_DEFAULT)));
+    document.documentElement.style.setProperty("--pw", w + "px");
+    const g = document.getElementById("pgrip");
+    g.setAttribute("aria-valuenow", w); g.setAttribute("aria-valuemax", Math.round(panelMax()));
+    // the list's own width: under 900 px its rows go tight (the panel only counts where it sits beside the list)
+    const narrow = window.innerWidth < 1200, left = document.body.classList.contains("side-open") ? 300 : 72;
+    const listW = window.innerWidth - left - 24 - (panel && !narrow ? w : 0);
+    document.getElementById("main").classList.toggle("tight", listW < 900);
+    return w;
+  }
+  function setPanelWidth(w, keep) {
+    pw = Math.round(Math.min(panelMax(), Math.max(PW_MIN, w)));
+    applyPanelWidth();
+    if (keep) store.set("panelw", pw);
+  }
+
   function applyLayout() {
     const narrow = window.innerWidth < 1200;
     document.body.classList.toggle("narrow", narrow);
     document.body.classList.toggle("side-open", !!store.get("side", false));
+    applyPanelWidth();
     document.getElementById("main").classList.toggle("compact", narrow || !!panel || document.body.classList.contains("side-open"));
     if (theme === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", theme);
   }
@@ -627,12 +665,11 @@
   const toggle = (set, key, id) => { set.has(id) ? set.delete(id) : set.add(id); store.set(key, [...set]); };
   function stamp() { const d = new Date(), p = n => String(n).padStart(2, "0"); return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); }
   document.body.addEventListener("click", e => {
-    const el = e.target.closest("[data-tab],[data-go],[data-f],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-more-done],[data-more-answered],a.doc,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
+    const el = e.target.closest("[data-tab],[data-go],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-more-done],[data-more-answered],a.doc,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
     if (!el) return;
     const d = el.dataset;
     if (d.tab) return goTab(d.tab);
     if (d.go) return d.go === "questions" ? goTab("questions") : goFilter(d.go);
-    if (d.f) return goFilter(d.f);
     if (d.jump) return jumpTask(d.jump);
     if (d.ask) { goTab("questions"); return flash(document.getElementById("ask-" + d.ask)); }
     if (d.exp) { toggle(open, "open", d.exp); if (!open.has(d.exp)) { full.delete(d.exp); store.set("full", [...full]); } return render(); }
@@ -653,6 +690,32 @@
     if (el.id === "pclose") { panel = null; store.set("panel", null); showPanel(); return render(); }
     if (el.id === "askchip") return goTab(window.DASH.asks && window.DASH.asks.some(a => a.state !== "answered") ? "questions" : "tasks");
     if (el.id === "readchip") return goFilter("pend");
+  });
+  // dragging the panel's left edge: the panel's right edge is the window's, so the width is the distance to it
+  const grip = document.getElementById("pgrip");
+  const edgeOffset = () => (document.body.classList.contains("narrow") ? 14 : 0);   // the panel's own padding when it lies over the list
+  grip.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    e.preventDefault(); grip.setPointerCapture(e.pointerId); document.body.classList.add("dragging");
+  });
+  grip.addEventListener("pointermove", e => {
+    if (!grip.hasPointerCapture(e.pointerId)) return;
+    setPanelWidth(window.innerWidth - e.clientX + edgeOffset(), false);
+  });
+  const endDrag = e => {
+    if (!document.body.classList.contains("dragging")) return;
+    document.body.classList.remove("dragging");
+    if (grip.hasPointerCapture(e.pointerId)) grip.releasePointerCapture(e.pointerId);
+    store.set("panelw", pw);
+  };
+  grip.addEventListener("pointerup", endDrag);
+  grip.addEventListener("pointercancel", endDrag);
+  grip.addEventListener("dblclick", () => { pw = null; store.set("panelw", null); applyPanelWidth(); });
+  grip.addEventListener("keydown", e => {
+    const step = e.shiftKey ? 96 : 32, now = applyPanelWidth();
+    if (e.key === "ArrowLeft") { e.preventDefault(); setPanelWidth(now + step, true); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); setPanelWidth(now - step, true); }
+    else if (e.key === "Home" || e.key === "Enter") { e.preventDefault(); pw = null; store.set("panelw", null); applyPanelWidth(); }
   });
   window.addEventListener("resize", () => applyLayout());
   document.getElementById("scroller").addEventListener("scroll", e => e.target.classList.toggle("pinned", e.target.scrollTop > 0));

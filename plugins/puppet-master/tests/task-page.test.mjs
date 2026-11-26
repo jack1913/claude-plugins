@@ -56,11 +56,12 @@ test("index.html keeps every feature of the live page and adds the T28 design wi
     "id=\"rail\"", "id=\"side\"", "Previous work sets", "id=\"prev\"", "D.previous", "store.get(\"side\"",
     // filters with counts, the old Initial / Added later included
     "Open", "Waits for you", "Running", "Blocked", "Pending report", "Queued", "Done", "All", "Initial", "Added later",
-    // sessions with headers, epics and Jira tasks with Jira board status
-    "<span>Session</span><span>State</span><span class=\"model\">Model / effort</span><span>Job</span>", "Context, measured",
+    // sessions and filters in the sidebar (T33), epics and Jira tasks with Jira board status
+    "id=\"sidesess\"", "id=\"sidefilters\"", "Context used", "(the filters are in the sidebar)",
     "Epics and Jira tasks", "Jira (board status · assignee)", "no rows recorded",
-    // the side panel for reports, new window only from its own button
+    // the side panel for reports, new window only from its own button; its width dragged on its left edge, kept, reset by double-click (T33)
     "<aside", "<iframe", "New window ↗", "Close ✕",
+    "id=\"pgrip\"", "role=\"separator\"", "PW_DEFAULT = 640, PW_MIN = 380, MAIN_MIN = 560", "store.get(\"panelw\"", "setPointerCapture", "\"dblclick\"",
     // long content: a line of 1,000 characters or more opens whole in a reading row
     "const LONG = 1000", "Open the whole line", "Show more", "Show less", "earlier line",
     // pending report and the seen mark (A62, A64), kept in this browser, with a line for the master
@@ -77,7 +78,7 @@ test("index.html keeps every feature of the live page and adds the T28 design wi
 });
 
 // Runs the page's own script against a small DOM stub, with a tasks.js fixture, and reads what each pane would show.
-function renderPage(dash, { seen = {}, width = 1440, tab, filter } = {}) {
+function renderPage(dash, { seen = {}, width = 1440, tab, filter, panelw, panel } = {}) {
   const html = read("index.html");
   const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
   const els = {};
@@ -89,12 +90,16 @@ function renderPage(dash, { seen = {}, width = 1440, tab, filter } = {}) {
   if (Object.keys(seen).length) localStorage.setItem("pmboard.seen:" + pathname, JSON.stringify(seen));
   if (tab) localStorage.setItem("pmboard.tab", JSON.stringify(tab));
   if (filter) localStorage.setItem("pmboard.filter", JSON.stringify(filter));
+  if (panelw) localStorage.setItem("pmboard.panelw", JSON.stringify(panelw));
+  if (panel) localStorage.setItem("pmboard.panel", JSON.stringify(panel));
+  const rootStyle = {};
+  els.rootStyle = rootStyle;
   const sandbox = {
     localStorage, location: { pathname, hash: "" }, history: { replaceState() {} }, navigator: {},
     setInterval() {}, setTimeout() {}, innerWidth: width, addEventListener() {},
     document: {
       getElementById: el, querySelectorAll: () => [], createElement: () => ({ remove() {} }),
-      documentElement: { setAttribute() {}, removeAttribute() {} },
+      documentElement: { setAttribute() {}, removeAttribute() {}, style: { setProperty: (k, v) => { rootStyle[k] = v; } } },
       body: { classList: classList(), addEventListener() {}, appendChild(s) { sandbox.window.DASH = dash; s.onload(); } },
     },
   };
@@ -168,26 +173,72 @@ test("the page: questions are records, open ones oldest first, answered ones new
 });
 
 test("the page: tasks in Open run running, waits for you, queued, pending report, newest first in each; done after", () => {
-  const t = renderPage(BOARD, { tab: "tasks" })["pane-tasks"].innerHTML;
+  const els = renderPage(BOARD, { tab: "tasks" });
+  const t = els["pane-tasks"].innerHTML;
   assert.deepEqual(ids(t, /data-task="(T\d+)" id=/g), ["T5", "T2", "T7", "T1", "T8", "T3", "T4", "T6"]);
   assert.match(t, /Done · 1 · newest first/);
   assert.match(t, /A3 open<\/b>/, "a done task with an open ask stays in Open with its ask strip");
   assert.match(t, /<span class="pill k-block">Blocked<\/span><span class="blk">on the review host<\/span>/);
   assert.match(t, /Open the whole line · 1,200 characters/);
-  assert.deepEqual(ids(t, /<div class="sg" title="([\w-]+) ·/g), ["m-1", "w-a", "w-b"], "sessions: master, working, clean");
-  assert.match(t, /from puppet list, 10:29/);
+  assert.match(t, /Showing <b>Open · 7<\/b> \(the filters are in the sidebar\)/);
+  assert.deepEqual(ids(els.sidesess.innerHTML, /<div class="ssess" title="([\w-]+) ·/g), ["m-1", "w-a", "w-b"], "sessions: master, working, clean");
+  assert.equal(els.sesshead.textContent, "Sessions · 10:29");
   const all = renderPage(BOARD, { tab: "tasks", filter: "all" })["pane-tasks"].innerHTML;
   assert.deepEqual(ids(all, /data-task="(T\d+)" id=/g), ["T8", "T7", "T6", "T5", "T4", "T3", "T2", "T1"]);
   assert.match(all, /Order: newest first\./);
+});
+
+test("the page: the Tasks tab holds only the task table; the filters and sessions are in the sidebar, the rail switches the filter (T33)", () => {
+  const els = renderPage(BOARD, { tab: "tasks", filter: "run" });
+  const t = els["pane-tasks"].innerHTML;
+  for (const gone of ["data-f=", "class=\"filters\"", "class=\"sg", "<h2>Sessions</h2>", "Context, measured"]) assert.ok(!t.includes(gone), `the Tasks tab still has ${gone}`);
+  assert.deepEqual(ids(t, /data-task="(T\d+)" id=/g), ["T5", "T2"]);
+  const side = els.sidefilters.innerHTML;
+  assert.deepEqual(ids(side, /data-go="(\w+)"><span>/g), ["open", "wait", "run", "block", "pend", "queue", "done", "all", "initial", "added"], "every filter, Blocked while a task is blocked");
+  assert.match(side, /<button class="srow on" data-go="run"><span>Running<\/span><span class="n hot k-run">2<\/span>/, "the chosen filter is marked, with its count");
+  assert.match(side, /class="srow first-origin" data-go="initial"><span>Initial<\/span><span class="n">2<\/span>/);
+  assert.match(side, /data-go="added"><span>Added later<\/span><span class="n">6<\/span>/);
+  assert.ok(!renderPage({ ...BOARD, tasks: BOARD.tasks.filter((x) => !x.blocked) }).sidefilters.innerHTML.includes("data-go=\"block\""));
+  // the rail (sidebar closed): open, asks for you, running, blocked, to read, queued, each switching the filter
+  assert.deepEqual(ids(els.railcounts.innerHTML, /data-go="(\w+)"/g), ["open", "questions", "run", "block", "pend", "queue"]);
+  assert.match(els.railcounts.innerHTML, /data-go="open" title="Show the open tasks"><i class="">7<\/i>open/);
+});
+
+test("the page: every open question is a full card, one under another, oldest first, none folded (T33)", () => {
+  const many = Array.from({ length: 11 }, (_, i) => ({ id: "A" + (60 + i), task: "T1", state: "open", asked: "01-02", question: "Question " + (60 + i) + "?", facts: [{ label: "Why", text: "w" }], recommend: "Yes" }));
+  const q = renderPage({ ...BOARD, asks: [...many.slice().reverse(), ...BOARD.asks.filter((a) => a.state === "answered")] })["pane-questions"].innerHTML;
+  assert.deepEqual(ids(q, /<div class="ask" id="ask-(A\d+)">/g), many.map((a) => a.id));
+  assert.equal((q.match(/<h3>Question \d+\?<\/h3>/g) || []).length, 11, "each open ask shows its whole question");
+  assert.ok(q.indexOf("ask-A70") < q.indexOf("<details"), "open asks come before the folded Answered list, never inside it");
+  const css = read("index.html").match(/\n {2}\.ask \{([^}]*)\}/)[1];
+  assert.ok(!/grid|columns|flex/.test(css), "an ask card is a block: the cards stack");
+});
+
+test("the page: the report panel opens 640 px wide, keeps the dragged width, clamps it to 380 and to what leaves the list 560 px (T33)", () => {
+  assert.equal(renderPage(BOARD).rootStyle["--pw"], "640px");
+  assert.equal(renderPage(BOARD, { panelw: 760 }).rootStyle["--pw"], "760px");
+  assert.equal(renderPage(BOARD, { panelw: 2000 }).rootStyle["--pw"], "808px", "1440 - 72 rail - 560");
+  assert.equal(renderPage(BOARD, { panelw: 100 }).rootStyle["--pw"], "380px");
+  assert.equal(renderPage(BOARD, { width: 1024, panelw: 2000 }).rootStyle["--pw"], "904px", "under 1200 it lies over the list: the window less 120");
+  // beside an open panel the list goes tight (reports under the status) once it is under 900 px; over the list (under 1200) it does not
+  const report = { url: "file:///x/r.html", label: "T4: the report", task: "T4" };
+  assert.ok(renderPage(BOARD, { panel: report }).main.classList.contains("tight"), "1440 - 72 - 640 - 24 = 704");
+  assert.ok(!renderPage(BOARD).main.classList.contains("tight"));
+  assert.ok(!renderPage(BOARD, { width: 1024, panel: report }).main.classList.contains("tight"));
 });
 
 test("the page: pending report has its own pill, filter and count, is not waiting, and Mark seen moves it to Done here (A62, A64)", () => {
   const els = renderPage(BOARD, { tab: "tasks" });
   const t = els["pane-tasks"].innerHTML;
   assert.match(t, /<span class="pill k-unread">Pending report<\/span>/);
-  assert.match(t, /data-seen="T4"[^>]*>Mark seen ✓/);
-  assert.match(t, /data-f="pend" class="">Pending report<b[^>]*>1<\/b>/);
-  assert.match(t, /data-f="wait" class="">Waits for you<b[^>]*>2<\/b>/, "T7 and T1 (its open ask) wait; T4 does not");
+  assert.match(t, /<button class="btn seen" data-seen="T4"[^>]*>Mark seen ✓/);
+  // the user, 11-26: "status 'pending report' must be different to btn 'mark seens'": the button is outlined and neutral
+  const seenCss = read("index.html").match(/\.btn\.seen \{([^}]*)\}/)[1];
+  assert.match(seenCss, /background:transparent/);
+  assert.match(seenCss, /border:1px solid var\(--text-3\)/);
+  assert.ok(!/unread/.test(seenCss), "Mark seen does not take the Pending report colour");
+  assert.match(els.sidefilters.innerHTML, /data-go="pend"><span>Pending report<\/span><span class="n hot k-unread">1<\/span>/);
+  assert.match(els.sidefilters.innerHTML, /data-go="wait"><span>Waits for you<\/span><span class="n hot k-wait">2<\/span>/, "T7 and T1 (its open ask) wait; T4 does not");
   const seen = renderPage(BOARD, { tab: "tasks", seen: { T4: "01-02 11:00" } });
   const s = seen["pane-tasks"].innerHTML;
   assert.match(s, /Done · 2 · newest first/);
