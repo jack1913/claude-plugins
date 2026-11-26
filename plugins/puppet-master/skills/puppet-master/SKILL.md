@@ -21,13 +21,17 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
 After any compaction of your own, Read `<skill dir>/SKILL.md` again before your next action: a compaction keeps only the start of this file. Then open the live task page and check each open task's item against the answers in the compaction summary; restore any that are missing before the next dispatch.
 
+## After a usage limit
+
+When you run again after a usage limit (Claude Code may resume you on its own: 2026-11-26, a master did so and acted on a worker 25 s later), run `puppet list` and read the task page's `waitingNow` before any step towards a worker. If a stand-in holds the role there, send it "<you> is back: send me your handover", tell the user in one line, and wait. Take the role back from its handover: check each item against the roster and the page, close the stand-in's line, then send each active worker "master is <you> again since <time>". When the user tells you to stand in for a limited master: `references/on-start.md`, "A stand-in master".
+
 ## Files to read, and when
 
 This file holds what you need on every turn. The rest is in `references/`, one file per moment: read the file for your moment before you act. `references/_index.md` lists them all.
 
 | File | Read it when |
 | --- | --- |
-| `references/on-start.md` | **First, when this skill starts**: read it and do it. Again when the user names a new session for your care. |
+| `references/on-start.md` | **First, when this skill starts**: read it and do it. Again when the user names a new session for your care, or tells you to stand in for a limited master. |
 | `references/jobs.md` | Before every `pick`, `assign`, `spawn` or `assign --extend`, and before you turn a design or a pasted issue into a job |
 | `references/briefs.md` | Before you write or send any brief, the worker's or the analyst's |
 | `references/approvals.md` | Before you put an approval, an irreversible step, a `!` line or a step in an outside service to the user |

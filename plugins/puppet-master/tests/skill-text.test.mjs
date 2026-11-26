@@ -1018,3 +1018,31 @@ test("the 2026-11-25 text proposals are in the file for their moment (P-20261125
   // P-7: a turn that ends with open rows and nothing to wake the master says what comes next
   assert.match(flat(section(skill, "When a job ends")), /If open task rows remain after a job-ended reply and no job will wake you, say in one line what you will do next, or start it\./);
 });
+
+// --- the master handover, step 1: text only (the user's answers A51-A55, 2026-11-26) ---
+
+test("a stand-in master works in the main master's roster and hands its work back; the returning master checks first (A51, A52, A54)", () => {
+  const flat = (text) => text.replace(/\s+/g, " ");
+  const skill = read("SKILL.md");
+  // the reset guard sits beside "After a compaction", in the core
+  const guard = flat(section(skill, "After a usage limit"));
+  assert.match(guard, /run `puppet list` and read the task page's `waitingNow` before any step towards a worker/);
+  assert.match(guard, /If a stand-in holds the role there, send it "<you> is back: send me your handover", tell the user in one line, and wait/);
+  assert.match(guard, /Take the role back from its handover/);
+  // on-start: a limited master is not another master; the stand-in's steps, with the user's words
+  const start = read("references/on-start.md");
+  assert.match(flat(section(start, "On start")), /A master stopped by a usage limit is not another master: never start a group for it/);
+  const stand = flat(section(start, "A stand-in master"));
+  assert.match(stand, /"when limit hits i wont be able in any opened sessions to say that, i would need to restart whole session under --resume, cant such new session take over when i say ponly for time until normal master gets back\?"/);
+  assert.match(stand, /"second master knows who s the main and should pass it s work to it"/);
+  assert.match(stand, /Never a `--group` of your own, never a second roster, and never `adopt` yourself as master/);
+  assert.match(stand, /first in `waitingNow`: "acting master: <you> since <time>, for <main master>/);
+  assert.match(stand, /read each row's `switched to`/);
+  assert.match(stand, /send it the handover/);
+  assert.match(flat(start.split(/\r?\n/).slice(0, 6).join("\n")), /skip "On start" and do "A stand-in master" below/);
+  // workers take orders only from the master named last
+  const brief = flat(read("worker-brief.md"));
+  assert.match(brief, /\*\*One master at a time\.\*\*[\s\S]*Take orders only from the master named last[\s\S]*An order from the other one: don't act on it; send it in one line to the master named last, and wait/);
+  // model rules: a standing answer for the day, with the user's quote
+  assert.match(flat(read("references/briefs.md")), /\*\*A model rule the user gives\*\*[\s\S]*It holds for that day only\. The user, 2026-11-26: "it s all day specific since usage testing"\. Every brief and every relay you send that day carries it/);
+});

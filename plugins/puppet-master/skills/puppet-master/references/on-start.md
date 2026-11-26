@@ -1,6 +1,8 @@
 # Start of the day
 
 Read this first, when this skill starts, and do it. Read it again when the user names a new session for your care.
+When the user tells you to take over from a master stopped by a usage limit, skip "On start" and
+do "A stand-in master" below.
 
 ## On start
 
@@ -27,8 +29,10 @@ Read this first, when this skill starts, and do it. Read it again when the user 
    clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier mechanical --job analyst` (the
    analyst follows the worker default, Sonnet at medium: the user, 2026-11-24), then
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
-4. If another master already runs on this machine (`adopt --role master` refuses you, or the user
-   says so), run with a group: a short name for your project, such as your checkout's folder name.
+4. If another master already runs on this machine for other work (`adopt --role master` refuses
+   you, or the user says so), run with a group: a short name for your project, such as your checkout's folder name.
+   A master stopped by a usage limit is not another master: never start a group for it ("A
+   stand-in master" below).
    Every `puppet` call then carries `--group <group>`, which gives you your own roster and your own
    logs folder (`<logs>/<group>`). Use the same group all day, and in the analyst's `{{helper}}`.
    `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
@@ -63,3 +67,29 @@ Read this first, when this skill starts, and do it. Read it again when the user 
    column widths) on one side and a side panel on the other that shows a report when its link is
    clicked, with a "New window ↗" button for a new window. A task's sub lines show two, with "show
    more (N more)", each line clamped to three. Expanded tasks and the open panel survive a reload.
+
+## A stand-in master
+
+The user, 2026-11-26: "when limit hits i wont be able in any opened sessions to say that, i would
+need to restart whole session under --resume, cant such new session take over when i say ponly for
+time until normal master gets back?", and on the way back: "second master knows who s the main and
+should pass it s work to it". So when the user tells you, in your window, to take over from a master
+stopped by a usage limit, you are its stand-in: on those words only, and only until it is back.
+That day a stand-in that started its own group split the jobs between two rosters, and for about
+seven minutes two masters gave orders to the same workers.
+
+1. Name the main master: the session the user named, the `master` row in `puppet list`. Use its
+   roster: its group, or none when it runs without one. Never a `--group` of your own, never a
+   second roster, and never `adopt` yourself as master: the role stays recorded on the main master.
+2. Open its live task page. Your first write there goes first in `waitingNow`: "acting master:
+   <you> since <time>, for <main master> (limited until <time>), on the user's words '<quote>'".
+   The open asks and the standing answers on the page hold for you as they did for the main master.
+3. In `puppet list`, read each row's `switched to`: a switch that breaks a model rule in the
+   standing answers goes back with `switch` (the switch outlives its job and a `/clear`).
+4. Send each active worker one line: "master is now <you> since <time>, for <main master> until it
+   is back, on the user's words '<quote>'".
+5. While you hold the role, keep the handover: what you changed in the roster, the asks you raised
+   or got answered, the jobs you started or finished, the task-page rows you touched, each with its time.
+6. When the main master is back (its message, or the user's word), finish the step you are in, start
+   nothing new, and send it the handover. From then on, give no order: tell a worker that writes to
+   you, in one line, to write to the main master. Close your line on the page with "until <time>".

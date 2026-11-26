@@ -48,7 +48,7 @@ limit is 500), and a reference file over 100 lines needs a `## Contents` list.
 | The text is needed | It goes in |
 | --- | --- |
 | on every turn, or it is a red flag | `SKILL.md` |
-| at the start of the day, or when a second master starts | `skills/puppet-master/references/on-start.md` |
+| at the start of the day, when a second master starts, or when a stand-in takes over from a limited master | `skills/puppet-master/references/on-start.md` |
 | when giving a job: the detail of rules 3, 4, 5 and 12, a design to relay, chained jobs | `skills/puppet-master/references/jobs.md` |
 | when writing a brief, or quoting the user from an earlier day | `skills/puppet-master/references/briefs.md` |
 | when putting an approval, an irreversible step, a `!` line or an outside-service step to the user | `skills/puppet-master/references/approvals.md` |

@@ -4,7 +4,7 @@ The skill's files, one per moment. SKILL.md's "Files to read, and when" table sa
 
 | File | Use it for |
 | --- | --- |
-| `on-start.md` | The start of the day: the open sessions, the analyst, the group, the first status, the live task page |
+| `on-start.md` | The start of the day: the open sessions, the analyst, the group, the first status, the live task page; a stand-in master for one stopped by a usage limit |
 | `jobs.md` | Giving a job: the detail of rules 3, 4, 5 and 12 (pick, one job per context, write scopes, tiers), a design to relay, chained jobs |
 | `briefs.md` | Writing the worker's and the analyst's briefs, and quoting the user from an earlier day |
 | `approvals.md` | Putting an approval, an irreversible step, a `!` line or a step in an outside service to the user |
