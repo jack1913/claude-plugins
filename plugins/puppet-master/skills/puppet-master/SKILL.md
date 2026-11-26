@@ -215,10 +215,12 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   step 7) and update it in the same turn as every change: a task added, started, blocked or done; a
   session adopted, assigned, compacted, switched, finished or closed; an ask raised or answered.
   The sessions list is part of it. The user, 2026-11-24: "for master status page, you must keep
-  updating sessions list same as other elements". The page has a pinned header (waiting banner,
-  filters with counts, sessions table) over a tasks table beside an always-visible side panel for
-  report pages; copy it from `skills/puppet-master/templates/task-page/` (layout detail and the
-  user's quotes: `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same turn as
+  updating sessions list same as other elements". The page has a pinned header (open asks, reports
+  to read, the waiting line) over three tabs, Questions, Tasks (sessions table, filters with counts,
+  the tasks) and Jira tasks (epics, their PRs and Jira board status), a sidebar with the previous
+  work sets, and a side panel for report pages; copy it from
+  `skills/puppet-master/templates/task-page/` (layout detail and the user's quotes:
+  `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same turn as
   every page change. Before a new row, search the page for an open row that covers the same job
   (same epic, same checkout, same session) and add the work as a sub-step of that row; a new row
   only when no open row names the job.
@@ -229,7 +231,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   file is never handed to the user.
 - **Every ask goes into its task's item on the page.** The user, 2026-11-24: "if you need anything
   for working tasks it must go into thirs opened/not done tasks items". Whatever you need from the
-  user for a task goes into that open task's item, with its id and the data to decide on: the
+  user for a task goes onto the page as an ask of that open task (a record in `asks[]` of
+  `tasks.js`, shown in Questions and on the task's item), with its id and the data to decide on: the
   quoted text, the evidence, the full path or link to the page that shows it. Never in chat only:
   on 2026-11-24 the user could not answer an ask about a Jira comment because its text was not on
   the page.

@@ -2,214 +2,667 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>puppet-master: work-set tasks</title>
 <style>
-  :root { --bg:#fafafa; --fg:#1d1d1f; --mut:#6b6b70; --line:#e3e3e6; --card:#fff;
-          --done:#2e7d32; --run:#1565c0; --wait:#c62828; --queue:#8d6e00; --open:#6a1b9a; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#161618; --fg:#ececef; --mut:#9a9aa2; --line:#2c2c30; --card:#1f1f22;
-            --done:#66bb6a; --run:#64b5f6; --wait:#ef5350; --queue:#ffca28; --open:#ce93d8; }
-  }
+  /* Style "Soft cards" (the user's pick, A30), light and dark. Tokens from the T28 canvas. */
+  :root { color-scheme:light;
+    --surface:#f1f2f5; --card:#ffffff; --card-quiet:#f8f9fb; --well:#f1f2f5; --line:#e2e5ec;
+    --text:#1e2230; --text-2:#586074; --text-3:#626a7d; --accent:#3d5bd9;
+    --wait:#8a5200; --wait-bg:#ffe9bd; --wait-soft:#fff6e3; --run:#2748b5; --run-bg:#e2eaff;
+    --block:#a1261d; --block-bg:#fde3e0; --unread:#6a3cc0; --unread-bg:#efe6ff; --done:#1f6b3a; --done-bg:#e2f3e7;
+    --queue:#4b5368; --queue-bg:#e7e9ef; --dot-busy:#2f9e5b; --dot-idle:#8a91a3;
+    --shadow:0 1px 2px rgba(22,28,45,.06), 0 1px 1px rgba(22,28,45,.03);
+    --shadow-pin:0 1px 0 #e2e5ec, 0 10px 16px -14px rgba(22,28,45,.35);
+    --ui:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,sans-serif; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme:dark;
+    --surface:#13151b; --card:#1d2028; --card-quiet:#181a21; --well:#282c37; --line:#313644;
+    --text:#e9ebf1; --text-2:#aab1c2; --text-3:#949cb0; --accent:#93a8ff;
+    --wait:#ffd791; --wait-bg:#4d3610; --wait-soft:#2a2416; --run:#bccaff; --run-bg:#22326d;
+    --block:#ffb9b0; --block-bg:#5a231e; --unread:#d6c2ff; --unread-bg:#3b2a66; --done:#a3e3b8; --done-bg:#17402a;
+    --queue:#c5cbd8; --queue-bg:#323745; --dot-busy:#45c07a; --dot-idle:#6f7790;
+    --shadow:0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.35);
+    --shadow-pin:0 1px 0 #313644, 0 10px 16px -12px rgba(0,0,0,.7); } }
+  :root[data-theme="dark"] { color-scheme:dark;
+    --surface:#13151b; --card:#1d2028; --card-quiet:#181a21; --well:#282c37; --line:#313644;
+    --text:#e9ebf1; --text-2:#aab1c2; --text-3:#949cb0; --accent:#93a8ff;
+    --wait:#ffd791; --wait-bg:#4d3610; --wait-soft:#2a2416; --run:#bccaff; --run-bg:#22326d;
+    --block:#ffb9b0; --block-bg:#5a231e; --unread:#d6c2ff; --unread-bg:#3b2a66; --done:#a3e3b8; --done-bg:#17402a;
+    --queue:#c5cbd8; --queue-bg:#323745; --dot-busy:#45c07a; --dot-idle:#6f7790;
+    --shadow:0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.35);
+    --shadow-pin:0 1px 0 #313644, 0 10px 16px -12px rgba(0,0,0,.7); }
+
   * { box-sizing:border-box; }
   html, body { height:100%; }
-  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg);
-         display:flex; flex-direction:column; overflow:hidden; }
-  .mut { color:var(--mut); }
-  code { font-size:12px; word-break:break-all; }
+  body { margin:0; background:var(--surface); color:var(--text); font:14.5px/1.55 var(--ui); display:flex; overflow:hidden; }
+  a { color:var(--accent); text-decoration:none; cursor:pointer; } a:hover { text-decoration:underline; }
+  button { font:inherit; color:inherit; }
+  code { font:12.5px Consolas, monospace; word-break:break-all; }
+  .mut { color:var(--text-2); } .mut3 { color:var(--text-3); }
+  .hide { display:none !important; }
+  .clamp2, .clamp3 { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+  .clamp2 { -webkit-line-clamp:2; } .clamp3 { -webkit-line-clamp:3; }
+  .pill { display:inline-flex; padding:3px 11px; border-radius:999px; font-size:13px; font-weight:600; white-space:nowrap; line-height:1.45; }
+  .k-wait { background:var(--wait-bg); color:var(--wait); } .k-run { background:var(--run-bg); color:var(--run); }
+  .k-block { background:var(--block-bg); color:var(--block); } .k-unread { background:var(--unread-bg); color:var(--unread); }
+  .k-done { background:var(--done-bg); color:var(--done); } .k-queue { background:var(--queue-bg); color:var(--queue); }
+  .nw { display:inline-flex; width:22px; height:22px; border-radius:7px; background:var(--well); align-items:center; justify-content:center;
+        font-size:12px; color:var(--text-2); flex:none; text-decoration:none !important; }
+  .card { background:var(--card); border-radius:16px; box-shadow:var(--shadow); }
 
-  /* pinned header */
-  header { flex:none; padding:8px 16px; border-bottom:1px solid var(--line); background:var(--bg);
-           display:flex; flex-direction:column; gap:6px; }
-  .hl { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:6px; }
-  .tl { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
-  h1 { font-size:16px; margin:0; white-space:nowrap; }
-  #meta { font-size:11px; }
-  .banner { padding:6px 10px; border-radius:6px; background:var(--card); border-left:4px solid var(--wait); }
-  .banner.calm { border-left-color:var(--done); }
-  .filters { display:flex; flex-wrap:wrap; gap:4px; }
-  .filters button { border:1px solid var(--line); background:var(--card); color:var(--fg);
-                    border-radius:14px; padding:2px 10px; cursor:pointer; font-size:12px; }
-  .filters button b { margin-left:4px; }
-  .filters button.on { border-color:var(--fg); font-weight:600; }
-  .filters button.hot b { color:var(--wait); }
-  .sessbox { max-width:1000px; }
-  .sessbox table { font-size:12px; table-layout:fixed; }
-  .sessbox th, .sessbox td { padding:2px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .sessbox col.s-name { width:170px; } .sessbox col.s-state { width:80px; } .sessbox col.s-model { width:150px; }
-  .sessbox col.s-ctx { width:80px; }
-  .sessbox td.ctx, .sessbox th.ctx { text-align:right; }
-  .sessbox td.job { color:var(--mut); }
-  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; background:var(--mut); }
-  .dot.busy { background:var(--run); } .dot.idle { background:var(--done); } .dot.fresh { background:var(--line); }
+  /* rail (collapsed sidebar) and the opened sidebar */
+  #rail { width:72px; flex:none; display:flex; flex-direction:column; align-items:center; gap:16px; padding:14px 0; }
+  .iconbtn { width:40px; height:40px; border-radius:12px; border:0; display:flex; align-items:center; justify-content:center;
+             background:var(--card); box-shadow:var(--shadow); color:var(--text-2); cursor:pointer; }
+  .iconbtn.flat { background:none; box-shadow:none; }
+  .rc { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:12px; color:var(--text-2); cursor:pointer; background:none; border:0; padding:0; }
+  .rc i { font-style:normal; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+          font-weight:600; font-size:14px; background:var(--card); color:var(--text-3); }
+  #rail .theme { margin-top:auto; }
+  #side { width:292px; flex:none; padding:14px 8px 14px 14px; overflow-y:auto; }
+  #side .card { padding:14px 14px 20px; display:flex; flex-direction:column; gap:22px; }
+  .sidehead { display:flex; align-items:center; gap:12px; font-weight:600; }
+  .sidehead .iconbtn { width:34px; height:34px; box-shadow:none; background:var(--well); }
+  .sidesec h3 { margin:0 0 6px; font-size:12.5px; font-weight:600; color:var(--text-3); }
+  .srow { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:10px; cursor:pointer;
+          width:100%; border:0; background:none; text-align:left; }
+  .srow.on { background:var(--well); font-weight:600; }
+  .srow .n { min-width:22px; text-align:center; border-radius:999px; font-size:13px; padding:0 4px; color:var(--text-2); }
+  .srow .n.hot { font-weight:600; }
+  .ssess { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:0 8px; align-items:center; font-size:13.5px; padding:3px 10px; }
+  .ssess span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ssess span:last-child { max-width:84px; text-align:right; }
+  .prev { padding:6px 10px; font-size:13.5px; border-top:1px solid var(--line); }
+  .prev:first-of-type { border-top:0; }
+  .prev .d { color:var(--text-2); font-size:12.5px; }
+  .prev .o { color:var(--text-3); font-size:12.5px; margin-top:2px; }
+  .seg { display:flex; background:var(--well); border-radius:10px; padding:3px; }
+  .seg button { flex:1; border:0; background:none; padding:4px 0; border-radius:8px; cursor:pointer; font-size:13px; color:var(--text-2); }
+  .seg button.on { background:var(--card); box-shadow:var(--shadow); color:var(--text); font-weight:600; }
+  body:not(.side-open) #side { display:none; } body.side-open #rail { display:none; }
 
-  /* body: list + side panel */
-  .split { flex:1; display:flex; min-height:0; }
-  .list { flex:0 0 min(50%, 1000px); overflow:auto; padding:10px 16px 30px; min-width:620px; }
-  aside { display:flex; flex:1 1 auto; min-width:0; border-left:1px solid var(--line); flex-direction:column; background:var(--card); }
-  .empty { flex:1; display:flex; align-items:center; justify-content:center; color:var(--mut); padding:20px; text-align:center; }
-  .split.withpanel .empty { display:none; } .split:not(.withpanel) .ph, .split:not(.withpanel) iframe { display:none; }
-  table.tasks { table-layout:fixed; }
-  table.tasks col.c-id { width:66px; } table.tasks col.c-st { width:112px; }
-  table.tasks col.c-who { width:130px; } table.tasks col.c-rep { width:170px; }
-  table.tasks td.st { white-space:normal; }
-  table.tasks td { overflow-wrap:anywhere; }
-  .epicwrap { overflow-x:auto; }
-  .ph { display:flex; align-items:center; gap:8px; padding:6px 10px; border-bottom:1px solid var(--line); }
+  /* main column: pinned header, waiting line, tab bar, then the scrolling pane */
+  #main { flex:1; min-width:0; display:flex; flex-direction:column; padding:0 24px 0 0; }
+  body.side-open #main { padding-left:8px; }
+  header { height:68px; flex:none; display:flex; align-items:center; gap:14px; padding:0 6px; }
+  header h1 { font-size:16px; margin:0; white-space:nowrap; }
+  #workset { color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .chip { display:inline-flex; padding:4px 12px; border-radius:999px; font-size:13px; font-weight:600; white-space:nowrap; cursor:pointer; border:0; }
+  #askchip { margin-left:auto; }
+  #updated { color:var(--text-2); font-size:13.5px; white-space:nowrap; }
+  #waiting { flex:none; margin:0 6px 10px; padding:8px 14px; border-radius:12px; background:var(--wait-soft); font-size:13.5px; overflow-wrap:anywhere; }
+  #waiting.calm { background:var(--card-quiet); color:var(--text-2); }
+  #waiting b { font-weight:600; }
+  #tabs { flex:none; display:flex; gap:6px; padding:0 6px 10px; border-bottom:1px solid var(--line); margin-bottom:2px; }
+  #tabs button { border:0; background:none; padding:7px 16px; border-radius:999px; cursor:pointer; font-size:14.5px; color:var(--text-2);
+                 display:inline-flex; gap:8px; align-items:baseline; }
+  #tabs button.on { background:var(--card); box-shadow:var(--shadow); color:var(--text); font-weight:600; }
+  #tabs button b { font-variant-numeric:tabular-nums; font-weight:600; }
+  #tabs button b.hot { color:var(--wait); }
+  #scroller { flex:1; min-height:0; overflow-y:auto; padding:12px 4px 32px; margin:0 -4px; scrollbar-width:thin; scrollbar-color:var(--dot-idle) transparent; }
+  #scroller.pinned { box-shadow:inset 0 10px 10px -12px rgba(0,0,0,.25); }
+  .pane > * + * { margin-top:18px; }
+  .foot { color:var(--text-3); font-size:13px; padding:0 6px; }
+
+  /* Questions */
+  .qcard { padding:20px 24px 18px; }
+  .qhead { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .qhead h2 { margin:0; font-size:16px; }
+  .qhead .right { margin-left:auto; font-size:13px; color:var(--text-3); }
+  .ask { background:var(--wait-soft); border-radius:14px; padding:16px 18px 14px; margin-top:14px; scroll-margin-top:12px; }
+  .ask.flash { outline:2px solid var(--wait); }
+  .ask .meta { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:var(--text-2); align-items:center; }
+  .ask .meta b { color:var(--wait); }
+  .ask h3 { margin:6px 0 10px; font-size:16px; font-weight:600; text-wrap:pretty; overflow-wrap:anywhere; }
+  .fact { display:grid; grid-template-columns:112px minmax(0,1fr); gap:0 12px; align-items:start; margin-top:8px; font-size:14px; }
+  .fact .l { color:var(--text-2); font-size:13.5px; }
+  .fact .v { text-wrap:pretty; overflow-wrap:anywhere; }
+  .fact .q { background:var(--card); border-radius:10px; padding:10px 14px; text-wrap:pretty; overflow-wrap:anywhere; }
+  .fact.rec .l { color:var(--done); font-weight:600; } .fact.rec .v { font-weight:600; }
+  .ask .af { display:flex; justify-content:space-between; gap:12px; margin-top:12px; font-size:13px; color:var(--text-3); }
+  .ask .af a { font-weight:600; white-space:nowrap; }
+  .calmh { margin:14px 0 2px; font-size:20px; font-weight:600; }
+  details.ans { margin-top:16px; border-top:1px solid var(--line); padding-top:10px; }
+  details.ans summary { cursor:pointer; display:flex; gap:10px; align-items:baseline; list-style:none; }
+  details.ans summary::-webkit-details-marker { display:none; }
+  details.ans summary::before { content:"▸"; color:var(--text-3); font-size:12px; }
+  details.ans[open] summary::before { content:"▾"; }
+  details.ans summary .r { margin-left:auto; font-size:13px; color:var(--text-3); }
+  .arow { display:grid; grid-template-columns:52px 44px minmax(0,1fr); gap:0 14px; padding:5px 0; border-top:1px solid var(--line); align-items:baseline; font-size:13.5px; }
+  .arow:first-of-type { border-top:0; }
+  .arow .an { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); }
+  .now { display:grid; grid-template-columns:112px minmax(0,1fr); gap:4px 12px; margin-top:16px; padding-top:12px; border-top:1px solid var(--line); font-size:13.5px; }
+  .now .l { color:var(--text-2); }
+
+  /* Tasks */
+  .scard { padding:16px 22px 14px; }
+  .cardh { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+  .cardh h2 { margin:0; font-size:15.5px; }
+  .cardh .cap { font-size:13px; color:var(--text-3); }
+  .sg { display:grid; grid-template-columns:250px 150px 170px minmax(0,1fr) 170px; gap:0 22px; align-items:center; min-height:38px; font-size:14px; }
+  .sg.h { min-height:0; font-size:13px; color:var(--text-3); padding:10px 0 4px; }
+  .sg > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sg .ctx { text-align:right; font-variant-numeric:tabular-nums; }
+  .dot { width:9px; height:9px; border-radius:50%; flex:none; display:inline-block; margin-right:9px; vertical-align:0; }
+  .dot.busy { background:var(--dot-busy); } .dot.idle { background:var(--dot-idle); } .dot.fresh { box-shadow:inset 0 0 0 1.5px var(--dot-idle); }
+  .dot.warn { background:var(--wait); }
+  .filters { display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding:0 2px; }
+  .filters button { display:inline-flex; gap:7px; align-items:baseline; padding:5px 13px; border-radius:999px; white-space:nowrap; cursor:pointer;
+                    border:0; background:none; color:var(--text-2); }
+  .filters button.on { background:var(--card); box-shadow:var(--shadow); font-weight:600; color:var(--text); }
+  .filters button b { font-variant-numeric:tabular-nums; font-weight:600; }
+  .filters .sep { width:1px; height:18px; background:var(--line); margin:0 8px; }
+  .orderline { font-size:13px; color:var(--text-3); padding:6px 8px 0; }
+  .seenbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 16px; border-radius:12px; background:var(--unread-bg); color:var(--unread); font-size:13.5px; }
+  .seenbar code { background:var(--card); color:var(--text); padding:2px 8px; border-radius:6px; user-select:all; }
+  .btn { border:0; border-radius:8px; padding:3px 10px; cursor:pointer; font-size:13px; font-weight:600; background:var(--card); color:var(--accent); box-shadow:var(--shadow); white-space:nowrap; }
+  .btn.seen { background:var(--unread-bg); color:var(--unread); box-shadow:none; margin-top:8px; }
+  .tg { display:grid; grid-template-columns:44px minmax(0,1fr) 140px 180px 226px; gap:0 22px; align-items:start; }
+  .tg.h { font-size:13px; color:var(--text-3); padding:0 24px 8px; }
+  .task { padding:18px 24px; margin-top:10px; scroll-margin-top:12px; }
+  .task.quiet { background:var(--card-quiet); box-shadow:none; padding:13px 24px; }
+  .task.flash { outline:2px solid var(--accent); }
+  .task .id { font-weight:600; }
+  .task.quiet .id, .task.quiet .title { color:var(--text-2); font-weight:400; }
+  .task .title { font-weight:600; text-wrap:pretty; min-width:0; overflow-wrap:anywhere; }
+  .pills { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+  .who { min-width:0; overflow-wrap:anywhere; }
+  .who small, .whou small { display:block; font-size:13px; color:var(--text-2); line-height:1.45; margin-top:2px; }
+  .whou { display:none; font-size:13.5px; color:var(--text-2); margin-top:6px; overflow-wrap:anywhere; }
+  .whou small { font-size:12.5px; }
+  .blk { font-size:12.5px; color:var(--block); margin-top:2px; overflow-wrap:anywhere; }
+  .strip { display:flex; gap:10px; align-items:baseline; margin-top:10px; padding:7px 12px; border-radius:10px; background:var(--wait-soft); font-size:13.5px; }
+  .strip b { color:var(--wait); white-space:nowrap; }
+  .strip span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .strip a { white-space:nowrap; font-weight:600; }
+  .ln { display:grid; grid-template-columns:112px minmax(0,1fr) 12px; gap:0 12px; margin-top:10px; font-size:13.5px; align-items:start; }
+  .ln .lead { font-weight:600; color:var(--text-2); font-size:13px; line-height:21px; overflow-wrap:anywhere; }
+  .ln .head { font-weight:600; text-wrap:pretty; overflow-wrap:anywhere; }
+  .ln .tx { color:var(--text-2); overflow-wrap:anywhere; }
+  .ln .chev { color:var(--text-3); cursor:pointer; font-size:15px; line-height:21px; border:0; background:none; padding:0; }
+  .ln .meta { margin-top:3px; font-size:13px; }
+  .more { margin-top:10px; font-size:13.5px; display:flex; gap:18px; flex-wrap:wrap; }
+  .reading { grid-column:2 / -1; margin-top:14px; background:var(--well); border-radius:12px; padding:14px 18px; font-size:13.5px; }
+  .reading .rh { display:flex; justify-content:space-between; gap:12px; font-size:13px; color:var(--text-2); font-weight:600; }
+  .reading .tx { margin-top:6px; text-wrap:pretty; overflow-wrap:anywhere; max-width:820px; }
+  .reading .tx.cols { column-count:2; column-gap:40px; max-width:none; }
+  .reps { display:flex; flex-direction:column; gap:6px; font-size:14px; min-width:0; }
+  .rep { display:flex; gap:8px; align-items:flex-start; }
+  .rep a.doc { min-width:0; overflow-wrap:anywhere; }
+  .rep a.doc.cur { background:var(--well); border-radius:7px; padding:0 6px; margin:0 -6px; font-weight:600; }
+  .rep .rd { width:7px; height:7px; border-radius:50%; background:var(--unread); flex:none; margin-top:8px; }
+  .rep.unread a.doc { font-weight:600; }
+  .rep .pend { color:var(--text-3); }
+  .doneh { font-size:13.5px; color:var(--text-2); margin:22px 6px 0; }
+
+  /* compact: narrow window, sidebar open or side panel open */
+  .compact .tg { grid-template-columns:34px minmax(0,1fr) 168px 190px; gap:0 16px; }
+  .compact .tg.h { padding:0 18px 8px; }
+  .compact .task { padding:16px 18px; } .compact .task.quiet { padding:12px 18px; }
+  .compact .who, .compact .tg.h .whoh { display:none; }
+  .compact .whou { display:block; }
+  .compact .ln { grid-template-columns:minmax(0,1fr) 12px; gap:1px 10px; }
+  .compact .ln .lead { grid-column:1 / -1; } .compact .ln .lead:empty { display:none; }
+  .compact .sg { grid-template-columns:196px 150px minmax(0,1fr) 64px; gap:0 16px; }
+  .compact .sg .model, .compact .sg .wide, .sg .short { display:none; }
+  .compact .sg .short { display:inline; }
+  .compact .fact { grid-template-columns:96px minmax(0,1fr); }
+  .compact .reading .tx.cols { column-count:1; }
+
+  /* Jira tasks: epics, one line per repo and PR */
+  .eo { display:grid; grid-template-columns:224px minmax(0,1fr) 112px; gap:0 20px; align-items:start; }
+  .eo.h { font-size:13px; color:var(--text-3); padding:12px 0 6px; }
+  .ei { display:grid; grid-template-columns:176px 206px 176px minmax(0,1fr); gap:0 16px; align-items:start; }
+  .erow { padding:12px 0; border-top:1px solid var(--line); font-size:13.5px; }
+  .erow .et { font-size:13.5px; color:var(--text-2); margin-top:2px; }
+  .erow .es { font-size:12.5px; color:var(--text-3); margin-top:2px; }
+  .rline + .rline { padding-top:12px; margin-top:12px; border-top:1px dashed var(--line); }
+  .rline .sub { font-size:13px; color:var(--text-2); }
+  .rline .sub.warn { color:var(--wait); }
+  .rline .chk { font-size:12.5px; color:var(--block); }
+  .rline .last { font-size:13px; color:var(--text-2); text-wrap:pretty; min-width:0; overflow-wrap:anywhere; }
+  .kp { display:inline-flex; padding:2px 10px; border-radius:999px; font-size:12.5px; font-weight:600; white-space:nowrap; margin-top:2px; }
+  .eboard { font-size:13px; color:var(--text-2); line-height:1.5; }
+  .compact .eo { grid-template-columns:168px minmax(0,1fr); }
+  .compact .ei { grid-template-columns:150px 176px minmax(0,1fr); gap:6px 14px; }
+  .compact .ei .last { grid-column:1 / -1; font-size:12.5px; }
+  .compact .eo .boardc, .compact .eo.h .boardh { display:none; }
+  .eboardu { display:none; font-size:12.5px; color:var(--text-3); margin-top:4px; }
+  .compact .eboardu { display:block; }
+
+  /* side panel for report pages */
+  #panel { width:474px; flex:none; padding:14px 14px 14px 0; display:flex; }
+  /* under 1200 wide the panel lies over the list instead of squeezing it */
+  body.narrow #panel { position:fixed; top:0; right:0; bottom:0; width:min(560px, 62vw); padding:14px; z-index:5; }
+  body.narrow #panel .card { box-shadow:0 8px 40px rgba(0,0,0,.28); }
+  #panel .card { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+  .ph { display:flex; align-items:center; gap:10px; padding:16px 18px 0; }
   .ph .t { flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ph button, .ph a { border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:6px;
-                      padding:2px 8px; cursor:pointer; font-size:12px; text-decoration:none; }
-  aside iframe { flex:1; border:0; width:100%; background:#fff; }
-
-  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:6px; }
-  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { font-size:11px; color:var(--mut); font-weight:600; }
-  .st { font-weight:600; white-space:nowrap; }
-  .done{color:var(--done)} .running{color:var(--run)} .waiting-you{color:var(--wait)}
-  .queued{color:var(--queue)} .open{color:var(--open)}
-  td.id { white-space:nowrap; } td.id small { display:block; color:var(--mut); }
-  td.who { font-size:12px; color:var(--mut); max-width:150px; }
-  td.rep { max-width:190px; font-size:12px; }
-  td.rep .r { display:flex; gap:4px; align-items:baseline; margin-bottom:2px; }
-  td.rep a.doc { color:var(--run); cursor:pointer; text-decoration:underline; }
-  td.rep a.doc.cur { font-weight:700; }
-  td.rep a.nw { font-size:11px; color:var(--mut); text-decoration:none; border:1px solid var(--line); border-radius:4px; padding:0 4px; }
-  ul.sub { margin:3px 0 0 0; padding-left:16px; color:var(--mut); }
-  ul.sub li { margin-bottom:2px; }
-  ul.sub.short li { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-  button.more { border:0; background:none; color:var(--run); cursor:pointer; padding:0; font-size:12px; margin-top:2px; }
-  h2 { font-size:14px; margin:18px 0 6px; }
+  .ph a, .ph button { border:0; border-radius:10px; padding:4px 12px; cursor:pointer; font-size:13px; font-weight:600; background:var(--run-bg); color:var(--accent); text-decoration:none; }
+  .ph button { background:var(--well); color:var(--text-2); padding:4px 9px; }
+  .pmeta { padding:8px 18px 12px; border-bottom:1px solid var(--line); margin:0 0 0; font-size:12.5px; color:var(--text-2); overflow-wrap:anywhere; }
+  .pmeta .pn { color:var(--unread); font-weight:600; margin-top:4px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .pmeta .pn .btn.seen { margin-top:0; }
+  #pframe { flex:1; border:0; width:100%; background:#fff; }
+  body:not(.withpanel) #panel { display:none; }
 </style>
 </head>
 <body>
-<header>
-  <div class="hl">
-    <div class="tl"><h1>puppet-master: work-set tasks</h1><span class="mut" id="meta"></span></div>
-    <div class="banner" id="waiting"></div>
-    <div class="filters" id="filters"></div>
+<nav id="rail" aria-label="Sidebar, collapsed">
+  <button class="iconbtn" id="sideopen" title="Open the sidebar" aria-label="Open the sidebar">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="2.5"/><path d="M7 3v12"/></svg></button>
+  <div id="railcounts" style="display:flex;flex-direction:column;gap:14px;align-items:center"></div>
+  <button class="iconbtn flat theme" id="themecycle" title="Theme: auto, light, dark" aria-label="Change the theme">
+    <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 2a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button>
+</nav>
+<nav id="side" aria-label="Sidebar">
+  <div class="card">
+    <div class="sidehead"><button class="iconbtn" id="sideclose" title="Close the sidebar" aria-label="Close the sidebar">
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="2.5"/><path d="M7 3v12"/></svg></button>
+      <span>puppet-master</span></div>
+    <div class="sidesec"><h3>Show</h3><div id="sidefilters"></div></div>
+    <div class="sidesec"><h3 style="display:flex;justify-content:space-between"><span>Sessions</span><span>Context used</span></h3><div id="sidesess"></div></div>
+    <div class="sidesec" id="prevsec"><h3 style="display:flex;justify-content:space-between"><span>Previous work sets</span><span>newest first</span></h3><div id="prev"></div></div>
+    <div class="sidesec"><h3>Theme</h3><div class="seg" id="themeseg"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
   </div>
-  <div class="sessbox"><table>
-    <colgroup><col class="s-name"><col class="s-state"><col class="s-model"><col><col class="s-ctx"></colgroup>
-    <thead><tr><th>Session</th><th>State</th><th>Model / effort</th><th>Job</th><th class="ctx">Context</th></tr></thead>
-    <tbody id="sess"></tbody></table></div>
-</header>
-<div class="split" id="split">
-  <div class="list">
-    <table class="tasks">
-      <colgroup><col class="c-id"><col><col class="c-st"><col class="c-who"><col class="c-rep"></colgroup>
-      <thead><tr><th>#</th><th>Task</th><th>Status</th><th>Who</th><th>Reports</th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div id="epicsec" hidden>
-    <h2>Epics, open</h2>
-    <div class="mut" id="epicsAsOf"></div>
-    <div class="epicwrap"><table>
-      <thead><tr><th>Epic</th><th>Repo</th><th>What</th><th>Status</th><th>Stamps</th><th>Tasks</th><th>PR</th><th>In collector</th><th>Next (owner)</th></tr></thead>
-      <tbody id="epics"></tbody>
-    </table></div>
-    </div>
-    <p class="mut">Data reloads every 90 s without a page reload (the side panel stays). Data: <code>tasks.js</code> beside this page, edited by the master on every change.</p>
+</nav>
+<div id="main">
+  <header>
+    <h1>puppet-master</h1><span id="workset"></span>
+    <button class="chip" id="askchip" title="Open Questions"></button>
+    <button class="chip k-unread hide" id="readchip" title="Show the tasks with a report to read"></button>
+    <span id="updated"></span>
+  </header>
+  <div id="waiting"></div>
+  <div id="tabs" role="tablist"></div>
+  <div id="scroller">
+    <section class="pane" id="pane-questions" role="tabpanel"></section>
+    <section class="pane" id="pane-tasks" role="tabpanel"></section>
+    <section class="pane" id="pane-jira" role="tabpanel"></section>
   </div>
-  <aside id="panel">
+</div>
+<aside id="panel">
+  <div class="card">
     <div class="ph"><span class="t" id="ptitle"></span>
       <a id="pnew" target="_blank" title="Open in a new window">New window ↗</a>
-      <button id="pclose" title="Close the panel">Close ✕</button></div>
-    <iframe id="pframe"></iframe>
-    <div class="empty">Click a report link in the list to read it here.<br>The ↗ button beside a link opens it in a new window.</div>
-  </aside>
-</div>
+      <button id="pclose" title="Close the panel" aria-label="Close the panel">Close ✕</button></div>
+    <div class="pmeta" id="pmeta"></div>
+    <iframe id="pframe" title="Report"></iframe>
+  </div>
+</aside>
 <script>
-  const LABEL = { "done":"done", "running":"running", "waiting-you":"waiting for you", "queued":"queued", "open":"open" };
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
-  const fileUrl = p => "file:///" + encodeURI(p).replace(/%23/g, "#");
-  const SHORT = 2;                      // sub lines shown before "show more"
+  // Reads window.DASH from tasks.js (shape: the comment at the top of tasks.js). Writes nothing but the browser's
+  // localStorage: the tab, the filter, expanded tasks, the panel, the theme, and the "seen" marks.
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const fileUrl = p => /^https?:\/\//.test(p) ? p : "file:///" + encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
+  const num = id => Number(String(id).replace(/\D/g, "")) || 0;
+  const fmt = n => n.toLocaleString("en-US");
+  const SHOWN = 6;                       // lines shown in an expanded task; the rest behind "Show N earlier lines"
+  const LONG = 1000;                     // a line this long says its length and opens in a reading row
   const store = {
     get(k, d) { try { return JSON.parse(localStorage.getItem("pmboard." + k)) ?? d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem("pmboard." + k, JSON.stringify(v)); } catch {} }
   };
-  let open = new Set(store.get("open", []));
-  let panel = store.get("panel", null);   // {url, label}
-  const FILTERS = { active: t => t.status !== "done", "waiting-you": t => t.status === "waiting-you",
-                    running: t => t.status === "running", queued: t => t.status === "queued" || t.status === "open",
-                    done: t => t.status === "done", all: () => true,
-                    initial: t => t.origin === "initial", added: t => t.origin === "added" };
-  const NAMES = { active:"Not done", "waiting-you":"Waiting for you", running:"Running", queued:"Queued / open",
-                  done:"Done", all:"All", initial:"Initial", added:"Added later" };
+  // Seen marks belong to this page only (every file:// page shares one localStorage).
+  const SEEN_KEY = "seen:" + location.pathname;
+  let open = new Set(store.get("open", []));        // tasks expanded
+  let full = new Set(store.get("full", []));        // tasks with every line shown
+  let lines = new Set(store.get("lines", []));      // "T8:3": a line opened whole
+  let panel = store.get("panel", null);             // {url, label, task}
+  let seen = store.get(SEEN_KEY, {});               // { T22: "11-26 23:40" }: Mark seen, kept here until tasks.js says done
+  let tab = store.get("tab", "questions");
+  let filter = location.hash.slice(1) || store.get("filter", "open");
+  let showAllDone = false, showAllAnswered = false;
+  let theme = store.get("theme", "auto");
+
+  const STATUS = {                                   // tasks.js status -> [page key, label, pill colour]
+    "running": ["run", "Running", "run"], "waiting-you": ["wait", "Waits for you", "wait"], "queued": ["queue", "Queued", "queue"],
+    "open": ["queue", "Queued", "queue"], "pending-report": ["pend", "Pending report", "unread"], "done": ["done", "Done", "done"] };
+  const FILTERS = [["open", "Open", ""], ["wait", "Waits for you", "wait"], ["run", "Running", "run"], ["block", "Blocked", "block"],
+    ["pend", "Pending report", "unread"], ["queue", "Queued", "queue"], ["done", "Done", "done"], ["all", "All", ""],
+    ["initial", "Initial", ""], ["added", "Added later", ""]];
+  const TABS = [["questions", "Questions"], ["tasks", "Tasks"], ["jira", "Jira tasks"]];
+
+  // "name (what it does)" -> name, and the part in brackets under it
+  const splitWho = w => { const m = String(w || "").match(/^([\w.-]+) \(([^)]*)\)(.*)$/); return m ? [m[1], (m[2] + m[3]).trim()] : [w || "-", ""]; };
+  // A line's label, read from its start: "A34 ANSWERED 11-26: “x” — y" -> lead "A34 · answered", head "“x”", text "y".
+  function parseLine(s) {
+    let m = s.match(/^((?:T\d+b )?A\d+(?:\/A\d+)?) (ANSWERED|ASKED|QUEUED|OPEN)\b(?: \d\d-\d\d)?(?: \d\d:\d\d)?(?: \([^)]*\))?[:.]?\s*/);
+    if (m) {
+      let rest = s.slice(m[0].length), head = "";
+      const q = rest.match(/^(“[^”]{1,260}”)(?:\s*[—.;:,]\s*|\s+)?/);
+      if (q && m[2] === "ANSWERED") { head = q[1]; rest = rest.slice(q[0].length); }
+      return { lead: m[1] + " · " + m[2].toLowerCase(), head, text: rest };
+    }
+    m = s.match(/^([A-Z]{3,}(?: [A-Z]{2,}){0,2})\b(?! ?[-#])(?: (?:by you, )?\d\d-\d\d(?: \d\d:\d\d)?)?[:.]?\s+/);
+    if (m && !/^(PR|FE|BE|SQL|API|CI|URL|HTML|JSON)$/.test(m[1])) {
+      const w = m[1].toLowerCase();
+      return { lead: w.charAt(0).toUpperCase() + w.slice(1), head: "", text: s.slice(m[0].length) };
+    }
+    m = s.match(/^(Your words|Your answer A\d+|My reading|Brief|Job|Verified|Progress|Delivered)(?:,? \d{4}-\d\d-\d\d| \d\d-\d\d)?[:.]\s*/);
+    if (m) return { lead: m[1], head: "", text: s.slice(m[0].length) };
+    return { lead: "", head: "", text: s };
+  }
+
+  function model(D) {
+    const asks = (D.asks || []).slice();
+    const openAsks = asks.filter(a => a.state !== "answered").sort((a, b) => num(a.id) - num(b.id));      // oldest first
+    const answered = asks.filter(a => a.state === "answered").sort((a, b) => num(b.id) - num(a.id));      // newest first
+    const askBy = {};
+    openAsks.forEach(a => { (askBy[a.task] = askBy[a.task] || []).push(a); });
+    // Drop seen marks the master has folded in (the task is no longer pending-report in tasks.js).
+    const pendIds = new Set((D.tasks || []).filter(t => t.status === "pending-report").map(t => t.id));
+    for (const id of Object.keys(seen)) if (!pendIds.has(id)) { delete seen[id]; store.set(SEEN_KEY, seen); }
+    const tasks = (D.tasks || []).map(t => {
+      const seenHere = t.status === "pending-report" && !!seen[t.id];
+      const st = STATUS[seenHere ? "done" : t.status] || ["queue", t.status, "queue"];
+      const a = askBy[t.id] || [];
+      const blocked = t.blocked && st[0] !== "done" ? t.blocked : "";
+      const inOpen = st[0] !== "done" || a.length > 0;
+      const group = st[0] === "run" ? 0 : (st[0] === "wait" || a.length) ? 1 : st[0] === "queue" ? 2 : 3;
+      return { t, key: st[0], label: st[1], colour: st[2], asks: a, blocked, inOpen, group, seenHere, n: num(t.id) };
+    });
+    const by = {
+      open: x => x.inOpen, wait: x => x.key === "wait" || x.asks.length > 0, run: x => x.key === "run", block: x => !!x.blocked,
+      pend: x => x.key === "pend", queue: x => x.key === "queue", done: x => x.key === "done", all: () => true,
+      initial: x => x.t.origin === "initial", added: x => x.t.origin === "added" };
+    const C = {};
+    for (const k of Object.keys(by)) C[k] = tasks.filter(by[k]).length;
+    return { openAsks, answered, tasks, by, C };
+  }
+
+  // ---------- header, waiting line, tabs, rail and sidebar ----------
+  function renderChrome(D, M) {
+    document.getElementById("workset").textContent = (D.workSet ? D.workSet : "") + (D.days && D.days.length ? " · day " + D.days.length : "");
+    document.getElementById("workset").title = (D.days || []).join(", ");
+    document.getElementById("updated").textContent = "Updated " + String(D.updated || "-").slice(11);
+    document.getElementById("updated").title = D.updated || "";
+    const nAsk = M.openAsks.length, nWaitTasks = M.C.wait;
+    const ask = document.getElementById("askchip");
+    ask.className = "chip " + (nAsk || nWaitTasks ? "k-wait" : "k-done");
+    ask.textContent = nAsk ? nAsk + (nAsk > 1 ? " asks wait for you" : " ask waits for you")
+      : nWaitTasks ? nWaitTasks + (nWaitTasks > 1 ? " tasks wait for you" : " task waits for you") : "Nothing waits for you";
+    const rc = document.getElementById("readchip");
+    rc.classList.toggle("hide", !M.C.pend);
+    rc.textContent = M.C.pend + (M.C.pend > 1 ? " reports to read" : " report to read");
+    const w = document.getElementById("waiting");
+    w.innerHTML = "<b>Now:</b> " + esc(D.waitingNow || "-");
+    w.classList.toggle("calm", /^Nothing waits/.test(D.waitingNow || "") || (!nAsk && !nWaitTasks));
+    const tc = { questions: [nAsk, nAsk > 0], tasks: [M.C.open, false], jira: [(D.epics || []).length, false] };
+    document.getElementById("tabs").innerHTML = TABS.map(([k, label]) =>
+      `<button role="tab" data-tab="${k}" class="${k === tab ? "on" : ""}" aria-selected="${k === tab}">${label}<b class="${tc[k][1] ? "hot" : ""}">${tc[k][0]}</b></button>`).join("");
+    for (const [k] of TABS) document.getElementById("pane-" + k).classList.toggle("hide", k !== tab);
+    // rail: open asks, running, blocked and pending report only when above 0, queued
+    const rail = [[nAsk, "for you", "wait", true, "questions"], [M.C.run, "running", "run", true, "run"], [M.C.block, "blocked", "block", false, "block"],
+                  [M.C.pend, "to read", "unread", false, "pend"], [M.C.queue, "queued", "queue", true, "queue"]];
+    document.getElementById("railcounts").innerHTML = rail.filter(r => r[3] || r[0] > 0).map(r =>
+      `<button class="rc" data-go="${r[4]}" title="${r[1]}"><i class="${r[0] ? "k-" + r[2] : ""}">${r[0]}</i>${r[1]}</button>`).join("");
+    document.getElementById("sidefilters").innerHTML = FILTERS.filter(f => (f[0] !== "block" || M.C.block > 0) && f[0] !== "initial" && f[0] !== "added").map(f =>
+      `<button class="srow${tab === "tasks" && filter === f[0] ? " on" : ""}" data-go="${f[0]}"><span>${f[1]}</span><span class="n${f[2] && M.C[f[0]] && f[2] !== "done" ? " hot k-" + f[2] : ""}">${M.C[f[0]]}</span></button>`).join("");
+    document.getElementById("sidesess").innerHTML = sessions(D).map(s =>
+      `<div class="ssess" title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + s.job + " · " + s.context)}"><i class="dot ${s.dot}" style="margin:0"></i><span>${esc(s.name)}</span><span class="mut">${esc(s.pct)}</span></div>`).join("")
+      || `<div class="mut" style="padding:0 10px;font-size:13px">none listed</div>`;
+    const prev = (D.previous || []).slice().sort((a, b) => String(b.days || b.label).localeCompare(String(a.days || a.label)));
+    document.getElementById("prevsec").classList.toggle("hide", !prev.length);
+    document.getElementById("prev").innerHTML = prev.map(p =>
+      `<div class="prev"><a href="${esc(fileUrl(p.path))}" target="_blank" title="Open its master page in a new window">${esc(p.label)} ↗</a>`
+      + `<div class="d">${esc(p.days)}${p.tasks ? " · " + esc(p.tasks) : ""}</div>${p.open ? `<div class="o clamp3" title="${esc(p.open)}">Left open: ${esc(p.open)}</div>` : ""}</div>`).join("");
+    document.querySelectorAll("#themeseg button").forEach(b => b.classList.toggle("on", b.dataset.theme === theme));
+  }
+
+  // Sessions: master, working, analyst, clean (then anything else); by name within each.
+  function sessions(D) {
+    const rank = s => /^master/.test(s.state) ? 0 : /^working/.test(s.state) ? 1 : /^analyst/.test(s.state) ? 2 : /^clean/.test(s.state) ? 3 : 4;
+    return (D.sessions || []).slice().sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name))).map(s => {
+      const ctx = String(s.context || "");
+      const m = ctx.match(/^([\d,]+) \(([^)]*)\)$/);
+      const fresh = /fresh/.test(ctx) || /fresh|clean/.test(s.state);
+      const dot = /^changed|blocked/.test(s.state) ? "warn" : /busy|working|master/.test(s.state) && !/idle/.test(s.state) ? "busy" : fresh ? "fresh" : "idle";
+      return Object.assign({}, s, { dot, pct: m ? (m[1] === "0" ? "fresh" : m[2]) : (ctx || "-"), ctxWide: m ? (m[1] === "0" ? "0 · fresh" : m[1] + " · " + m[2]) : (ctx || "-") });
+    });
+  }
+
+  // ---------- Questions ----------
+  function factHtml(f) {
+    const kind = f.kind || "text";
+    const v = kind === "quote" ? `<div class="q">${esc(f.text)}</div>`
+      : kind === "link" ? `<div class="v" style="display:flex;gap:8px;align-items:flex-start"><a class="doc" data-url="${esc(fileUrl(f.path || f.text))}" data-label="${esc(f.text)}">${esc(f.text)}</a><a class="nw" href="${esc(fileUrl(f.path || f.text))}" target="_blank" title="Open in a new window">↗</a></div>`
+      : `<div class="v">${esc(f.text)}</div>`;
+    return `<div class="fact"><div class="l">${esc(f.label)}</div>${v}</div>`;
+  }
+  function renderQuestions(D, M) {
+    const nAsk = M.openAsks.length, nNoHurry = M.openAsks.filter(a => a.noHurry).length;
+    let h = `<div class="card qcard" data-questions><div class="qhead"><h2>Questions</h2>`
+      + `<span class="chip ${nAsk ? "k-wait" : "k-done"}" style="cursor:default">${nAsk ? nAsk + " open" + (nNoHurry ? " · " + nNoHurry + " of them no hurry" : "") : "0 open"}</span>`
+      + (nAsk > 1 ? `<span class="mut3" style="font-size:13px">oldest first</span>` : "")
+      + `<span class="right">You answer in the master's chat, by the ask's id</span></div>`;
+    if (!nAsk) h += `<div class="calmh">Nothing waits for you</div><div class="mut">No ask is open in any task. ${M.answered.length} asks answered on this board, below.</div>`;
+    h += M.openAsks.map(a => `<div class="ask" id="ask-${esc(a.id)}">`
+      + `<div class="meta"><b>${esc(a.id)}</b><span>in <a data-jump="${esc(a.task)}">${esc(a.task)}</a></span>${a.asked ? `<span>asked ${esc(a.asked)}</span>` : ""}`
+      + (a.movedFrom ? `<span>moved here from ${esc(a.movedFrom)}</span>` : "") + (a.noHurry ? `<span class="pill k-queue" style="padding:1px 9px">No hurry</span>` : "") + `</div>`
+      + `<h3>${esc(a.question)}</h3>` + (a.facts || []).map(factHtml).join("")
+      + (a.recommend ? `<div class="fact rec"><div class="l">Recommended</div><div class="v">${esc(a.recommend)}</div></div>` : "")
+      + `<div class="af"><span>${a.noHurry ? "Counts like any open ask; it stays here until you answer it." : "Stays here until you answer it, also while its task is done."}</span><a data-jump="${esc(a.task)}">Open ${esc(a.task)} ↓</a></div></div>`).join("");
+    const shown = showAllAnswered ? M.answered : M.answered.slice(0, 12);
+    if (M.answered.length) h += `<details class="ans"${nAsk ? "" : " open"}><summary><b>Answered</b><span class="mut">${M.answered.length}</span><span class="r">newest first; the whole line is in its task</span></summary>`
+      + shown.map(a => `<div class="arow"><b>${esc(a.id)}</b><a data-jump="${esc(a.task)}">${esc(a.task)}</a><span class="an" title="${esc(a.answer)}">${esc(a.answer || "-")}</span></div>`).join("")
+      + (M.answered.length > shown.length ? `<a data-more-answered style="display:inline-block;margin-top:6px;font-size:13.5px">Show ${M.answered.length - shown.length} more answered</a>` : "") + `</details>`;
+    const ids = k => M.tasks.filter(x => x.key === k).sort((a, b) => b.n - a.n);
+    const run = ids("run").map(x => `<a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a> (${esc(splitWho(x.t.who)[0])})`).join(" · ");
+    const queue = ids("queue").map(x => `<a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a>`).join(" · ");
+    h += `<div class="now"><span class="l">Running</span><span>${run || "nothing"}</span><span class="l">Queued next</span><span>${queue || "nothing"}</span></div></div>`;
+    document.getElementById("pane-questions").innerHTML = h;
+  }
+
+  // ---------- Tasks ----------
+  function linesHtml(x) {
+    const t = x.t, sub = t.sub || [];
+    if (!sub.length) return "";
+    const exp = open.has(t.id), all = full.has(t.id);
+    const shown = all ? sub : exp ? sub.slice(0, SHOWN) : sub.slice(0, 1);
+    const rest = sub.length - shown.length;
+    const nAns = sub.reduce((n, s) => n + (s.match(/\bA\d+ ANSWERED\b/g) || []).length, 0);
+    let h = shown.map((s, i) => {
+      const p = parseLine(s), key = t.id + ":" + i, isOpen = lines.has(key), len = [...s].length, long = len >= LONG;
+      const meta = long ? `<div class="meta"><a data-line="${esc(key)}">${isOpen ? "Shown whole below the card row · close it" : "Open the whole line · " + fmt(len) + " characters"}</a></div>` : "";
+      const body = (p.head ? `<div class="head">${esc(p.head)}</div>` : "")
+        + (isOpen && long ? "" : `<div class="tx ${isOpen ? "" : exp ? "clamp3" : "clamp2"}">${esc(p.text)}</div>`) + meta;
+      return `<div class="ln"><div class="lead">${esc(p.lead)}</div><div>${body}</div><button class="chev" data-line="${esc(key)}" title="${isOpen ? "Close this line" : "Open this line"}">${isOpen ? "⌄" : "›"}</button></div>`;
+    }).join("");
+    const links = [];
+    if (rest > 0) links.push(exp ? `<a data-full="${esc(t.id)}">Show ${rest} earlier line${rest > 1 ? "s" : ""}</a>`
+      : `<a data-exp="${esc(t.id)}">Show more · ${rest} more line${rest > 1 ? "s" : ""}${nAns ? " · " + nAns + " answered ask" + (nAns > 1 ? "s" : "") + " in all" : ""}</a>`);
+    if (exp) links.push(`<a data-exp="${esc(t.id)}">Show less</a>`);
+    if (links.length) h += `<div class="more">${links.join("")}</div>`;
+    return h;
+  }
+  function readingRows(x) {
+    const t = x.t, sub = t.sub || [];
+    return sub.map((s, i) => [s, i]).filter(([s, i]) => lines.has(t.id + ":" + i) && [...s].length >= LONG).map(([s, i]) => {
+      const p = parseLine(s), len = [...s].length;
+      return `<div class="reading"><div class="rh"><span>${esc(p.lead ? p.lead + " · " : "")}${fmt(len)} characters, the whole line</span><a data-line="${esc(t.id + ":" + i)}">Close this line ^</a></div>`
+        + (p.head ? `<div style="font-weight:600;margin-top:6px">${esc(p.head)}</div>` : "") + `<div class="tx${len > 1200 ? " cols" : ""}">${esc(p.text)}</div></div>`;
+    }).join("");
+  }
+  function reportsHtml(x) {
+    const t = x.t, r = t.reports || [];
+    if (!r.length) return `<span class="mut3">${t.evidence && t.evidence !== "-" ? "no HTML report" : "–"}</span>`;
+    return `<div class="reps">` + r.map(rep => {
+      if (rep.pending) return `<div class="rep"><span class="pend">${esc(rep.label)}${/\(pending\)|· pending/.test(rep.label) ? "" : " · pending"}</span></div>`;
+      const u = fileUrl(rep.path), unread = x.key === "pend";
+      return `<div class="rep${unread ? " unread" : ""}">${unread ? `<i class="rd"></i>` : ""}<a class="doc${panel && panel.url === u ? " cur" : ""}" data-url="${esc(u)}" data-label="${esc(t.id + ": " + rep.label)}" data-task="${esc(t.id)}">${esc(rep.label)}</a>`
+        + `<a class="nw" href="${esc(u)}" target="_blank" title="Open in a new window">↗</a></div>`;
+    }).join("") + `</div>`;
+  }
+  function taskHtml(x, quiet) {
+    const t = x.t, [who, whoSub] = splitWho(t.who);
+    const pills = `<span class="pill k-${x.colour}">${esc(x.label)}</span>` + (x.asks.length && x.key !== "wait" ? `<span class="pill k-wait">Ask open</span>` : "")
+      + (x.blocked ? `<span class="pill k-block">Blocked</span><span class="blk">${esc(x.blocked)}</span>` : "")
+      + (x.key === "pend" ? `<button class="btn seen" data-seen="${esc(t.id)}" title="Mark the report seen: the task moves to Done here; the master folds it into tasks.js">Mark seen ✓</button>` : "")
+      + (x.seenHere ? `<span class="mut3" style="font-size:12.5px">seen here ${esc(seen[t.id])} · <a data-unseen="${esc(t.id)}">undo</a></span>` : "");
+    const whoHtml = `${esc(who)}${whoSub ? `<small>${esc(whoSub)}</small>` : ""}`;
+    const strips = x.asks.map(a => `<div class="strip"><b>${esc(a.id)} open${a.noHurry ? " · no hurry" : ""}</b><span title="${esc(a.question)}">${esc(a.question)}</span><a data-ask="${esc(a.id)}">See it in Questions ↑</a></div>`).join("");
+    return `<div class="card task tg${quiet ? " quiet" : ""}" data-task="${esc(t.id)}" id="task-${esc(t.id)}">`
+      + `<div class="id">${esc(t.id)}</div>`
+      + `<div style="min-width:0"><div class="title${quiet ? " clamp2" : ""}">${esc(t.title)}</div>${quiet ? "" : strips + linesHtml(x)}</div>`
+      + `<div class="pills">${pills}<div class="whou">${whoHtml}</div></div>`
+      + `<div class="who">${whoHtml}</div>`
+      + `<div>${reportsHtml(x)}</div>`
+      + (quiet ? "" : readingRows(x)) + `</div>`;
+  }
+  function renderTasks(D, M) {
+    const ss = sessions(D);
+    let h = `<div class="card scard"><div class="cardh"><h2>Sessions</h2><span class="cap">from puppet list${D.sessionsAsOf ? ", " + esc(D.sessionsAsOf) : ""} · master, working, analyst, clean; by name in each</span></div>`
+      + `<div class="sg h"><span>Session</span><span>State</span><span class="model">Model / effort</span><span>Job</span><span class="ctx"><span class="wide">Context, measured</span><span class="short">Context</span></span></div>`
+      + (ss.map(s => `<div class="sg" title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + s.job + " · " + s.context)}"><span><i class="dot ${s.dot}"></i>${esc(s.name)}</span>`
+        + `<span class="mut">${esc(s.state)}</span><span class="model mut">${esc(s.model || "-")}</span><span class="mut">${esc(jobName(s.job))}</span><span class="ctx"><span class="wide">${esc(s.ctxWide)}</span><span class="short">${esc(s.pct)}</span></span></div>`).join("")
+        || `<div class="mut" style="padding:8px 0">No session listed yet: run sync-sessions.mjs.</div>`) + `</div>`;
+    const seenIds = Object.keys(seen).filter(id => M.tasks.some(x => x.t.id === id && x.seenHere)).sort((a, b) => num(a) - num(b));
+    if (seenIds.length) {
+      const line = "seen on the task page: " + seenIds.map(id => id + " (" + seen[id] + ")").join(", ");
+      h += `<div class="seenbar"><span>Marked seen here, not yet in tasks.js: ${seenIds.map(esc).join(", ")}. Tell the master:</span><code id="seenline">${esc(line)}</code>`
+        + `<button class="btn" data-copy="seenline">Copy</button><span id="copied" class="mut"></span></div>`;
+    }
+    h += `<div><div class="filters">` + FILTERS.filter(f => f[0] !== "block" || M.C.block > 0).map((f, i) =>
+      (f[0] === "initial" ? `<span class="sep"></span>` : "")
+      + `<button data-f="${f[0]}" class="${f[0] === filter ? "on" : ""}">${f[1]}<b style="${f[2] && M.C[f[0]] && f[2] !== "done" && f[2] !== "queue" ? "color:var(--" + f[2] + ")" : ""}">${M.C[f[0]]}</b></button>`).join("") + `</div>`
+      + `<div class="orderline">${filter === "open" ? "Order: running, waits for you, queued, pending report; newest first within each. Lines in a task: newest first." : "Order: newest first. Lines in a task: newest first."}</div></div>`;
+    h += `<div><div class="tg h"><span># ↓</span><span>Task</span><span>Status</span><span class="whoh">Who</span><span>Reports</span></div>`;
+    const by = M.by[filter] || M.by.open;
+    if (filter === "open") {
+      const cards = M.tasks.filter(x => x.inOpen).sort((a, b) => a.group - b.group || b.n - a.n);
+      h += cards.map(x => taskHtml(x, false)).join("") || `<div class="card task mut">No open task.</div>`;
+      const done = M.tasks.filter(x => !x.inOpen).sort((a, b) => b.n - a.n);
+      if (done.length) {
+        const shownDone = showAllDone ? done : done.slice(0, 4);
+        h += `<div class="doneh">Done · ${done.length} · newest first</div>` + shownDone.map(x => taskHtml(x, !open.has(x.t.id))).join("")
+          + (done.length > shownDone.length ? `<a data-more-done style="display:inline-block;margin:10px 6px 0">Show ${done.length - shownDone.length} more done</a>` : "");
+      }
+    } else {
+      const list = M.tasks.filter(by).sort((a, b) => b.n - a.n);
+      h += list.map(x => taskHtml(x, x.key === "done" && !x.asks.length && !open.has(x.t.id))).join("") || `<div class="card task mut">No task here.</div>`;
+    }
+    h += `</div><p class="foot">Data reloads every 90 s without a page reload (the tab, the side panel and expanded tasks stay). Data: <code>tasks.js</code> beside this page, edited by the master on every change.</p>`;
+    document.getElementById("pane-tasks").innerHTML = h;
+  }
   // a job shown as a brief path reads as its brief name: ".../brief-ad-pm-default-tier.md" -> "ad-pm-default-tier"
   const jobName = j => /[\\/]brief-[^\\/]+\.md$/.test(j || "") ? j.replace(/^.*[\\/]brief-/, "").replace(/\.md$/, "") : (j || "-");
-  const stateDot = s => /busy|working/.test(s) && !/fresh/.test(s) ? "busy" : /fresh|clean/.test(s) ? "fresh" : "idle";
-  let cur = location.hash.slice(1) in FILTERS ? location.hash.slice(1) : "active";
 
-  function reportLinks(t) {
-    const r = t.reports || [];
-    if (!r.length) return `<span class="mut">${t.evidence && t.evidence !== "-" ? "no HTML report" : "-"}</span>`;
-    return r.map(x => {
-      if (x.pending) return `<div class="mut">${esc(x.label)}${/\(pending\)/.test(x.label) ? "" : " (pending)"}</div>`;
-      const u = fileUrl(x.path);
-      const isCur = panel && panel.url === u ? " cur" : "";
-      return `<div class="r"><a class="doc${isCur}" data-url="${esc(u)}" data-label="${esc(t.id + ": " + x.label)}">${esc(x.label)}</a>`
-           + `<a class="nw" href="${esc(u)}" target="_blank" title="Open in a new window">↗</a></div>`;
-    }).join("");
+  // ---------- Jira tasks: epics and their Jira issues ----------
+  const JIRA_CAT = { "new": "queue", "indeterminate": "run", "done": "done" };   // Jira's own status categories
+  const verdictKind = v => /clean|approved|pass/i.test(v || "") ? "done" : /block|fail|changes/i.test(v || "") ? "block" : "queue";
+  function renderJira(D, M) {
+    const rows = (D.epics || []).slice().sort((a, b) => num(a.epic) - num(b.epic));
+    const asOf = D.epicsAsOf && typeof D.epicsAsOf === "object" ? Object.keys(D.epicsAsOf).map(k => k + " " + D.epicsAsOf[k]).join(" · ") : (D.epicsAsOf || "");
+    let h = `<div class="card scard"><div class="cardh"><h2>Epics and Jira tasks</h2><span class="cap">${rows.length ? (asOf ? esc(asOf) + " · " : "") + "by epic id; backend before frontend" : "no rows recorded"}</span></div>`;
+    if (!rows.length) {
+      h += `<div class="mut" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px;font-size:13.5px">No epic is recorded on this board: the list is empty. The rows appear here once the master writes them; the tasks still name their epics.</div></div>`;
+      document.getElementById("pane-jira").innerHTML = h; return;
+    }
+    h += `<div class="eo h"><span>Epic ↑</span><div class="ei"><span>Repo · PR</span><span>Jira (board status · assignee)</span><span>Review</span><span class="last">Last change</span></div><span class="boardh">Tasks here</span></div>`;
+    h += rows.map(e => {
+      // tasks on this board whose title or lines name the epic, by id
+      const board = M.tasks.filter(x => [x.t.title, ...(x.t.sub || [])].join("\n").includes(e.epic)).map(x => x.t.id).sort((a, b) => num(a) - num(b)).join(" ");
+      const repos = (e.repos || [{ repo: e.repo, pr: e.pr, tasks: e.tasks, last: e.next }]).slice()
+        .sort((a, b) => (String(a.repo) === "backend" ? 0 : 1) - (String(b.repo) === "backend" ? 0 : 1));
+      return `<div class="eo erow"><div><b>${esc(e.epic)}</b><div class="et clamp2" title="${esc(e.what)}">${esc(e.what || "")}</div><div class="es">${esc([e.status, e.stamps].filter(Boolean).join(" · "))}</div>`
+        + `<div class="eboardu">${board ? "Tasks here: " + esc(board) : ""}</div></div><div>`
+        + repos.map(r => {
+          const j = r.jira || {}, rv = r.review || {};
+          return `<div class="ei rline"><div><a${r.url ? ` href="${esc(r.url)}" target="_blank"` : ""}>${esc([r.repo, r.pr].filter(Boolean).join(" "))}</a>`
+            + (r.prState ? `<div class="sub${/draft|unstable|conflict|dirty|blocked/i.test(r.prState) ? " warn" : ""}">${esc(r.prState)}</div>` : "")
+            + (r.check ? `<div class="chk">${esc(r.check)}</div>` : "") + (r.tasks ? `<div class="sub">${esc(r.tasks)}</div>` : "") + `</div>`
+            + `<div>${j.key ? `<b>${esc(j.key)}</b> <span class="kp k-${JIRA_CAT[j.category] || "queue"}">${esc(j.status || "-")}</span><div class="sub">${esc([j.type, j.assignee].filter(Boolean).join(" · "))}</div>` : `<span class="mut3">–</span>`}</div>`
+            + `<div>${rv.verdict ? `<span class="kp k-${verdictKind(rv.verdict)}">${esc(rv.verdict)}</span>` : `<span class="mut3">–</span>`}${rv.note ? `<div class="sub">${esc(rv.note)}</div>` : ""}</div>`
+            + `<div class="last">${esc(r.last || "–")}</div></div>`;
+        }).join("") + `</div><div class="eboard boardc">${esc(board || "–")}</div></div>`;
+    }).join("") + `</div>`;
+    document.getElementById("pane-jira").innerHTML = h;
   }
-  function subList(t) {
-    if (!t.sub || !t.sub.length) return "";
-    const expanded = open.has(t.id), many = t.sub.length > SHORT;
-    const lines = expanded ? t.sub : t.sub.slice(0, SHORT);
-    const more = many || t.sub.some(s => s.length > 300)
-      ? `<button class="more" data-t="${t.id}">${expanded ? "show less" : "show more" + (many ? ` (${t.sub.length - SHORT} more)` : "")}</button>` : "";
-    return `<ul class="sub${expanded ? "" : " short"}">${lines.map(s => `<li>${esc(s)}</li>`).join("")}</ul>${more}`;
-  }
-  function render() {
-    const D = window.DASH, T = D.tasks, count = f => T.filter(f).length;
-    document.getElementById("meta").textContent = D.workSet + " · days: " + D.days.join(", ") + " · updated " + D.updated;
-    const w = document.getElementById("waiting");
-    w.innerHTML = "<b>Now:</b> " + esc(D.waitingNow);
-    w.classList.toggle("calm", /^Nothing waits/.test(D.waitingNow));
-    document.getElementById("filters").innerHTML = Object.keys(FILTERS).map(k => {
-      const n = count(FILTERS[k]), cls = [k === cur ? "on" : "", k === "waiting-you" && n ? "hot" : ""].join(" ").trim();
-      return `<button class="${cls}" data-f="${k}">${NAMES[k]}<b>${n}</b></button>`;
-    }).join("");
-    document.getElementById("rows").innerHTML = T.filter(FILTERS[cur]).map(t => `
-      <tr><td class="id"><b>${t.id}</b><small>${t.day} ${t.origin === "initial" ? "initial" : "later"}</small></td>
-      <td>${esc(t.title)}${subList(t)}</td>
-      <td class="st ${t.status}">${LABEL[t.status]}</td>
-      <td class="who">${esc(t.who)}</td><td class="rep">${reportLinks(t)}</td></tr>`).join("");
-    document.getElementById("epicsec").hidden = !(D.epics && D.epics.length);
-    document.getElementById("epicsAsOf").textContent = "As of " + (D.epicsAsOf || "-");
-    document.getElementById("epics").innerHTML = (D.epics || []).map(e =>
-      `<tr><td><b>${esc(e.epic)}</b></td><td>${esc(e.repo)}</td><td>${esc(e.what)}</td><td class="st ${e.status === "shipped" ? "done" : "queued"}">${esc(e.status)}</td><td>${esc(e.stamps)}</td><td>${esc(e.tasks)}</td><td>${esc(e.pr)}</td><td>${esc(e.collector)}</td><td>${esc(e.next)}</td></tr>`).join("");
-    document.getElementById("sess").innerHTML = (D.sessions || []).map(s => {
-      const job = jobName(s.job), ctx = (String(s.context).match(/\(([^)]*)\)/) || [, s.context])[1];
-      return `<tr title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + s.job + " · " + s.context)}">`
-        + `<td><i class="dot ${stateDot(s.state)}"></i>${esc(s.name)}</td><td class="mut">${esc(s.state.replace(/\s*\(.*\)/, ""))}</td>`
-        + `<td>${esc(s.model || "-")}</td><td class="job">${esc(job)}</td><td class="ctx">${esc(ctx)}</td></tr>`;
-    }).join("");
-  }
+
+  // ---------- side panel ----------
   function showPanel() {
-    const split = document.getElementById("split");
-    if (!panel) { split.classList.remove("withpanel"); document.getElementById("pframe").src = "about:blank"; return; }
-    split.classList.add("withpanel");
+    document.body.classList.toggle("withpanel", !!panel);
+    const f = document.getElementById("pframe");
+    if (!panel) { f.src = "about:blank"; f.dataset.url = ""; return; }
     document.getElementById("ptitle").textContent = panel.label;
     document.getElementById("pnew").href = panel.url;
-    const f = document.getElementById("pframe");
     if (f.dataset.url !== panel.url) { f.src = panel.url; f.dataset.url = panel.url; }
   }
-  document.getElementById("filters").addEventListener("click", e => {
-    const f = e.target.dataset.f; if (!f) return; cur = f; location.hash = f; render();
-  });
-  document.getElementById("rows").addEventListener("click", e => {
-    const m = e.target.closest("button.more");
-    if (m) { const id = m.dataset.t; open.has(id) ? open.delete(id) : open.add(id); store.set("open", [...open]); render(); return; }
-    const d = e.target.closest("a.doc");
-    if (d) { e.preventDefault(); panel = { url: d.dataset.url, label: d.dataset.label }; store.set("panel", panel); showPanel(); render(); }
-  });
-  document.getElementById("pclose").addEventListener("click", () => { panel = null; store.set("panel", null); showPanel(); render(); });
+  function renderPanelMeta(M) {
+    if (!panel) return;
+    const x = panel.task && M.tasks.find(y => y.t.id === panel.task);
+    const path = decodeURI(panel.url.replace(/^file:\/\/\//, ""));
+    document.getElementById("pmeta").innerHTML = esc(path)
+      + (x && x.key === "pend" ? `<div class="pn"><span>${esc(x.t.id)} stays Pending report until you mark it seen</span><button class="btn seen" data-seen="${esc(x.t.id)}">Mark seen ✓</button></div>` : "");
+  }
 
-  // Data refresh without a page reload: load tasks.js again every 90 s, keep the panel and the expanded rows.
+  function applyLayout() {
+    const narrow = window.innerWidth < 1200;
+    document.body.classList.toggle("narrow", narrow);
+    document.body.classList.toggle("side-open", !!store.get("side", false));
+    document.getElementById("main").classList.toggle("compact", narrow || !!panel || document.body.classList.contains("side-open"));
+    if (theme === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", theme);
+  }
+  function render() {
+    const D = window.DASH; if (!D) return;
+    if (!FILTERS.some(f => f[0] === filter)) filter = "open";
+    if (!TABS.some(t => t[0] === tab)) tab = "questions";
+    applyLayout();
+    const M = model(D);
+    renderChrome(D, M); renderQuestions(D, M); renderTasks(D, M); renderJira(D, M); renderPanelMeta(M);
+  }
+
+  // ---------- events ----------
+  function goTab(k) { tab = k; store.set("tab", k); render(); document.getElementById("scroller").scrollTop = 0; }
+  function goFilter(f) { filter = f; store.set("filter", f); history.replaceState(null, "", "#" + f); tab = "tasks"; store.set("tab", "tasks"); render(); document.getElementById("scroller").scrollTop = 0; }
+  function flash(el) { if (!el) return; el.scrollIntoView({ block: "start" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); }
+  function jumpTask(id) {
+    const x = window.DASH.tasks.find(t => t.id === id);
+    if (x && x.status === "done" && filter === "open" && !(window.DASH.asks || []).some(a => a.task === id && a.state !== "answered")) showAllDone = true;
+    tab = "tasks"; store.set("tab", "tasks"); render();
+    if (!document.getElementById("task-" + id)) { filter = "all"; store.set("filter", filter); history.replaceState(null, "", "#all"); render(); }
+    flash(document.getElementById("task-" + id));
+  }
+  const toggle = (set, key, id) => { set.has(id) ? set.delete(id) : set.add(id); store.set(key, [...set]); };
+  function stamp() { const d = new Date(), p = n => String(n).padStart(2, "0"); return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); }
+  document.body.addEventListener("click", e => {
+    const el = e.target.closest("[data-tab],[data-go],[data-f],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-more-done],[data-more-answered],a.doc,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
+    if (!el) return;
+    const d = el.dataset;
+    if (d.tab) return goTab(d.tab);
+    if (d.go) return d.go === "questions" ? goTab("questions") : goFilter(d.go);
+    if (d.f) return goFilter(d.f);
+    if (d.jump) return jumpTask(d.jump);
+    if (d.ask) { goTab("questions"); return flash(document.getElementById("ask-" + d.ask)); }
+    if (d.exp) { toggle(open, "open", d.exp); if (!open.has(d.exp)) { full.delete(d.exp); store.set("full", [...full]); } return render(); }
+    if (d.full) { full.add(d.full); store.set("full", [...full]); return render(); }
+    if (d.line) { toggle(lines, "lines", d.line); return render(); }
+    if (d.seen) { seen[d.seen] = stamp(); store.set(SEEN_KEY, seen); return render(); }
+    if (d.unseen) { delete seen[d.unseen]; store.set(SEEN_KEY, seen); return render(); }
+    if (d.copy) {
+      const text = document.getElementById(d.copy).textContent, out = document.getElementById("copied");
+      return navigator.clipboard.writeText(text).then(() => { out.textContent = "copied"; }, err => { out.textContent = "copy failed (" + err.name + "): select the line and copy it"; });
+    }
+    if ("moreDone" in d) { showAllDone = true; return render(); }
+    if ("moreAnswered" in d) { showAllAnswered = true; return render(); }
+    if (el.matches("a.doc")) { e.preventDefault(); panel = { url: d.url, label: d.label, task: d.task || "" }; store.set("panel", panel); showPanel(); return render(); }
+    if (el.id === "sideopen" || el.id === "sideclose") { store.set("side", el.id === "sideopen"); return render(); }
+    if (el.id === "themecycle") { theme = { auto: "light", light: "dark", dark: "auto" }[theme]; store.set("theme", theme); return render(); }
+    if (el.matches("#themeseg button")) { theme = d.theme; store.set("theme", theme); return render(); }
+    if (el.id === "pclose") { panel = null; store.set("panel", null); showPanel(); return render(); }
+    if (el.id === "askchip") return goTab(window.DASH.asks && window.DASH.asks.some(a => a.state !== "answered") ? "questions" : "tasks");
+    if (el.id === "readchip") return goFilter("pend");
+  });
+  window.addEventListener("resize", () => applyLayout());
+  document.getElementById("scroller").addEventListener("scroll", e => e.target.classList.toggle("pinned", e.target.scrollTop > 0));
+
+  // Data refresh without a page reload: load tasks.js again every 90 s; the tab, the panel and the expanded rows stay.
   function loadData(first) {
     const s = document.createElement("script");
     s.src = "tasks.js?t=" + Date.now();
     s.onload = () => { render(); if (first) showPanel(); s.remove(); };
-    s.onerror = () => s.remove();
+    s.onerror = () => { s.remove(); document.getElementById("waiting").innerHTML = "<b>tasks.js did not load</b> (" + esc(new Date().toTimeString().slice(0, 5)) + "): the page shows the last data it read."; };
     document.body.appendChild(s);
   }
   loadData(true);

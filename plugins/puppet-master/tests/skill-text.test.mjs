@@ -990,6 +990,22 @@ test("the live task page ships as a template: the layout in SKILL.md, the detail
   assert.match(step7, /Reports are written straight into `tasks\.js`/);
 });
 
+test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar, asks as records, pending report and its seen line (T28, T29, A62, A64)", () => {
+  const bullet = read("SKILL.md").replace(/\s+/g, " ");
+  assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*three tabs, Questions, Tasks \(sessions table, filters with counts, the tasks\) and Jira tasks \(epics, their PRs and Jira board status\), a sidebar with the previous work sets/);
+  assert.match(bullet, /goes onto the page as an ask of that open task \(a record in `asks\[\]` of `tasks\.js`, shown in Questions and on the task's item\), with its id and the data to decide on/);
+  const step7 = read("references/on-start.md").replace(/\s+/g, " ");
+  assert.match(step7, /"questions\/tasks\/jira tasks should be 3 separate tabs, previouse work status pages go to sidebar"/);
+  assert.match(step7, /"all lists and tables must be ordered"/);
+  assert.match(step7, /each ask as its own record in `asks\[\]`, with its id, its task and the data to decide on/);
+  assert.match(step7, /is `pending-report`, not counted as waiting[\s\S]*"new list item status, 'pending report' which tells me nothing waits there but it s thing to read"/);
+  assert.match(step7, /"button next to it marking showed"[\s\S]*"seen on the task page: T22 \(11-26 23:40\)"; on that line, or when the user says they read it, set it `done`/);
+  assert.match(step7, /three tabs, Questions, Tasks \(sessions, filters, tasks\) and Jira tasks; previous work sets in the sidebar/);
+  // the page's own seen line is the one the skill tells the master to act on
+  const page = fs.readFileSync(path.join(SKILL_DIR, "templates", "task-page", "index.html"), "utf8");
+  assert.ok(page.includes('"seen on the task page: "'));
+});
+
 test("every report for the user is one HTML page with its full path", () => {
   const skill = read("SKILL.md").replace(/\s+/g, " ");
   assert.match(skill, /\*\*Reports are HTML only\.\*\*[\s\S]*dont show me md files reports and any other text, since i got this html reports it s all i need[\s\S]*note that we dont need new file report for each response, it can be status report, it sgood now/);

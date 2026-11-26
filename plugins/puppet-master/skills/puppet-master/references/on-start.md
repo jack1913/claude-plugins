@@ -53,20 +53,24 @@ do "A stand-in master" below.
    to a folder outside every checkout, fill `tasks.js` (its comment names every field), and give the
    user its full path. The page lists every task, from the start or added later, with their count;
    each with its state and its session. It holds the sessions list (each session in your care: its
-   name, role, job, state and measured context), and in each open task's item, what that task needs
-   from the user: each ask with its id and the data to decide on. Reports are written straight into
-   `tasks.js` (`reports: [{label, path, pending}]`, HTML pages with full paths). `sync-sessions.mjs`
-   rewrites the sessions list from `puppet list`; from a copy outside the plugin, pass `--puppet <path
-   to puppet.mjs>`. Run it in the same turn as every page change.
-   Layout, as the user asked on 2026-11-24: "list items like T39/41 when get so big they need a
-   shortneing with 'show more' button + lets make it more area efficient - current data goes to one
-   side and linked docs opens in side panel (new window only when clicked in specific button)", then
-   "+ static pinned header with [Image #1] and opened sessions", then "sessions table needs ehaders,
-   3. tasks list table columns overlaps". So: a pinned header with the title, the waiting banner, the
-   filter buttons and the sessions table (with column headers); under it the tasks table (fixed
-   column widths) on one side and a side panel on the other that shows a report when its link is
-   clicked, with a "New window ↗" button for a new window. A task's sub lines show two, with "show
-   more (N more)", each line clamped to three. Expanded tasks and the open panel survive a reload.
+   name, role, job, state and measured context), and for each open task, what it needs from the
+   user: each ask as its own record in `asks[]`, with its id, its task and the data to decide on.
+   Reports are written straight into `tasks.js` (`reports: [{label, path, pending}]`, HTML pages with
+   full paths). A finished task whose report the user has not read is `pending-report`, not counted
+   as waiting (A62, 2026-11-26: "new list item status, 'pending report' which tells me nothing waits
+   there but it s thing to read"); its "Mark seen" button (A64: "button next to it marking showed")
+   shows it done in that browser and gives the user a line for you, "seen on the task page: T22
+   (11-26 23:40)"; on that line, or when the user says they read it, set it `done`. `sync-sessions.mjs`
+   rewrites the sessions list from `puppet list` (from a copy outside the plugin, pass `--puppet <path
+   to puppet.mjs>`). Run it in the same turn as every page change. Layout, as the user asked on
+   2026-11-24: "list items like T39/41 when get so big they need a shortneing with 'show more' button
+   + lets make it more area efficient - current data goes to one side and linked docs opens in side
+   panel (new window only when clicked in specific button)", then "+ static pinned header with
+   [Image #1] and opened sessions", then "sessions table needs ehaders, 3. tasks list table columns
+   overlaps"; on 2026-11-26: "questions/tasks/jira tasks should be 3 separate tabs, previouse work
+   status pages go to sidebar" and "all lists and tables must be ordered". So: a pinned header with
+   `waitingNow` over three tabs, Questions, Tasks (sessions, filters, tasks) and Jira tasks; previous
+   work sets in the sidebar; a report side panel; every list sorted; tab and panel kept on reload.
 
 ## A stand-in master
 

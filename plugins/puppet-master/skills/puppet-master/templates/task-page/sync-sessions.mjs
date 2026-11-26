@@ -1,6 +1,6 @@
-// Rewrites the `sessions` block and `updated` in tasks.js from `puppet list`.
+// Rewrites the `sessions` block, `sessionsAsOf` and `updated` in tasks.js from `puppet list`.
 // Run it in the same turn as every assign, finish, clear, switch, relaunch or measure.
-//   node sync-sessions.mjs [--puppet <path to puppet.mjs>] [--file <path to tasks.js>]
+//   node sync-sessions.mjs [--puppet <path to puppet.mjs>] [--file <path to tasks.js>] [--group <group>]
 // --puppet defaults to ../../scripts/puppet.mjs (the template inside the plugin); a copy of this folder
 // outside the plugin needs --puppet (or PUPPET_MASTER_SCRIPT). --file defaults to tasks.js beside this script.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -21,10 +21,18 @@ if (!existsSync(PUPPET)) {
   process.exit(1);
 }
 
-const out = execFileSync("node", [PUPPET, "list"], { encoding: "utf8" });
+// --group lists another master's group (the helper's own --group option); without it, the helper's default.
+const GROUP = arg("--group");
+const out = execFileSync("node", [PUPPET, ...(GROUP ? ["--group", GROUP] : []), "list"], { encoding: "utf8" });
 const rows = out.trim().split(/\r?\n/).filter(Boolean).map(line => {
   const name = line.split(/\s+/)[0];
   const tokens = line.split(/\s+/)[1];
+  // A line with no token count, such as "u1  changed  (new session id: ask the user whether it was cleared)":
+  // keep what the helper says instead of reading a number out of it (it used to write "NaN ()").
+  if (!/^\d+$/.test(tokens || "")) {
+    const said = line.slice(name.length).trim().replace(/\s{2,}/g, " ");
+    return { name, state: said || "unknown", model: NOTES[name] || "-", job: "-", context: "-" };
+  }
   const pct = (line.match(/\s(\d+(?:\.\d+)?%)\s/) || [])[1] || "";
   const busy = /\sbusy\s/.test(line) ? "busy" : /\sidle\s/.test(line) ? "idle" : /\sfresh\s/.test(line) ? "fresh" : "";
   const role = (line.match(/interactive (worker|analyst|master)/) || [])[1] || "";
@@ -48,5 +56,7 @@ const now = new Date();
 const pad = n => String(n).padStart(2, "0");
 const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 s = s.replace(/^  updated: ".*",/m, () => `  updated: "${stamp}",`);
+const asOf = `  sessionsAsOf: "${stamp.slice(11)}",`;
+s = /^  sessionsAsOf: ".*",/m.test(s) ? s.replace(/^  sessionsAsOf: ".*",/m, () => asOf) : s.replace(/^  sessions: \[/m, () => asOf + "\n  sessions: [");
 writeFileSync(FILE, s);
 console.log(rows.map(r => `${r.name} | ${r.state} | ${r.model} | ${r.job} | ${r.context}`).join("\n"));
