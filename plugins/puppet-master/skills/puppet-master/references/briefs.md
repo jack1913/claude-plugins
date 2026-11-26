@@ -23,7 +23,9 @@ Read this before you write or send any brief, the worker's or the analyst's.
   brainiac runs from the brain root, a standing yes with the exact commands it covers). Paste it
   unchanged into `{{standing_rules}}` of every brief that day, and before you send, check that each
   line of the block is in the brief. Facts about the user's repositories (the IIS lock, the Stripe
-  CLI process) go into the block, never into skill text.
+  CLI process) go into the block, never into skill text. A work set may carry the window the user
+  named for its git steps: record "git, commit and merge steps go to `<window>`" in the block as a
+  standing answer and route by it for that work set.
 - Write every path in a brief with forward slashes: backslashes get lost on the way.
 - **Every brief holds the template's lines itself, word for word**, through the brief's last line
   (`<!-- end of the puppet-master worker brief: keep this line -->`): a common file may add to a brief but never stands in for them

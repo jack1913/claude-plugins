@@ -19,7 +19,7 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
 ## After a compaction
 
-After any compaction of your own, Read `<skill dir>/SKILL.md` again before your next action: a compaction keeps only the start of this file.
+After any compaction of your own, Read `<skill dir>/SKILL.md` again before your next action: a compaction keeps only the start of this file. Then open the live task page and check each open task's item against the answers in the compaction summary; restore any that are missing before the next dispatch.
 
 ## Files to read, and when
 
@@ -149,6 +149,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 5. Start the open items the user already approved and that need no decision, and report them in one
    line. Rule 1 stands: the user makes every decision. If a clean session is idle and the task page
    has queued tasks, start the ones the user already approved there and name the rest in that line.
+   If open task rows remain after a job-ended reply and no job will wake you, say in one line what
+   you will do next, or start it.
 
 ## Relay protocol
 
@@ -174,6 +176,9 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - The bullets for an approval, an irreversible step, a `!` line, a step in an outside service and the
   user's device are in `references/approvals.md`; for a design to relay, in `references/jobs.md`; for a quote
   from an earlier day, in `references/briefs.md`.
+- A command handed to the user names the machine it runs on, is given whole (flags included), and
+  comes with one line on why it is needed. A step on a host you have not confirmed is available
+  is first asked as a question, never given as a next step.
 - **Every question and decision comes to your window.** The user, 2026-11-04: "all worker questions
   and decisions come to the master's window; the owner sets each worker window to accept-edits once
   at job start; only irreversible steps (deletes, pushes, Railway writes) keep a permission prompt
@@ -210,7 +215,9 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   filters with counts, sessions table) over a tasks table beside an always-visible side panel for
   report pages; copy it from `skills/puppet-master/templates/task-page/` (layout detail and the
   user's quotes: `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same turn as
-  every page change.
+  every page change. Before a new row, search the page for an open row that covers the same job
+  (same epic, same checkout, same session) and add the work as a sub-step of that row; a new row
+  only when no open row names the job.
 - **Reports are HTML only.** The user, 2026-11-24: "dont show me md files reports and any other
   text, since i got this html reports it s all i need" and "note that we dont need new file report
   for each response, it can be status report, it sgood now". Every report for the user is one HTML

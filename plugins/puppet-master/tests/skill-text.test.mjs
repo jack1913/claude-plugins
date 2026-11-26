@@ -681,7 +681,8 @@ test("the worker's finish checklist, coupled files, read-back, long-run progress
   assert.match(brief, /Never\s+create\s+or\s+edit\s+a\s+credentials\s+file/);
   assert.match(brief, /cp \.env\.example \.env/);
   assert.match(brief, /inferred/);
-  assert.match(brief, /list\s+every\s+scratch\s+folder/);
+  // P-20261125-6 put the files written outside the scratch folder in front; the scratch folders are still listed.
+  assert.match(brief, /list\s+every\s+file\s+you\s+wrote\s+outside\s+the\s+job's\s+scratch\s+folder,\s+and\s+every\s+scratch\s+folder\s+you\s+created/);
   assert.match(brief, /A\s+live\s+check\s+with\s+no\s+host,\s+database\s+or\s+test\s+account\s+named\s+here\s+is\s+a\s+miss/);
 });
 
@@ -995,4 +996,25 @@ test("every report for the user is one HTML page with its full path", () => {
   assert.match(skill, /Every report for the user is one HTML page, given with its full path; a short answer goes on the status page; a scratch `\.md` or `\.txt` file is never handed to the user/);
   const briefs = read("references/briefs.md").replace(/\s+/g, " ");
   assert.match(briefs, /`\{\{deliverable\}\}`:[^`]*A report for the user is one HTML page with its full path, never an `\.md` or `\.txt` file/);
+});
+
+test("the 2026-11-25 text proposals are in the file for their moment (P-20261125-1 to -7)", () => {
+  const flat = (text) => text.replace(/\s+/g, " ");
+  const skill = read("SKILL.md");
+  const brief = flat(read("worker-brief.md"));
+  // P-1: after its own compaction the master checks the task page against the summary's answers
+  assert.match(flat(section(skill, "After a compaction")), /Read `<skill dir>\/SKILL\.md` again before your next action[\s\S]*Then open the live task page and check each open task's item against the answers in the compaction summary; restore any that are missing before the next dispatch/);
+  // P-2: one row per job on the task page
+  assert.match(flat(section(skill, "Relay protocol")), /\*\*The live task page\.\*\*[\s\S]*Before a new row, search the page for an open row that covers the same job \(same epic, same checkout, same session\) and add the work as a sub-step of that row; a new row only when no open row names the job/);
+  // P-3: a command for the user names its machine, is whole and has its reason; an unconfirmed host is a question
+  assert.match(flat(section(skill, "Relay protocol")), /A command handed to the user names the machine it runs on, is given whole \(flags included\), and comes with one line on why it is needed\. A step on a host you have not confirmed is available is first asked as a question, never given as a next step/);
+  // P-4: the compaction line covers a job without git, once: the clause replaced "With no git allowed, ask the master."
+  assert.match(brief, /take where you are from the checkout's git state \(`git status`, `git log` of your branch\), not from the summary, unless this job runs without git; then from the files you wrote and, for a git fact, ask the master\./);
+  assert.doesNotMatch(brief, /With no git allowed, ask the master/);
+  // P-5: the window the user named for git steps is a standing answer of the work set, never a default in the skill
+  assert.match(flat(read("references/briefs.md")), /"standing answers" block on the live task page[\s\S]*A work set may carry the window the user named for its git steps: record "git, commit and merge steps go to `<window>`" in the block as a standing answer and route by it for that work set/);
+  // P-6: the FINAL lists the files written outside the job's scratch folder
+  assert.match(brief, /Then `FINAL:`, and list every file you wrote outside the job's scratch folder, and every scratch folder you created\./);
+  // P-7: a turn that ends with open rows and nothing to wake the master says what comes next
+  assert.match(flat(section(skill, "When a job ends")), /If open task rows remain after a job-ended reply and no job will wake you, say in one line what you will do next, or start it\./);
 });
