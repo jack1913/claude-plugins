@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Coordinate your Claude sessions from one session: hand each job to an open session or a background worker.",
   "author": {
-    "name": "Jacek Pytlik"
+    "name": "Krzysztof Pawlik",
+    "url": "https://github.com/krzysiekk333"
   },
   "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/puppet-master",
   "repository": "https://github.com/jack1913/claude-plugins",
