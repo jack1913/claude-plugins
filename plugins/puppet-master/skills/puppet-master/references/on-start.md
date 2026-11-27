@@ -81,7 +81,31 @@ do "A stand-in master" below.
    with their counts, the sessions and the previous work sets in the sidebar (its collapsed rail's
    counts filter too); a report side panel, 640 px wide by default, its width dragged on its left
    edge and kept in the browser; every list sorted; tab, panel and its width kept on reload. Every
-   open question goes into `asks[]` as its own record, so the page shows them all at once.
+   open question goes into `asks[]` as its own record, so the page shows them all at once. On
+   2026-11-27: "we need to have sidebar with whole sessions info + whole tasks status filter +
+   taskjs list items must be smaller since it takes too much space for one and it s not clear table
+   than + ordering must be strict, i see again T ids messed + no done tasks under normal list + jira
+   tasks list seems not updated too often + group questions from single task + better grouping of
+   tasks (you show related tasks in epics view already) + new tab for my side questions log", and
+   "each task on list should have only title and rest under show more". So: the sidebar lists every
+   status filter with its count (0 too) and each session's whole record; a task is one row (id,
+   status, title), the rest under Show more, under a heading per `group` (the epic or theme; groups A
+   to Z, none last); tasks and asks by id, lowest first, whatever the order in `tasks.js`; done tasks
+   only in the folded Done list; open asks grouped under their task; the Jira tab shows when each
+   epic was read and marks it stale after 2 hours, and `sync-epics.mjs` reads the PRs and Jira
+   issues again (one `gh pr view` per PR, one Jira read per key); a fourth tab, Side questions,
+   lists `sideQuestions[]`: log each question the user asks you beside the tasks there, with its
+   time, their words verbatim, your short answer and its time, in the same turn you answer it.
+   On 2026-11-27, after the design canvas `pm-status-page-r3` (this replaces the folded Done list, the 640 px panel
+   and the Jira tasks label above): the sidebar is 420 px wide with every
+   status filter and each session's context % with a bar and what it is doing (no raw token counts);
+   its collapsed rail is 88 px, a count circle and a word per filter and a dot, % and bar per session;
+   a task row is # | title, its newest line, Show more · n | status and who | the 3 newest reports, with
+   done tasks under the Done filter; the report panel is open from the start, 300 px wide, with a hint and
+   the newest unread reports; the tab is called Epics and Jira;
+   Collapse all / Expand all sits in the heading of each list with several foldable parts; the Jira
+   tab is one card per epic (the epic id large, backend first, "x of y landed" largest, the review
+   verdict, the check time, and an event log from `log[]` of each repo line), with no commit id on it.
 
 ## A stand-in master
 

@@ -50,37 +50,63 @@
         font-size:12px; color:var(--text-2); flex:none; text-decoration:none !important; }
   .card { background:var(--card); border-radius:16px; box-shadow:var(--shadow); }
 
-  /* rail (collapsed sidebar) and the opened sidebar */
-  #rail { width:72px; flex:none; display:flex; flex-direction:column; align-items:center; gap:16px; padding:14px 0; }
+/* rail (collapsed sidebar, 88 px) and the opened sidebar (420 px): every status filter with its count, every session's record
+     (the user, 11-27: "sidebar needs to be wider and it s all filters should move to it s collapsed version") */
+  #rail { width:88px; flex:none; display:flex; flex-direction:column; align-items:center; gap:11px; padding:14px 6px; overflow-y:auto; scrollbar-width:none; }
   .iconbtn { width:40px; height:40px; border-radius:12px; border:0; display:flex; align-items:center; justify-content:center;
-             background:var(--card); box-shadow:var(--shadow); color:var(--text-2); cursor:pointer; }
+             background:var(--card); box-shadow:var(--shadow); color:var(--text-2); cursor:pointer; flex:none; }
   .iconbtn.flat { background:none; box-shadow:none; }
-  .rc { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:12px; color:var(--text-2); cursor:pointer; background:none; border:0; padding:0; }
-  .rc i { font-style:normal; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-          font-weight:600; font-size:14px; background:var(--card); color:var(--text-3); }
+  .rc { display:flex; flex-direction:column; align-items:center; gap:2px; width:76px; font-size:12px; line-height:1.2; color:var(--text-2); cursor:pointer; background:none; border:0; padding:0; flex:none; }
+  .rc i { font-style:normal; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px;
+          background:var(--card); color:var(--text-2); box-shadow:var(--shadow); font-variant-numeric:tabular-nums; }
+  .rc.on i { box-shadow:0 0 0 2px var(--accent); }
+  .rc i.k-wait { background:var(--wait-bg); color:var(--wait); } .rc i.k-run { background:var(--run-bg); color:var(--run); }
+  .rc i.k-block { background:var(--block-bg); color:var(--block); } .rc i.k-unread { background:var(--unread-bg); color:var(--unread); }
+  .rc i.k-queue { background:var(--queue-bg); color:var(--queue); } .rc i.k-done { background:var(--done-bg); color:var(--done); }
+  .rdiv { width:44px; border-top:1px solid var(--line); margin:2px 0; flex:none; }
+  .rs { display:flex; flex-direction:column; align-items:center; gap:1px; font-size:11.5px; color:var(--text-2); width:76px; flex:none; }
+  .rs b { font-weight:600; color:var(--text); font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .rs .bar { width:44px; }
+  .bar { height:5px; border-radius:3px; background:var(--line); overflow:hidden; }
+  .bar > span { display:block; height:100%; border-radius:3px; background:var(--dot-busy); } .bar > span.hi { background:var(--wait); }
   #rail .theme { margin-top:auto; }
-  #side { width:292px; flex:none; padding:14px 8px 14px 14px; overflow-y:auto; }
-  #side .card { padding:14px 14px 20px; display:flex; flex-direction:column; gap:22px; }
-  .sidehead { display:flex; align-items:center; gap:12px; font-weight:600; }
-  .sidehead .iconbtn { width:34px; height:34px; box-shadow:none; background:var(--well); }
-  .sidesec h3 { margin:0 0 6px; font-size:12.5px; font-weight:600; color:var(--text-3); }
-  .srow { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:10px; cursor:pointer;
+  #side { width:420px; flex:none; padding:14px 8px 14px 14px; overflow-y:auto; }
+  #side .card { padding:16px 16px 20px; display:flex; flex-direction:column; gap:20px; }
+  .sidehead { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px; }
+  .sidehead .iconbtn { width:32px; height:32px; box-shadow:none; background:var(--well); border-radius:10px; margin-left:auto; order:2; }
+  .sidesec h3 { margin:0 0 6px; font-size:12.5px; font-weight:600; color:var(--text-3); letter-spacing:.02em; text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+  .sidesec h3 .tag { margin-left:auto; text-transform:none; letter-spacing:0; font-weight:500; }
+  .srow { display:flex; justify-content:space-between; align-items:center; padding:7px 12px; border-radius:10px; cursor:pointer;
           width:100%; border:0; background:none; text-align:left; }
   .srow.on { background:var(--well); font-weight:600; }
-  .srow .n { min-width:22px; text-align:center; border-radius:999px; font-size:13px; padding:0 4px; color:var(--text-2); }
+  .srow .n { min-width:28px; text-align:center; border-radius:999px; font-size:13px; padding:0 6px; color:var(--text-2); font-variant-numeric:tabular-nums; }
   .srow .n.hot { font-weight:600; }
-  .srow.first-origin { margin-top:6px; position:relative; }
-  .srow.first-origin::before { content:""; position:absolute; left:10px; right:10px; top:-4px; border-top:1px solid var(--line); }
-  .ssess { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:0 8px; align-items:center; font-size:13.5px; padding:3px 10px; }
-  .ssess span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ssess span:last-child { max-width:84px; text-align:right; }
-  .prev { padding:6px 10px; font-size:13.5px; border-top:1px solid var(--line); }
+  .srow .n.k-wait { background:var(--wait-bg); color:var(--wait); } .srow .n.k-unread { background:var(--unread-bg); color:var(--unread); }
+  .srow .n.k-block { background:var(--block-bg); color:var(--block); } .srow .n.k-run { background:var(--run-bg); color:var(--run); }
+  .srow.first-origin { margin-top:8px; position:relative; }
+  .srow.first-origin::before { content:""; position:absolute; left:12px; right:12px; top:-5px; border-top:1px solid var(--line); }
+  .srow .n.zero { color:var(--text-3); opacity:.7; background:none; }
+  /* a session: its context share with a bar, and what it is doing (the user, 11-27: no raw token counts) */
+  .ssess { padding:7px 12px; border-radius:10px; }
+  .ssess .t { display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:0 10px; align-items:center; }
+  .ssess .t .dot { margin:0; }
+  .ssess .nm { font-weight:600; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ssess .pc { font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text-2); }
+  .ssess .job { margin:2px 0 4px 22px; font-size:12.5px; color:var(--text-2); line-height:1.4; overflow-wrap:anywhere; }
+  .ssess .bar { margin-left:22px; }
+  .ssess .md { margin:3px 0 0 22px; font-size:11.5px; color:var(--text-3); }
+  .ssess.folded .job, .ssess.folded .bar, .ssess.folded .md { display:none; }
+  .prev { padding:6px 12px; font-size:13.5px; border-top:1px solid var(--line); }
   .prev:first-of-type { border-top:0; }
   .prev .d { color:var(--text-2); font-size:12.5px; }
   .prev .o { color:var(--text-3); font-size:12.5px; margin-top:2px; }
   .seg { display:flex; background:var(--well); border-radius:10px; padding:3px; }
   .seg button { flex:1; border:0; background:none; padding:4px 0; border-radius:8px; cursor:pointer; font-size:13px; color:var(--text-2); }
   .seg button.on { background:var(--card); box-shadow:var(--shadow); color:var(--text); font-weight:600; }
+  /* Collapse all / Expand all: one switch in the heading of each list with several foldable parts */
+  .sw { margin-left:auto; display:inline-flex; background:var(--well); border-radius:9px; padding:2px; font-size:12.5px; flex:none; }
+  .sw button { border:0; background:none; padding:2px 10px; border-radius:7px; color:var(--text-2); cursor:pointer; font-size:12.5px; }
+  .sw button.on { background:var(--card); box-shadow:var(--shadow); color:var(--text); font-weight:600; }
   body:not(.side-open) #side { display:none; } body.side-open #rail { display:none; }
 
   /* main column: pinned header, waiting line, tab bar, then the scrolling pane */
@@ -130,11 +156,40 @@
   details.ans summary::before { content:"▸"; color:var(--text-3); font-size:12px; }
   details.ans[open] summary::before { content:"▾"; }
   details.ans summary .r { margin-left:auto; font-size:13px; color:var(--text-3); }
-  .arow { display:grid; grid-template-columns:52px 44px minmax(0,1fr); gap:0 14px; padding:5px 0; border-top:1px solid var(--line); align-items:baseline; font-size:13.5px; }
-  .arow:first-of-type { border-top:0; }
+  .arow { display:grid; grid-template-columns:52px minmax(0,1fr) 84px; gap:0 14px; padding:4px 0 4px 16px; border-top:1px solid var(--line); align-items:baseline; font-size:13.5px; }
   .arow .an { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); }
+  .arow .at { color:var(--text-3); font-size:12.5px; text-align:right; white-space:nowrap; }
+  .arh { display:flex; gap:10px; align-items:baseline; margin-top:12px; padding-bottom:4px; font-size:13.5px; min-width:0; }
+  .arh .tt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); min-width:0; }
+  /* open asks grouped under their task (the user, 11-27: "group questions from single task") */
+  .qtask { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
+  .qtask:first-of-type { border-top:0; }
+  .qth { display:flex; gap:10px; align-items:center; font-size:14px; min-width:0; }
+  .qth .tid { font-weight:600; }
+  .qth .ch { color:var(--text-3); font-size:12px; width:12px; cursor:pointer; }
+  .qth .tt { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .qth .pill { padding:1px 9px; font-size:12.5px; }
+  .qth .r { font-size:13px; color:var(--text-3); white-space:nowrap; }
+  .qtask .ask { margin-top:10px; }
   .now { display:grid; grid-template-columns:112px minmax(0,1fr); gap:4px 12px; margin-top:16px; padding-top:12px; border-top:1px solid var(--line); font-size:13.5px; }
   .now .l { color:var(--text-2); }
+
+  /* Side questions: the user's side questions to the master, the newest first (the user, 11-27) */
+  .sq { display:grid; grid-template-columns:96px minmax(0,1.3fr) minmax(0,1fr) 96px; gap:0 18px; padding:10px 0; border-top:1px solid var(--line); font-size:13.5px; align-items:start; }
+  .sq.h { font-size:12.5px; color:var(--text-3); border-top:0; padding:12px 0 4px; }
+  .sq .q { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .sq .a { color:var(--text-2); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .sq .t { color:var(--text-3); font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .compact .sq { grid-template-columns:84px minmax(0,1.3fr) minmax(0,1fr) 84px; gap:0 14px; }
+  #main.tight .sq { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:4px 14px; }
+  #main.tight .sq .t:first-child { grid-column:1 / -1; }
+  #main.tight .sq.h { display:none; }
+
+  /* Jira freshness: when each line was read, stale after STALE_H hours (the user, 11-27: "jira tasks list seems not updated too often") */
+  /* (scoped to [data-fresh]: .dot.fresh is a session that has not started, in the sidebar) */
+  .fresh[data-fresh] { margin-top:10px; padding:8px 12px; border-radius:10px; background:var(--card-quiet); font-size:13.5px; color:var(--text-2); }
+  .fresh.stale[data-fresh] { background:var(--wait-soft); color:var(--text); }
+  .fresh.stale[data-fresh] b { color:var(--wait); }
 
   /* Tasks */
   .scard { padding:16px 22px 14px; }
@@ -153,20 +208,40 @@
   .btn.seen { background:transparent; color:var(--text); box-shadow:none; border:1px solid var(--text-3); padding:2px 10px; margin-top:8px; }
   .btn.seen:hover { background:var(--well); border-color:var(--text-2); }
   .btn:focus-visible, #pgrip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .tg { display:grid; grid-template-columns:44px minmax(0,1fr) 140px 180px 226px; gap:0 22px; align-items:start; }
-  .tg.h { font-size:13px; color:var(--text-3); padding:0 24px 8px; }
-  .task { padding:18px 24px; margin-top:10px; scroll-margin-top:12px; }
-  .task.quiet { background:var(--card-quiet); box-shadow:none; padding:13px 24px; }
-  .task.flash { outline:2px solid var(--accent); }
-  .task .id { font-weight:600; }
-  .task.quiet .id, .task.quiet .title { color:var(--text-2); font-weight:400; }
-  .task .title { font-weight:600; text-wrap:pretty; min-width:0; overflow-wrap:anywhere; }
-  .pills { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
-  .who { min-width:0; overflow-wrap:anywhere; }
-  .who small, .whou small { display:block; font-size:13px; color:var(--text-2); line-height:1.45; margin-top:2px; }
-  .whou { display:none; font-size:13.5px; color:var(--text-2); margin-top:6px; overflow-wrap:anywhere; }
-  .whou small { font-size:12.5px; }
-  .blk { font-size:12.5px; color:var(--block); margin-top:2px; overflow-wrap:anywhere; }
+/* the task table (the accepted canvas, 11-27): # | title, one line of what is new, Show more | status, who | the 3 newest reports.
+     Group headings fold; done tasks are a filter, not a section. */
+  .lh { display:flex; align-items:center; gap:10px; padding:0 6px; }
+  .lh h2 { margin:0; font-size:15.5px; } .lh .cap { font-size:13px; color:var(--text-3); }
+  .grp { padding:6px 6px 10px; }
+  .tgh { display:flex; align-items:center; gap:8px; padding:6px 14px 4px; font-weight:600; font-size:14px; cursor:pointer; }
+  .tgh .cap { font-weight:400; font-size:12.5px; color:var(--text-3); } .tgh .ch { color:var(--text-3); font-size:12px; width:12px; }
+  .thead, .trow { display:grid; grid-template-columns:38px minmax(0,1fr) 124px 168px; gap:0 12px; align-items:start; }
+  .thead { padding:0 26px 0 20px; font-size:12.5px; color:var(--text-3); }
+  .trow { padding:10px 14px; border-top:1px solid var(--line); scroll-margin-top:12px; }
+  .tgh + .trow { border-top:0; }
+  .trow.flash { outline:2px solid var(--accent); outline-offset:-2px; border-radius:8px; }
+  .trow .id { font-weight:600; font-variant-numeric:tabular-nums; }
+  .trow .ti { font-weight:600; text-wrap:pretty; overflow-wrap:anywhere; }
+  .trow.done .id, .trow.done .ti { color:var(--text-2); font-weight:400; }
+  .trow .s1 { margin-top:3px; font-size:13px; color:var(--text-2); overflow-wrap:anywhere; }
+  .trow .more { margin-top:3px; font-size:13px; font-weight:600; display:block; }
+  .trow .more a, .trow .rmore a { font-weight:600; cursor:pointer; }
+  .trow .stc .st { display:flex; gap:4px; flex-wrap:wrap; }
+  .trow .stc small { display:block; margin-top:4px; font-size:12.5px; color:var(--text-2); line-height:1.4; overflow-wrap:anywhere; }
+  .trow .rp { display:flex; flex-direction:column; gap:3px; font-size:13px; min-width:0; }
+  .trow .rmore { margin-top:2px; font-size:13px; }
+  .tdet { padding:2px 18px 14px 64px; font-size:13.5px; border-top:0; }
+  .tdet .kv { display:grid; grid-template-columns:96px minmax(0,1fr); gap:6px 12px; align-items:start; margin-top:6px; }
+  .tdet .kv > .l { color:var(--text-2); font-size:13px; font-weight:600; line-height:21px; }
+  .tdet .kv small { display:block; font-size:12.5px; color:var(--text-2); }
+  .blk { color:var(--block); overflow-wrap:anywhere; }
+  .tdet { padding:6px 18px 14px 54px; background:var(--card-quiet); font-size:13.5px; }
+  .tdet .full { font-weight:600; text-wrap:pretty; overflow-wrap:anywhere; margin:4px 0 8px; }
+  .tdet .kv { display:grid; grid-template-columns:96px minmax(0,1fr); gap:6px 12px; align-items:start; }
+  .tdet .kv > .l { color:var(--text-2); font-size:13px; font-weight:600; line-height:21px; }
+  .tdet .kv small { display:block; font-size:12.5px; color:var(--text-2); }
+  .blk { color:var(--block); overflow-wrap:anywhere; }
+
   .strip { display:flex; gap:10px; align-items:baseline; margin-top:10px; padding:7px 12px; border-radius:10px; background:var(--wait-soft); font-size:13.5px; }
   .strip b { color:var(--wait); white-space:nowrap; }
   .strip span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -188,59 +263,71 @@
   .rep a.doc.cur { background:var(--well); border-radius:7px; padding:0 6px; margin:0 -6px; font-weight:600; }
   .rep .rd { width:7px; height:7px; border-radius:50%; background:var(--unread); flex:none; margin-top:8px; }
   .rep.unread a.doc { font-weight:600; }
-  .rep .pend { color:var(--text-3); }
-  .doneh { font-size:13.5px; color:var(--text-2); margin:22px 6px 0; }
+  /* a report not written yet is a muted note, not a link (the user's screenshot, 11-27) */
+  .rep .pend { color:var(--text-3); font-size:13px; }
+  .rep .pend i { font-style:normal; }
 
-  /* compact: narrow window, sidebar open or side panel open */
-  .compact .tg { grid-template-columns:34px minmax(0,1fr) 168px 190px; gap:0 16px; }
-  .compact .tg.h { padding:0 18px 8px; }
-  .compact .task { padding:16px 18px; } .compact .task.quiet { padding:12px 18px; }
-  .compact .who, .compact .tg.h .whoh { display:none; }
-  .compact .whou { display:block; }
+/* compact: narrow window, sidebar open or panel open */
   .compact .ln { grid-template-columns:minmax(0,1fr) 12px; gap:1px 10px; }
   .compact .ln .lead { grid-column:1 / -1; } .compact .ln .lead:empty { display:none; }
   .compact .fact { grid-template-columns:96px minmax(0,1fr); }
   .compact .reading .tx.cols { column-count:1; }
-  /* tight: the list under 900 px beside a wide panel or the sidebar; the reports go under the status, the title keeps its room */
-  .tight .tg { grid-template-columns:30px minmax(0,1fr) 170px; gap:0 14px; }
-  .tight .tg.h > span:last-child { display:none; }
-  .tight .task > :nth-child(1) { grid-column:1; grid-row:1; }
-  .tight .task > :nth-child(2) { grid-column:2; grid-row:1 / span 2; }
-  .tight .task > :nth-child(3) { grid-column:3; grid-row:1; }
-  .tight .task > :nth-child(5) { grid-column:3; grid-row:2; margin-top:10px; }
-  .tight .task .reading { grid-column:2 / -1; }
-  #main.tight .ei { grid-template-columns:minmax(0,1fr); gap:4px; }
-  #main.tight .ei .last { font-size:12.5px; }
-  #main.tight .eo { grid-template-columns:132px minmax(0,1fr); gap:0 14px; }
+  /* tight: the list under 660 px beside the panel and the sidebar: status and reports go under the title */
+  #main.tight .thead > :nth-child(n+3) { display:none; }
+  #main.tight .thead, #main.tight .trow { grid-template-columns:38px minmax(0,1fr); }
+  #main.tight .trow .stc, #main.tight .trow .rp { grid-column:2; }
+  #main.tight .trow .stc { margin-top:4px; } #main.tight .trow .stc small { display:inline; margin-left:6px; }
+  #main.tight .trow .rp { flex-direction:row; flex-wrap:wrap; gap:3px 16px; margin-top:4px; }
+  #main.tight .tdet { padding-left:14px; }
+  #main.tight .tdet .kv { grid-template-columns:minmax(0,1fr); gap:2px; }
+  #main.tight .ep { grid-template-columns:minmax(0,1fr); }
+  #main.tight .ep .el { border-right:0; border-bottom:1px solid var(--line); }
+  #main.tight .rp2 .l1 { grid-template-columns:70px minmax(0,1fr) minmax(0,1fr); gap:4px 12px; } #main.tight .rp2 .big { grid-column:1 / -1; }
 
-  /* Jira tasks: epics, one line per repo and PR */
-  .eo { display:grid; grid-template-columns:224px minmax(0,1fr) 112px; gap:0 20px; align-items:start; }
-  .eo.h { font-size:13px; color:var(--text-3); padding:12px 0 6px; }
-  .ei { display:grid; grid-template-columns:176px 206px 176px minmax(0,1fr); gap:0 16px; align-items:start; }
-  .erow { padding:12px 0; border-top:1px solid var(--line); font-size:13.5px; }
-  .erow .et { font-size:13.5px; color:var(--text-2); margin-top:2px; }
-  .erow .es { font-size:12.5px; color:var(--text-3); margin-top:2px; }
-  .rline + .rline { padding-top:12px; margin-top:12px; border-top:1px dashed var(--line); }
-  .rline .sub { font-size:13px; color:var(--text-2); }
-  .rline .sub.warn { color:var(--wait); }
-  .rline .chk { font-size:12.5px; color:var(--block); }
-  .rline .last { font-size:13px; color:var(--text-2); text-wrap:pretty; min-width:0; overflow-wrap:anywhere; }
-  .kp { display:inline-flex; padding:2px 10px; border-radius:999px; font-size:12.5px; font-weight:600; white-space:nowrap; margin-top:2px; }
-  .eboard { font-size:13px; color:var(--text-2); line-height:1.5; }
-  .compact .eo { grid-template-columns:168px minmax(0,1fr); }
-  .compact .ei { grid-template-columns:150px 176px minmax(0,1fr); gap:6px 14px; }
-  .compact .ei .last { grid-column:1 / -1; font-size:12.5px; }
-  .compact .eo .boardc, .compact .eo.h .boardh { display:none; }
-  .eboardu { display:none; font-size:12.5px; color:var(--text-3); margin-top:4px; }
-  .compact .eboardu { display:block; }
+/* Epics and Jira: one card per epic, backend first (the accepted canvas): left the epic, right a block per repo */
+  .fl { display:flex; gap:18px; padding:0 6px; font-size:13px; color:var(--text-3); flex-wrap:wrap; }
+  .fl .amber { color:var(--wait); font-weight:600; }
+  .ep { display:grid; grid-template-columns:290px minmax(0,1fr); border-radius:16px; background:var(--card); box-shadow:var(--shadow); overflow:hidden; }
+  .ep .el { padding:14px 16px; background:var(--card-quiet); border-right:1px solid var(--line); font-size:13px; color:var(--text-2); }
+  .ep .el .eid { font-size:22px; font-weight:800; line-height:1.15; letter-spacing:-0.01em; color:var(--text); }
+  .ep .el .en { color:var(--text); font-weight:600; margin:2px 0 6px; text-wrap:pretty; overflow-wrap:anywhere; }
+  .ep .el .stp { margin-top:6px; overflow-wrap:anywhere; }
+  .ep .el h4 { margin:12px 0 4px; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-3); }
+  .ep .el .th { display:flex; gap:6px; align-items:baseline; padding:2px 0; min-width:0; }
+  .ep .el .th b { font-weight:600; color:var(--text); }
+  .ep .el .th .pill { font-size:11.5px; padding:0 8px; flex:none; }
+  .ep .el .th span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ep .el .fold { margin-top:10px; font-size:12.5px; }
+  .ep .er { display:flex; flex-direction:column; min-width:0; }
+  .ep.folded { grid-template-columns:minmax(0,1fr); } .ep.folded .er { display:none; } .ep.folded .el { border-right:0; }
+  .rp2 { padding:12px 18px; border-top:1px solid var(--line); font-size:13.5px; }
+  .rp2:first-child { border-top:0; }
+  .rp2 .l1 { display:grid; grid-template-columns:78px 170px 150px minmax(0,1fr); gap:0 12px; align-items:center; }
+  .rp2 .big { font-size:20px; font-weight:700; color:var(--text); line-height:1.1; }
+  .rp2 .big small { display:block; font-size:12px; font-weight:600; color:var(--done); margin-top:2px; }
+  .rp2 .big.part small { color:var(--wait); }
+  .rp2 .big.dim { font-size:14px; font-weight:600; color:var(--text-3); }
+  .rp2 .l2 { display:flex; gap:12px; align-items:baseline; margin-top:6px; font-size:13px; color:var(--text-2); flex-wrap:wrap; }
+  .rp2 .l2 .fresh { margin-left:auto; font-size:12.5px; color:var(--text-3); }
+  .rp2 .l2 .fresh.amber { color:var(--wait); font-weight:600; }
+  .rp2 .lg { margin-top:8px; padding:6px 12px; border-radius:10px; background:var(--card-quiet); font-size:12.5px; color:var(--text-2); display:flex; flex-direction:column; gap:2px; }
+  .rp2 .lg div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rp2 .lg b { font-weight:600; color:var(--text-3); margin-right:6px; font-variant-numeric:tabular-nums; }
+  .rp2 .warn { color:var(--wait); }
+  .kp { display:inline-flex; padding:2px 10px; border-radius:999px; font-size:12.5px; font-weight:600; white-space:nowrap; }
+  .asof { font-size:12.5px; color:var(--text-3); margin-top:3px; }
+  .asof.stale { color:var(--wait); font-weight:600; }
 
   /* side panel for report pages; its width (--pw) is dragged on its left edge, kept in this browser, double-click resets */
-  #panel { width:var(--pw, 640px); flex:none; padding:14px 14px 14px 0; display:flex; position:relative; }
+  #panel { width:var(--pw, 300px); flex:none; padding:14px 14px 14px 0; display:flex; position:relative; }
   #pgrip { position:absolute; left:-8px; top:14px; bottom:14px; width:14px; cursor:col-resize; z-index:2; touch-action:none; border-radius:8px; }
   #pgrip::after { content:""; position:absolute; left:5px; top:calc(50% - 24px); width:4px; height:48px; border-radius:2px; background:var(--line); }
   #pgrip:hover::after, body.dragging #pgrip::after { background:var(--accent); }
   body.dragging { cursor:col-resize; user-select:none; }
-  body.dragging #pframe { pointer-events:none; }
+  /* The report's frame keeps its pointer events while the panel is dragged (the grip holds the pointer capture, so the drag
+     still follows the pointer over the report). Turning them off during a drag that resizes the frame left the report
+     unable to scroll by wheel afterwards, 8 times in 8 in Chromium (T46; the user, 11-27: "report scrolling get sometimes
+     bugged and stops working on reports side"). */
   /* under 1200 wide the panel lies over the list instead of squeezing it */
   body.narrow #panel { position:fixed; top:0; right:0; bottom:0; padding:14px; z-index:5; }
   body.narrow #pgrip { left:6px; }
@@ -254,14 +341,26 @@
   .pmeta .pn { color:var(--unread); font-weight:600; margin-top:4px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .pmeta .pn .btn.seen { margin-top:0; }
   #pframe { flex:1; border:0; width:100%; background:#fff; }
+  .pwide { padding:6px 18px; font-size:12.5px; color:var(--text-3); border-bottom:1px solid var(--line); }
+  .pwide:empty { display:none; }
   body:not(.withpanel) #panel { display:none; }
+  /* the panel is open by default with nothing selected: a hint and the newest unread reports (the user, 11-27) */
+  #pempty { padding:16px 18px 18px; display:flex; flex-direction:column; gap:12px; overflow-y:auto; flex:1; }
+  #pempty .empty { background:var(--card-quiet); border:1px dashed var(--line); border-radius:12px; padding:14px; font-size:13.5px; color:var(--text-2); }
+  #pempty h4 { margin:6px 0 0; font-size:13px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.03em; }
+  #pempty .ur { display:flex; gap:8px; align-items:flex-start; padding:7px 0; border-top:1px solid var(--line); font-size:13.5px; }
+  #pempty .ur:first-of-type { border-top:0; }
+  #pempty .ur .rd { width:7px; height:7px; border-radius:50%; background:var(--unread); margin-top:8px; flex:none; }
+  #pempty .ur .tt { color:var(--text-3); font-size:12.5px; overflow-wrap:anywhere; }
+  body.panel-empty #pframe, body.panel-empty #pmeta, body.panel-empty #pwide, body.panel-empty #pnew { display:none; }
+  body:not(.panel-empty) #pempty { display:none; }
 </style>
 </head>
 <body>
 <nav id="rail" aria-label="Sidebar, collapsed">
   <button class="iconbtn" id="sideopen" title="Open the sidebar" aria-label="Open the sidebar">
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="2.5"/><path d="M7 3v12"/></svg></button>
-  <div id="railcounts" style="display:flex;flex-direction:column;gap:14px;align-items:center"></div>
+  <div id="railcounts" style="display:flex;flex-direction:column;gap:11px;align-items:center"></div>
   <button class="iconbtn flat theme" id="themecycle" title="Theme: auto, light, dark" aria-label="Change the theme">
     <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 2a7 7 0 0 1 0 14z" fill="currentColor"/></svg></button>
 </nav>
@@ -269,10 +368,10 @@
   <div class="card">
     <div class="sidehead"><button class="iconbtn" id="sideclose" title="Close the sidebar" aria-label="Close the sidebar">
       <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="14" height="12" rx="2.5"/><path d="M7 3v12"/></svg></button>
-      <span>puppet-master</span></div>
-    <div class="sidesec"><h3>Show</h3><div id="sidefilters"></div></div>
-    <div class="sidesec"><h3 style="display:flex;justify-content:space-between"><span id="sesshead">Sessions</span><span>Context used</span></h3><div id="sidesess"></div></div>
-    <div class="sidesec" id="prevsec"><h3 style="display:flex;justify-content:space-between"><span>Previous work sets</span><span>newest first</span></h3><div id="prev"></div></div>
+      <span>Filters and records</span></div>
+    <div class="sidesec"><h3>Status filters <span class="tag" id="sidetag"></span></h3><div id="sidefilters"></div></div>
+    <div class="sidesec"><h3><span id="sesshead">Session records</span><span class="tag">context used</span></h3><div class="lh" style="padding:0 0 6px"><span class="sw" id="sesssw"></span></div><div id="sidesess"></div></div>
+    <div class="sidesec" id="prevsec"><h3>Previous work sets <span class="tag">newest first</span></h3><div id="prev"></div></div>
     <div class="sidesec"><h3>Theme</h3><div class="seg" id="themeseg"><button data-theme="auto">Auto</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div></div>
   </div>
 </nav>
@@ -281,6 +380,7 @@
     <h1>puppet-master</h1><span id="workset"></span>
     <button class="chip" id="askchip" title="Open Questions"></button>
     <button class="chip k-unread hide" id="readchip" title="Show the tasks with a report to read"></button>
+    <button class="chip" id="panelchip" title="Show or hide the report panel" style="background:var(--well);color:var(--text-2)"></button>
     <span id="updated"></span>
   </header>
   <div id="waiting"></div>
@@ -289,16 +389,19 @@
     <section class="pane" id="pane-questions" role="tabpanel"></section>
     <section class="pane" id="pane-tasks" role="tabpanel"></section>
     <section class="pane" id="pane-jira" role="tabpanel"></section>
+    <section class="pane" id="pane-side" role="tabpanel"></section>
   </div>
 </div>
 <aside id="panel">
-  <div id="pgrip" role="separator" aria-orientation="vertical" tabindex="0" aria-valuemin="380"
+  <div id="pgrip" role="separator" aria-orientation="vertical" tabindex="0" aria-valuemin="300"
        aria-label="Panel width" title="Drag to change the width (or the arrow keys); double-click resets it"></div>
   <div class="card">
     <div class="ph"><span class="t" id="ptitle"></span>
       <a id="pnew" target="_blank" title="Open in a new window">New window ↗</a>
       <button id="pclose" title="Close the panel" aria-label="Close the panel">Close ✕</button></div>
     <div class="pmeta" id="pmeta"></div>
+    <div class="pwide" id="pwide"></div>
+    <div id="pempty"></div>
     <iframe id="pframe" title="Report"></iframe>
   </div>
 </aside>
@@ -306,6 +409,23 @@
   // Reads window.DASH from tasks.js (shape: the comment at the top of tasks.js). Writes nothing but the browser's
   // localStorage: the tab, the filter, expanded tasks, the panel and its width, the theme, and the "seen" marks.
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  // A link out (Jira, GitHub): https only, a new tab; with no URL the text stays plain
+  const webUrl = u => /^https:\/\/[^\s"<>]+$/.test(String(u || "")) ? String(u) : "";
+  const ext = (url, html) => webUrl(url) ? `<a class="ext" href="${esc(webUrl(url))}" target="_blank" rel="noopener">${html}</a>` : html;
+  // The Jira keys and PR numbers the Jira tab knows, linked where a task's title or lines name them.
+  // A PR number is linked only when one PR on the board has it (#65 in two repos stays plain).
+  let REFS = { keys: {}, prs: {} };
+  function readRefs(D) {
+    const keys = {}, prs = {};
+    for (const e of D.epics || []) for (const r of e.repos || []) {
+      const j = r.jira || {}, pu = webUrl(r.prUrl || r.url), n = String(r.pr || "").replace(/^#/, "");
+      if (j.key && webUrl(j.url)) keys[j.key] = j.url;
+      if (/^\d+$/.test(n) && pu) (prs[n] = prs[n] || new Set()).add(pu);
+    }
+    REFS = { keys, prs: Object.fromEntries(Object.entries(prs).filter(([, s]) => s.size === 1).map(([n, s]) => [n, [...s][0]])) };
+  }
+  const linkRefs = text => esc(text).replace(/\b([A-Z][A-Z0-9_]*-\d+)\b|(^|[^\w&])#(\d+)\b/g, (m, key, pre, n) =>
+    key ? (REFS.keys[key] ? ext(REFS.keys[key], key) : m) : REFS.prs[n] ? pre + ext(REFS.prs[n], "#" + n) : m);
   const fileUrl = p => /^https?:\/\//.test(p) ? p : "file:///" + encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
   const num = id => Number(String(id).replace(/\D/g, "")) || 0;
   const fmt = n => n.toLocaleString("en-US");
@@ -324,16 +444,30 @@
   let seen = store.get(SEEN_KEY, {});               // { T22: "11-26 23:40" }: Mark seen, kept here until tasks.js says done
   let tab = store.get("tab", "questions");
   let filter = location.hash.slice(1) || store.get("filter", "open");
-  let showAllDone = false, showAllAnswered = false;
+  let fold = new Set(store.get("fold", []));        // folded parts: "g:<group>" a task group, "q:<task>" a task's asks, "e:<epic>" an epic card, "sess" the session details
+  let rall = new Set(store.get("rall", []));        // tasks showing every report, not the 3 newest
+  let panelOpen = store.get("panelOpen", null);     // null: the report panel is open on a wide window (the user, 11-27)
+  let LM = null;                                    // the model of the last render, for Collapse all / Expand all
   let theme = store.get("theme", "auto");
 
   const STATUS = {                                   // tasks.js status -> [page key, label, pill colour]
     "running": ["run", "Running", "run"], "waiting-you": ["wait", "Waits for you", "wait"], "queued": ["queue", "Queued", "queue"],
-    "open": ["queue", "Queued", "queue"], "pending-report": ["pend", "Pending report", "unread"], "done": ["done", "Done", "done"] };
+    "open": ["queue", "Queued", "queue"], "pending-report": ["pend", "Pending report", "unread"], "done": ["done", "Done", "done"],
+    "blocked": ["block", "Blocked", "block"] };
+  // a status is read loosely: "pending report", "Pending_Report" and "pending-report" are one status (the board had two spellings, 11-27)
+  const normStatus = s => String(s == null ? "" : s).trim().toLowerCase().replace(/[\s_]+/g, "-");
+  // Every status filter is listed, with its count (0 too); a status tasks.js uses that is not above gets its own row
+  // (the user, 11-27: "whole tasks status filter").
   const FILTERS = [["open", "Open", ""], ["wait", "Waits for you", "wait"], ["run", "Running", "run"], ["block", "Blocked", "block"],
     ["pend", "Pending report", "unread"], ["queue", "Queued", "queue"], ["done", "Done", "done"], ["all", "All", ""],
     ["initial", "Initial", ""], ["added", "Added later", ""]];
-  const TABS = [["questions", "Questions"], ["tasks", "Tasks"], ["jira", "Jira tasks"]];
+  // the word under a filter's count in the collapsed rail
+  const RAILW = { open: "open", wait: "for you", run: "running", block: "blocked", pend: "to read", queue: "queued", done: "done", all: "all", initial: "initial", added: "later" };
+  const TABS = [["questions", "Questions"], ["tasks", "Tasks"], ["jira", "Epics and Jira"], ["side", "Side questions"]];
+  // One order everywhere, said on the page (the user, 11-27: "ordering must be strict, i see again T ids messed"):
+  // groups A to Z, no group last; tasks and asks by id, lowest first. tasks.js order never counts.
+  const ORDER_NOTE = "Order: groups A to Z (no group last), then task id, lowest first.";
+  const STALE_H = 2;                                 // Jira and PR lines read longer ago than this show as stale
 
   // "name (what it does)" -> name, and the part in brackets under it
   const splitWho = w => { const m = String(w || "").match(/^([\w.-]+) \(([^)]*)\)(.*)$/); return m ? [m[1], (m[2] + m[3]).trim()] : [w || "-", ""]; };
@@ -359,28 +493,43 @@
   function model(D) {
     const asks = (D.asks || []).slice();
     const openAsks = asks.filter(a => a.state !== "answered").sort((a, b) => num(a.id) - num(b.id));      // oldest first
-    const answered = asks.filter(a => a.state === "answered").sort((a, b) => num(b.id) - num(a.id));      // newest first
+    const answered = asks.filter(a => a.state === "answered").sort((a, b) => num(a.id) - num(b.id));      // by id, lowest first
     const askBy = {};
     openAsks.forEach(a => { (askBy[a.task] = askBy[a.task] || []).push(a); });
     // Drop seen marks the master has folded in (the task is no longer pending-report in tasks.js).
-    const pendIds = new Set((D.tasks || []).filter(t => t.status === "pending-report").map(t => t.id));
+    const pendIds = new Set((D.tasks || []).filter(t => normStatus(t.status) === "pending-report").map(t => t.id));
     for (const id of Object.keys(seen)) if (!pendIds.has(id)) { delete seen[id]; store.set(SEEN_KEY, seen); }
+    const extra = [];                                // statuses tasks.js uses that the page does not know: a filter each
     const tasks = (D.tasks || []).map(t => {
-      const seenHere = t.status === "pending-report" && !!seen[t.id];
-      const st = STATUS[seenHere ? "done" : t.status] || ["queue", t.status, "queue"];
+      const status = normStatus(t.status);
+      const seenHere = status === "pending-report" && !!seen[t.id];
+      let st = STATUS[seenHere ? "done" : status];
+      if (!st) {
+        st = ["s-" + status.replace(/[^a-z0-9-]/g, ""), String(t.status || "no status"), "queue"];
+        if (!extra.some(f => f[0] === st[0])) extra.push([st[0], st[1], ""]);
+      }
       const a = askBy[t.id] || [];
-      const blocked = t.blocked && st[0] !== "done" ? t.blocked : "";
+      const blocked = st[0] === "done" ? "" : t.blocked ? t.blocked : st[0] === "block" ? "status blocked" : "";
+      // Open holds every task not done; a done task stays only while one of its asks is open (its ask is not answered yet)
       const inOpen = st[0] !== "done" || a.length > 0;
-      const group = st[0] === "run" ? 0 : (st[0] === "wait" || a.length) ? 1 : st[0] === "queue" ? 2 : 3;
-      return { t, key: st[0], label: st[1], colour: st[2], asks: a, blocked, inOpen, group, seenHere, n: num(t.id) };
+      return { t, key: st[0], label: st[1], colour: st[2], asks: a, blocked, inOpen, seenHere, n: num(t.id), group: String(t.group || "").trim() };
     });
     const by = {
       open: x => x.inOpen, wait: x => x.key === "wait" || x.asks.length > 0, run: x => x.key === "run", block: x => !!x.blocked,
       pend: x => x.key === "pend", queue: x => x.key === "queue", done: x => x.key === "done", all: () => true,
       initial: x => x.t.origin === "initial", added: x => x.t.origin === "added" };
+    for (const f of extra) by[f[0]] = x => x.key === f[0];
+    const filters = [...FILTERS.slice(0, 7), ...extra, ...FILTERS.slice(7)];
     const C = {};
     for (const k of Object.keys(by)) C[k] = tasks.filter(by[k]).length;
-    return { openAsks, answered, tasks, by, C };
+    return { openAsks, answered, tasks, by, C, filters };
+  }
+  // [[group, items]]: groups A to Z (numbers in order), no group last; items by task id, lowest first
+  function grouped(list) {
+    const m = new Map();
+    for (const x of list) { if (!m.has(x.group)) m.set(x.group, []); m.get(x.group).push(x); }
+    return [...m.entries()].map(([g, xs]) => [g, xs.sort((a, b) => a.n - b.n)])
+      .sort((a, b) => (a[0] === "" ? 1 : 0) - (b[0] === "" ? 1 : 0) || a[0].localeCompare(b[0], "en", { numeric: true, sensitivity: "base" }));
   }
 
   // ---------- header, waiting line, tabs, rail and sidebar ----------
@@ -400,23 +549,31 @@
     const w = document.getElementById("waiting");
     w.innerHTML = "<b>Now:</b> " + esc(D.waitingNow || "-");
     w.classList.toggle("calm", /^Nothing waits/.test(D.waitingNow || "") || (!nAsk && !nWaitTasks));
-    const tc = { questions: [nAsk, nAsk > 0], tasks: [M.C.open, false], jira: [(D.epics || []).length, false] };
+    const tc = { questions: [nAsk, nAsk > 0], tasks: [M.C.open, false], jira: [(D.epics || []).length, false], side: [(D.sideQuestions || []).length, false] };
     document.getElementById("tabs").innerHTML = TABS.map(([k, label]) =>
       `<button role="tab" data-tab="${k}" class="${k === tab ? "on" : ""}" aria-selected="${k === tab}">${label}<b class="${tc[k][1] ? "hot" : ""}">${tc[k][0]}</b></button>`).join("");
     for (const [k] of TABS) document.getElementById("pane-" + k).classList.toggle("hide", k !== tab);
-    // rail (sidebar closed): open tasks, open asks, running, blocked and pending report only when above 0, queued;
-    // each count switches the Tasks filter (open asks: the Questions tab); every other filter is in the opened sidebar
-    const rail = [[M.C.open, "open", "", true, "open"], [nAsk, "for you", "wait", true, "questions"], [M.C.run, "running", "run", true, "run"],
-                  [M.C.block, "blocked", "block", false, "block"], [M.C.pend, "to read", "unread", false, "pend"], [M.C.queue, "queued", "queue", true, "queue"]];
-    document.getElementById("railcounts").innerHTML = rail.filter(r => r[3] || r[0] > 0).map(r =>
-      `<button class="rc" data-go="${r[4]}" title="${r[4] === "questions" ? "Open asks: the Questions tab" : "Show the " + r[1] + " tasks"}"><i class="${r[0] && r[2] ? "k-" + r[2] : ""}">${r[0]}</i>${r[1]}</button>`).join("");
-    // the sidebar holds every filter of the Tasks tab, with its count; Blocked only when a task is blocked
-    document.getElementById("sidefilters").innerHTML = FILTERS.filter(f => f[0] !== "block" || M.C.block > 0).map(f =>
-      `<button class="srow${tab === "tasks" && filter === f[0] ? " on" : ""}${f[0] === "initial" ? " first-origin" : ""}" data-go="${f[0]}"><span>${f[1]}</span><span class="n${f[2] && M.C[f[0]] && f[2] !== "done" ? " hot k-" + f[2] : ""}">${M.C[f[0]]}</span></button>`).join("");
-    document.getElementById("sesshead").textContent = "Sessions" + (D.sessionsAsOf ? " · " + D.sessionsAsOf : "");
-    document.getElementById("sidesess").innerHTML = sessions(D).map(s =>
-      `<div class="ssess" title="${esc(s.name + " · " + s.state + " · " + (s.model || "-") + " · " + jobName(s.job) + " · " + s.context)}"><i class="dot ${s.dot}" style="margin:0"></i><span>${esc(s.name)}</span><span class="mut">${esc(s.pct)}</span></div>`).join("")
-      || `<div class="mut" style="padding:0 10px;font-size:13px">No session listed yet: run sync-sessions.mjs.</div>`;
+    const ss = sessions(D);
+    const on = f => tab === "tasks" && filter === f;
+    // rail (sidebar closed, 88 px): every filter as a count circle and a word, then every session as a dot, its context % and a bar;
+    // each filter switches the Tasks filter (the user, 11-27: "all filters should move to it s collapsed version")
+    document.getElementById("railcounts").innerHTML = M.filters.map(f =>
+      `<button class="rc${on(f[0]) ? " on" : ""}" data-go="${esc(f[0])}" title="${esc("Show the " + f[1].toLowerCase() + " tasks")}"><i class="${M.C[f[0]] && f[2] ? "k-" + f[2] : ""}">${M.C[f[0]]}</i>${esc(RAILW[f[0]] || f[1].toLowerCase())}</button>`).join("")
+      + `<div class="rdiv"></div>` + ss.map(x => `<div class="rs" title="${esc(x.name + " · " + x.state + " · " + doing(x))}"><span class="dot ${x.dot}" style="margin:0"></span><b>${esc(x.pct)}</b>`
+      + `<div class="bar"><span class="${x.pctN >= 70 ? "hi" : ""}" style="width:${x.pctN}%"></span></div>${esc(String(x.name).split("-").pop())}</div>`).join("");
+    // the sidebar holds every status filter of the Tasks tab with its count, 0 included, and a row for any other status in tasks.js
+    document.getElementById("sidetag").textContent = M.tasks.length + " tasks";
+    document.getElementById("sidefilters").innerHTML = M.filters.map(f =>
+      `<button class="srow${on(f[0]) ? " on" : ""}${f[0] === "initial" ? " first-origin" : ""}" data-go="${esc(f[0])}"><span>${esc(f[1])}</span><span class="n${!M.C[f[0]] ? " zero" : f[2] && f[2] !== "done" ? " hot k-" + f[2] : ""}">${M.C[f[0]]}</span></button>`).join("");
+    // every session's record: name, context % with a bar, what it is doing, state and model (no raw token counts)
+    document.getElementById("sesshead").textContent = "Session records" + (D.sessionsAsOf ? " · as of " + D.sessionsAsOf : "");
+    document.getElementById("sesssw").innerHTML = switchHtml("sess", ss.length ? ["sess"] : [], () => true);
+    document.getElementById("sidesess").innerHTML = ss.map(x =>
+      `<div class="ssess${fold.has("sess") ? " folded" : ""}" title="${esc(x.name + " · " + x.state + " · " + (x.model || "-") + " · " + doing(x))}">`
+      + `<div class="t"><i class="dot ${x.dot}"></i><span class="nm">${esc(x.name)}</span><span class="pc">${esc(x.pct)}</span></div>`
+      + `<div class="job">${esc(doing(x))}</div><div class="bar"><span class="${x.pctN >= 70 ? "hi" : ""}" style="width:${x.pctN}%"></span></div>`
+      + `<div class="md">${esc(x.state || "-")} · ${esc(x.model || "-")}</div></div>`).join("")
+      || `<div class="mut" style="padding:0 12px;font-size:13px">No session listed yet: run sync-sessions.mjs.</div>`;
     const prev = (D.previous || []).slice().sort((a, b) => String(b.days || b.label).localeCompare(String(a.days || a.label)));
     document.getElementById("prevsec").classList.toggle("hide", !prev.length);
     document.getElementById("prev").innerHTML = prev.map(p =>
@@ -433,8 +590,26 @@
       const m = ctx.match(/^([\d,]+) \(([^)]*)\)$/);
       const fresh = /fresh/.test(ctx) || /fresh|clean/.test(s.state);
       const dot = /^changed|blocked/.test(s.state) ? "warn" : /busy|working|master/.test(s.state) && !/idle/.test(s.state) ? "busy" : fresh ? "fresh" : "idle";
-      return Object.assign({}, s, { dot, pct: m ? (m[1] === "0" ? "fresh" : m[2]) : (ctx || "-") });
+      const pctN = m ? Math.max(0, Math.min(100, Math.round(parseFloat(m[2]) || 0))) : 0;
+      return Object.assign({}, s, { dot, fresh, pctN, pct: m ? pctN + "%" : (ctx || "-") });
     });
+  }
+  // what a session is doing: its job (a brief path reads as its name), or "no job"
+  const doing = x => { const j = jobName(x.job); return !j || j === "-" ? "no job" + (x.fresh ? " · fresh" : "") : j; };
+  // Collapse all / Expand all: one switch in a list's heading; "on" shows when every part is in that state, neither when mixed
+  function switchHtml(which, keys, rowsOpen) {
+    const nFold = keys.filter(k => fold.has(k)).length;
+    const allFolded = keys.length > 0 && nFold === keys.length, allOpen = nFold === 0 && (!rowsOpen || rowsOpen());
+    return `<button data-all="${which}" data-mode="collapse" class="${allFolded ? "on" : ""}">Collapse all</button><button data-all="${which}" data-mode="expand" class="${allOpen && keys.length ? "on" : ""}">Expand all</button>`;
+  }
+  // the fold keys (and the task ids whose rows open) of each list
+  function listKeys(which) {
+    const M = LM, D = window.DASH;
+    if (which === "sess") return { keys: ["sess"], ids: [] };
+    if (which === "questions") return { keys: byTask(M, M.openAsks).map(a => "q:" + a[1]), ids: [] };
+    if (which === "jira") return { keys: (D.epics || []).map(e => "e:" + e.epic), ids: [] };
+    const list = tasksList(M);
+    return { keys: grouped(list).map(g => "g:" + g[0]), ids: list.map(x => x.t.id) };
   }
 
   // ---------- Questions ----------
@@ -445,24 +620,36 @@
       : `<div class="v">${esc(f.text)}</div>`;
     return `<div class="fact"><div class="l">${esc(f.label)}</div>${v}</div>`;
   }
+  // asks grouped by their task: [[task model or null, task id, asks]], tasks by id, asks by id, lowest first
+  function byTask(M, asks) {
+    const m = new Map();
+    for (const a of asks) { const k = String(a.task || "-"); if (!m.has(k)) m.set(k, []); m.get(k).push(a); }
+    return [...m.entries()].sort((a, b) => num(a[0]) - num(b[0]))
+      .map(([id, list]) => [M.tasks.find(x => x.t.id === id) || null, id, list.sort((a, b) => num(a.id) - num(b.id))]);
+  }
   function renderQuestions(D, M) {
     const nAsk = M.openAsks.length, nNoHurry = M.openAsks.filter(a => a.noHurry).length;
     let h = `<div class="card qcard" data-questions><div class="qhead"><h2>Questions</h2>`
       + `<span class="chip ${nAsk ? "k-wait" : "k-done"}" style="cursor:default">${nAsk ? nAsk + " open" + (nNoHurry ? " · " + nNoHurry + " of them no hurry" : "") : "0 open"}</span>`
-      + (nAsk > 1 ? `<span class="mut3" style="font-size:13px">oldest first</span>` : "")
+      + (nAsk > 1 ? `<span class="mut3" style="font-size:13px">grouped by task; tasks and asks by id, lowest first</span>` : "")
+      + (nAsk > 1 ? `<span class="sw">${switchHtml("questions", byTask(M, M.openAsks).map(a => "q:" + a[1]))}</span>` : "")
       + `<span class="right">You answer in the master's chat, by the ask's id</span></div>`;
     if (!nAsk) h += `<div class="calmh">Nothing waits for you</div><div class="mut">No ask is open in any task. ${M.answered.length} asks answered on this board, below.</div>`;
-    h += M.openAsks.map(a => `<div class="ask" id="ask-${esc(a.id)}">`
-      + `<div class="meta"><b>${esc(a.id)}</b><span>in <a data-jump="${esc(a.task)}">${esc(a.task)}</a></span>${a.asked ? `<span>asked ${esc(a.asked)}</span>` : ""}`
+    // the asks of one task together, under that task's heading (the user, 11-27: "group questions from single task")
+    h += byTask(M, M.openAsks).map(([x, id, list]) => `<div class="qtask" data-qtask="${esc(id)}"><div class="qth"><span class="ch" data-fold="q:${esc(id)}" title="Fold or open this task's asks">${fold.has("q:" + id) ? "▸" : "▾"}</span><a class="tid" data-jump="${esc(id)}">${esc(id)}</a>`
+      + (x ? `<span class="pill k-${x.colour}">${esc(x.label)}</span><span class="tt" title="${esc(x.t.title)}">${esc(x.t.title)}</span>` : `<span class="tt mut">not on this board</span>`)
+      + `<span class="r">${list.length} open</span></div>`
+      + (fold.has("q:" + id) ? "" : list.map(a => `<div class="ask" id="ask-${esc(a.id)}">`
+      + `<div class="meta"><b>${esc(a.id)}</b>${a.asked ? `<span>asked ${esc(a.asked)}</span>` : ""}`
       + (a.movedFrom ? `<span>moved here from ${esc(a.movedFrom)}</span>` : "") + (a.noHurry ? `<span class="pill k-queue" style="padding:1px 9px">No hurry</span>` : "") + `</div>`
       + `<h3>${esc(a.question)}</h3>` + (a.facts || []).map(factHtml).join("")
       + (a.recommend ? `<div class="fact rec"><div class="l">Recommended</div><div class="v">${esc(a.recommend)}</div></div>` : "")
-      + `<div class="af"><span>${a.noHurry ? "Counts like any open ask; it stays here until you answer it." : "Stays here until you answer it, also while its task is done."}</span><a data-jump="${esc(a.task)}">Open ${esc(a.task)} ↓</a></div></div>`).join("");
-    const shown = showAllAnswered ? M.answered : M.answered.slice(0, 12);
-    if (M.answered.length) h += `<details class="ans"${nAsk ? "" : " open"}><summary><b>Answered</b><span class="mut">${M.answered.length}</span><span class="r">newest first; the whole line is in its task</span></summary>`
-      + shown.map(a => `<div class="arow"><b>${esc(a.id)}</b><a data-jump="${esc(a.task)}">${esc(a.task)}</a><span class="an" title="${esc(a.answer)}">${esc(a.answer || "-")}</span></div>`).join("")
-      + (M.answered.length > shown.length ? `<a data-more-answered style="display:inline-block;margin-top:6px;font-size:13.5px">Show ${M.answered.length - shown.length} more answered</a>` : "") + `</details>`;
-    const ids = k => M.tasks.filter(x => x.key === k).sort((a, b) => b.n - a.n);
+      + `<div class="af"><span>${a.noHurry ? "Counts like any open ask; it stays here until you answer it." : "Stays here until you answer it, also while its task is done."}</span><a data-jump="${esc(a.task)}" data-rep="${esc(a.id)}" title="Opens its report beside and the task in the list">Open ${esc(a.task)} ↓</a></div></div>`).join("")) + `</div>`).join("");
+    if (M.answered.length) h += `<details class="ans"${nAsk ? "" : " open"}><summary><b>Answered</b><span class="mut">${M.answered.length}</span><span class="r">grouped by task, by id; the whole line is in its task</span></summary>`
+      + byTask(M, M.answered).map(([x, id, list]) => `<div class="arh"><a data-jump="${esc(id)}"><b>${esc(id)}</b></a><span class="tt" title="${esc(x ? x.t.title : "")}">${esc(x ? x.t.title : "")}</span></div>`
+        + list.map(a => `<div class="arow"><b>${esc(a.id)}</b><span class="an" title="${esc(a.answer)}">${esc(a.answer || "-")}</span><span class="at">${esc(a.answered || "")}</span></div>`).join("")).join("")
+      + `</details>`;
+    const ids = k => M.tasks.filter(x => x.key === k).sort((a, b) => a.n - b.n);
     const run = ids("run").map(x => `<a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a> (${esc(splitWho(x.t.who)[0])})`).join(" · ");
     const queue = ids("queue").map(x => `<a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a>`).join(" · ");
     h += `<div class="now"><span class="l">Running</span><span>${run || "nothing"}</span><span class="l">Queued next</span><span>${queue || "nothing"}</span></div></div>`;
@@ -473,22 +660,17 @@
   function linesHtml(x) {
     const t = x.t, sub = t.sub || [];
     if (!sub.length) return "";
-    const exp = open.has(t.id), all = full.has(t.id);
-    const shown = all ? sub : exp ? sub.slice(0, SHOWN) : sub.slice(0, 1);
+    // shown only in an expanded row: the newest SHOWN lines, the rest behind "Show N earlier lines"
+    const shown = full.has(t.id) ? sub : sub.slice(0, SHOWN);
     const rest = sub.length - shown.length;
-    const nAns = sub.reduce((n, s) => n + (s.match(/\bA\d+ ANSWERED\b/g) || []).length, 0);
     let h = shown.map((s, i) => {
       const p = parseLine(s), key = t.id + ":" + i, isOpen = lines.has(key), len = [...s].length, long = len >= LONG;
-      const meta = long ? `<div class="meta"><a data-line="${esc(key)}">${isOpen ? "Shown whole below the card row · close it" : "Open the whole line · " + fmt(len) + " characters"}</a></div>` : "";
-      const body = (p.head ? `<div class="head">${esc(p.head)}</div>` : "")
-        + (isOpen && long ? "" : `<div class="tx ${isOpen ? "" : exp ? "clamp3" : "clamp2"}">${esc(p.text)}</div>`) + meta;
+      const meta = long ? `<div class="meta"><a data-line="${esc(key)}">${isOpen ? "Shown whole below · close it" : "Open the whole line · " + fmt(len) + " characters"}</a></div>` : "";
+      const body = (p.head ? `<div class="head">${linkRefs(p.head)}</div>` : "")
+        + (isOpen && long ? "" : `<div class="tx ${isOpen ? "" : "clamp3"}">${linkRefs(p.text)}</div>`) + meta;
       return `<div class="ln"><div class="lead">${esc(p.lead)}</div><div>${body}</div><button class="chev" data-line="${esc(key)}" title="${isOpen ? "Close this line" : "Open this line"}">${isOpen ? "⌄" : "›"}</button></div>`;
     }).join("");
-    const links = [];
-    if (rest > 0) links.push(exp ? `<a data-full="${esc(t.id)}">Show ${rest} earlier line${rest > 1 ? "s" : ""}</a>`
-      : `<a data-exp="${esc(t.id)}">Show more · ${rest} more line${rest > 1 ? "s" : ""}${nAns ? " · " + nAns + " answered ask" + (nAns > 1 ? "s" : "") + " in all" : ""}</a>`);
-    if (exp) links.push(`<a data-exp="${esc(t.id)}">Show less</a>`);
-    if (links.length) h += `<div class="more">${links.join("")}</div>`;
+    if (rest > 0) h += `<div class="more"><a data-full="${esc(t.id)}">Show ${rest} earlier line${rest > 1 ? "s" : ""}</a></div>`;
     return h;
   }
   function readingRows(x) {
@@ -496,35 +678,61 @@
     return sub.map((s, i) => [s, i]).filter(([s, i]) => lines.has(t.id + ":" + i) && [...s].length >= LONG).map(([s, i]) => {
       const p = parseLine(s), len = [...s].length;
       return `<div class="reading"><div class="rh"><span>${esc(p.lead ? p.lead + " · " : "")}${fmt(len)} characters, the whole line</span><a data-line="${esc(t.id + ":" + i)}">Close this line ^</a></div>`
-        + (p.head ? `<div style="font-weight:600;margin-top:6px">${esc(p.head)}</div>` : "") + `<div class="tx${len > 1200 ? " cols" : ""}">${esc(p.text)}</div></div>`;
+        + (p.head ? `<div style="font-weight:600;margin-top:6px">${linkRefs(p.head)}</div>` : "") + `<div class="tx${len > 1200 ? " cols" : ""}">${linkRefs(p.text)}</div></div>`;
     }).join("");
   }
+  // a report line: a link that opens in the panel, ↗ for a new window; not written yet: a muted note, never a chip that looks like a deliverable
+  function repHtml(x, rep) {
+    const t = x.t;
+    if (rep.pending || !rep.path) return `<div class="rep"><span class="pend" title="${esc(rep.path || "")}">${esc(String(rep.label || "report").replace(/\s*(\(pending\)|· pending)\s*$/, ""))} <i>· not written yet</i></span></div>`;
+    const u = fileUrl(rep.path), unread = x.key === "pend";
+    return `<div class="rep${unread ? " unread" : ""}">${unread ? `<i class="rd"></i>` : ""}<a class="doc${panel && panel.url === u ? " cur" : ""}" data-url="${esc(u)}" data-label="${esc(t.id + ": " + rep.label)}" data-task="${esc(t.id)}">${esc(rep.label)}</a>`
+      + `<a class="nw" href="${esc(u)}" target="_blank" title="Open in a new window">↗</a></div>`;
+  }
+  // the 3 newest reports (reports[] is oldest first), the rest behind "Show more · n"
   function reportsHtml(x) {
-    const t = x.t, r = t.reports || [];
-    if (!r.length) return `<span class="mut3">${t.evidence && t.evidence !== "-" ? "no HTML report" : "–"}</span>`;
-    return `<div class="reps">` + r.map(rep => {
-      if (rep.pending) return `<div class="rep"><span class="pend">${esc(rep.label)}${/\(pending\)|· pending/.test(rep.label) ? "" : " · pending"}</span></div>`;
-      const u = fileUrl(rep.path), unread = x.key === "pend";
-      return `<div class="rep${unread ? " unread" : ""}">${unread ? `<i class="rd"></i>` : ""}<a class="doc${panel && panel.url === u ? " cur" : ""}" data-url="${esc(u)}" data-label="${esc(t.id + ": " + rep.label)}" data-task="${esc(t.id)}">${esc(rep.label)}</a>`
-        + `<a class="nw" href="${esc(u)}" target="_blank" title="Open in a new window">↗</a></div>`;
-    }).join("") + `</div>`;
+    const t = x.t, r = (t.reports || []).slice().reverse();
+    if (!r.length) return `<div class="rp"><span class="mut3">${t.evidence && t.evidence !== "-" ? "no HTML report" : "–"}</span></div>`;
+    const all = rall.has(t.id), shown = all ? r : r.slice(0, 3), rest = r.length - shown.length;
+    return `<div class="rp">` + shown.map(rep => repHtml(x, rep)).join("")
+      + (rest > 0 ? `<div class="rmore"><a data-rall="${esc(t.id)}">Show more · ${rest}</a></div>` : all && r.length > 3 ? `<div class="rmore"><a data-rall="${esc(t.id)}">Show fewer</a></div>` : "") + `</div>`;
   }
-  function taskHtml(x, quiet) {
+  // One row per task, as drawn in the accepted canvas: # | title, one line of what is new, Show more | status and who | reports.
+  function rowHtml(x) {
+    const t = x.t, exp = open.has(t.id), sub = t.sub || [];
+    const flag = x.blocked ? `<span class="pill k-block" title="${esc(x.blocked)}">Blocked</span>`
+      : x.asks.length && x.key !== "wait" ? `<span class="pill k-wait">Ask open</span>` : "";
+    const more = exp ? "Show less" : sub.length > 1 ? "Show more · " + (sub.length - 1) + " more line" + (sub.length > 2 ? "s" : "") : "Show more";
+    return `<div class="trow${x.key === "done" ? " done" : ""}${exp ? " on" : ""}" data-task="${esc(t.id)}" id="task-${esc(t.id)}">`
+      + `<span class="id">${esc(t.id)}</span>`
+      + `<div class="tk"><div class="ti" title="${esc(t.title)}">${linkRefs(t.title)}</div>${exp || !sub.length ? "" : `<div class="s1 clamp2">${linkRefs(sub[0])}</div>`}`
+      + `<div class="more"><a data-exp="${esc(t.id)}" aria-expanded="${exp}">${more}</a></div></div>`
+      + `<div class="stc"><div class="st"><span class="pill k-${x.colour}">${esc(x.label)}</span>${flag}</div><small class="clamp2" title="${esc(t.who || "")}">${esc(t.who || "")}</small></div>`
+      + reportsHtml(x) + `</div>` + (exp ? detailHtml(x) : "");
+  }
+  function detailHtml(x) {
     const t = x.t, [who, whoSub] = splitWho(t.who);
-    const pills = `<span class="pill k-${x.colour}">${esc(x.label)}</span>` + (x.asks.length && x.key !== "wait" ? `<span class="pill k-wait">Ask open</span>` : "")
-      + (x.blocked ? `<span class="pill k-block">Blocked</span><span class="blk">${esc(x.blocked)}</span>` : "")
-      + (x.key === "pend" ? `<button class="btn seen" data-seen="${esc(t.id)}" title="Mark the report seen: the task moves to Done here; the master folds it into tasks.js">Mark seen ✓</button>` : "")
-      + (x.seenHere ? `<span class="mut3" style="font-size:12.5px">seen here ${esc(seen[t.id])} · <a data-unseen="${esc(t.id)}">undo</a></span>` : "");
-    const whoHtml = `${esc(who)}${whoSub ? `<small>${esc(whoSub)}</small>` : ""}`;
+    const kv = (label, html) => html ? `<span class="l">${label}</span><div>${html}</div>` : "";
     const strips = x.asks.map(a => `<div class="strip"><b>${esc(a.id)} open${a.noHurry ? " · no hurry" : ""}</b><span title="${esc(a.question)}">${esc(a.question)}</span><a data-ask="${esc(a.id)}">See it in Questions ↑</a></div>`).join("");
-    return `<div class="card task tg${quiet ? " quiet" : ""}" data-task="${esc(t.id)}" id="task-${esc(t.id)}">`
-      + `<div class="id">${esc(t.id)}</div>`
-      + `<div style="min-width:0"><div class="title${quiet ? " clamp2" : ""}">${esc(t.title)}</div>${quiet ? "" : strips + linesHtml(x)}</div>`
-      + `<div class="pills">${pills}<div class="whou">${whoHtml}</div></div>`
-      + `<div class="who">${whoHtml}</div>`
-      + `<div>${reportsHtml(x)}</div>`
-      + (quiet ? "" : readingRows(x)) + `</div>`;
+    const status = x.blocked || x.key === "pend" || x.seenHere
+      ? `<span class="pill k-${x.colour}">${esc(x.label)}</span>`
+        + (x.blocked ? ` <span class="pill k-block">Blocked</span> <span class="blk">${esc(x.blocked)}</span>` : "")
+        + (x.key === "pend" ? ` <button class="btn seen" data-seen="${esc(t.id)}" title="Mark the report seen: the task moves to Done here; the master folds it into tasks.js">Mark seen ✓</button>` : "")
+        + (x.seenHere ? ` <span class="mut3" style="font-size:12.5px">seen here ${esc(seen[t.id])} · <a data-unseen="${esc(t.id)}">undo</a></span>` : "") : "";
+    return `<div class="tdet" data-det="${esc(t.id)}">${strips}<div class="kv">`
+      + kv("Status", status)
+      + kv("Who", esc(who) + (whoSub ? `<small>${esc(whoSub)}</small>` : ""))
+      + kv("Asked", esc([t.day, t.origin === "initial" ? "at the start of the work set" : t.origin === "added" ? "added later" : ""].filter(Boolean).join(" · ")))
+      + kv("Evidence", t.evidence && t.evidence !== "-" ? esc(t.evidence) : "")
+      + `</div>` + linesHtml(x) + readingRows(x) + `</div>`;
   }
+  function tableHtml(list) {
+    return `<div class="thead"><span>#</span><span>Task</span><span>Status · who</span><span>Reports, newest first</span></div>`
+      + grouped(list).map(([g, xs]) => { const f = fold.has("g:" + g);
+        return `<div class="card grp"><div class="tgh" data-group="${esc(g)}" data-fold="g:${esc(g)}"><span class="ch">${f ? "▸" : "▾"}</span>${esc(g || "No group")} <span class="cap">${xs.length} shown</span></div>${f ? "" : xs.map(rowHtml).join("")}</div>`; }).join("");
+  }
+  // the tasks of the chosen filter; Open also holds a done task while one of its asks is open
+  const tasksList = M => filter === "open" ? M.tasks.filter(x => x.inOpen) : M.tasks.filter(M.by[filter] || M.by.open);
   // The Tasks tab holds the task table only: the sessions are in the sidebar, the filters in the sidebar and its rail.
   function renderTasks(D, M) {
     let h = "";
@@ -534,72 +742,148 @@
       h += `<div class="seenbar"><span>Marked seen here, not yet in tasks.js: ${seenIds.map(esc).join(", ")}. Tell the master:</span><code id="seenline">${esc(line)}</code>`
         + `<button class="btn" data-copy="seenline">Copy</button><span id="copied" class="mut"></span></div>`;
     }
-    const fl = FILTERS.find(f => f[0] === filter) || FILTERS[0];
-    h += `<div class="orderline">Showing <b>${esc(fl[1])} · ${M.C[fl[0]]}</b> (the filters are in the sidebar). `
-      + `${filter === "open" ? "Order: running, waits for you, queued, pending report; newest first within each. Lines in a task: newest first." : "Order: newest first. Lines in a task: newest first."}</div>`;
-    h += `<div><div class="tg h"><span># ↓</span><span>Task</span><span>Status</span><span class="whoh">Who</span><span>Reports</span></div>`;
-    const by = M.by[filter] || M.by.open;
-    if (filter === "open") {
-      const cards = M.tasks.filter(x => x.inOpen).sort((a, b) => a.group - b.group || b.n - a.n);
-      h += cards.map(x => taskHtml(x, false)).join("") || `<div class="card task mut">No open task.</div>`;
-      const done = M.tasks.filter(x => !x.inOpen).sort((a, b) => b.n - a.n);
-      if (done.length) {
-        const shownDone = showAllDone ? done : done.slice(0, 4);
-        h += `<div class="doneh">Done · ${done.length} · newest first</div>` + shownDone.map(x => taskHtml(x, !open.has(x.t.id))).join("")
-          + (done.length > shownDone.length ? `<a data-more-done style="display:inline-block;margin:10px 6px 0">Show ${done.length - shownDone.length} more done</a>` : "");
-      }
-    } else {
-      const list = M.tasks.filter(by).sort((a, b) => b.n - a.n);
-      h += list.map(x => taskHtml(x, x.key === "done" && !x.asks.length && !open.has(x.t.id))).join("") || `<div class="card task mut">No task here.</div>`;
-    }
-    h += `</div><p class="foot">Data reloads every 90 s without a page reload (the tab, the side panel and expanded tasks stay). Data: <code>tasks.js</code> beside this page, edited by the master on every change.</p>`;
+    const fl = M.filters.find(f => f[0] === filter) || M.filters[0];
+    const list = tasksList(M), groups = grouped(list);
+    h += `<div class="lh"><h2>${filter === "open" ? "Open tasks" : esc(fl[1])}</h2><span class="cap">${list.length} of ${M.tasks.length}</span>`
+      + `<span class="sw">${switchHtml("tasks", groups.map(g => "g:" + g[0]), () => list.every(x => open.has(x.t.id)))}</span></div>`;
+    h += `<div class="orderline">Showing <b>${esc(fl[1])} · ${M.C[fl[0]]}</b> (the filters are in the sidebar). ${ORDER_NOTE}`
+      + `${filter === "open" ? " Done tasks are under the Done filter." : ""} Lines in a task: newest first.</div>`;
+    h += list.length ? tableHtml(list) : `<div class="card grp mut" style="padding:14px 18px">${filter === "open" ? "No open task." : "No task here."}</div>`;
+    h += `<p class="foot">Data reloads every 90 s without a page reload (the tab, the side panel and expanded tasks stay). Data: <code>tasks.js</code> beside this page, edited by the master on every change.</p>`;
     document.getElementById("pane-tasks").innerHTML = h;
+  }
+
+  // ---------- Side questions: the user's side questions to the master, the newest first ----------
+  function renderSide(D) {
+    const list = (D.sideQuestions || []).slice().sort((a, b) => String(b.asked || "").localeCompare(String(a.asked || "")) || num(b.id) - num(a.id));
+    let h = `<div class="card scard"><div class="cardh"><h2>Side questions</h2><span class="cap">${list.length} · your questions to the master beside the tasks, the newest first</span></div>`;
+    if (!list.length) h += `<div class="mut" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px;font-size:13.5px">No side question logged yet. The master adds each question you ask it beside the tasks to <code>sideQuestions[]</code> in tasks.js, with its short answer.</div>`;
+    else h += `<div class="sq h"><span>Asked</span><span>Your question, as you wrote it</span><span>Short answer</span><span>Answered</span></div>`
+      + list.map(q => `<div class="sq" data-sq="${esc(q.id || "")}"><span class="t">${esc(q.asked || "-")}${q.id ? `<br>${esc(q.id)}` : ""}</span><span class="q">${esc(q.question)}</span>`
+        + `<span class="a">${q.answer ? esc(q.answer) : `<span class="mut3">not answered yet</span>`}</span><span class="t">${esc(q.answered || "")}</span></div>`).join("");
+    document.getElementById("pane-side").innerHTML = h + `</div>`;
   }
   // a job shown as a brief path reads as its brief name: ".../brief-ad-pm-default-tier.md" -> "ad-pm-default-tier"
   const jobName = j => /[\\/]brief-[^\\/]+\.md$/.test(j || "") ? j.replace(/^.*[\\/]brief-/, "").replace(/\.md$/, "") : (j || "-");
 
   // ---------- Jira tasks: epics and their Jira issues ----------
   const JIRA_CAT = { "new": "queue", "indeterminate": "run", "done": "done" };   // Jira's own status categories
+  // a read time: "YYYY-MM-DD HH:MM", "MM-DD HH:MM" or "HH:MM" (today), any words after it ignored; its age in hours, or null
+  const STAMP_RE = /(?:(\d{4})-)?(?:(\d\d)-(\d\d)[ T])?(\d\d):(\d\d)/;
+  const stampOf = s => { const m = String(s || "").match(STAMP_RE); return m ? m[0].replace(/^\d{4}-/, "").replace("T", " ") : String(s || ""); };
+  function ageOf(s) {
+    const m = String(s || "").match(STAMP_RE); if (!m) return null;
+    const now = new Date();
+    const t = new Date(m[1] ? +m[1] : now.getFullYear(), m[2] ? +m[2] - 1 : now.getMonth(), m[3] ? +m[3] : now.getDate(), +m[4], +m[5]);
+    if (!m[1] && t - now > 3600000) t.setFullYear(t.getFullYear() - 1);     // "12-31 23:00" read in January
+    return Math.max(0, (now - t) / 3600000);
+  }
+  const ago = h => h < 1 ? Math.round(h * 60) + " min ago" : h < 48 ? Math.round(h) + " h ago" : Math.round(h / 24) + " days ago";
   const verdictKind = v => /clean|approved|pass/i.test(v || "") ? "done" : /block|fail|changes/i.test(v || "") ? "block" : "queue";
+  // No commit id is shown anywhere on this tab: "head f01fca9b20", "(a5179404b2)" and a bare hash go
+  const noSha = t => String(t == null ? "" : t).replace(/\s*\(\s*(?:head\s+)?[0-9a-f]{7,40}\s*\)/g, "")
+    .replace(/\b(?:head\s+)?(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/g, "").replace(/\(\s*[,;·]\s*/g, "(").replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").replace(/\s*[,;·]\s*\)/g, ")").replace(/\s+([,;.)])/g, "$1").replace(/\s*[·,;]\s*$/, "").trim();
+  // a PR state without its head and read time: "open · mergeable · head f01fca9b20 (11-27 14:11)" -> "open · mergeable"
+  const prShort = ps => noSha(String(ps || "").replace(/\s*\((?:head [^)]*|\d\d-\d\d [^)]*)\)/g, "").replace(/ · head \w+/, "").replace(/ · unknown/, ""));
+  // a repo line's event log: log[] ("MM-DD HH:MM · what", newest first) when tasks.js has it, else the single "last" line
+  const logOf = r => (Array.isArray(r.log) && r.log.length ? r.log : r.last ? [r.last] : []).slice(0, 4).map(e => {
+    const t = noSha(typeof e === "string" ? e : [e.at, e.text].filter(Boolean).join(" · ")), i = t.indexOf(" · ");
+    return i > 0 && i <= 16 ? [t.slice(0, i), t.slice(i + 3)] : ["", t];
+  });
+  const staleOf = a => a != null && a > STALE_H;
+  function repoBlock(r, srcRead) {
+    const j = r.jira || {}, rv0 = r.review || {}, pu = r.prUrl || r.url, st = prShort(r.prState);
+    const rv = { verdict: /^s*-?s*$/.test(rv0.verdict || "") ? "" : noSha(rv0.verdict), note: rv0.note };
+    // this line's read time, else the oldest source of the board (epicsAsOf)
+    const readAt = r.asOf || (srcRead && srcRead[0]), age = r.asOf ? ageOf(r.asOf) : srcRead ? srcRead[1] : null;
+    const m = String(r.tasks || "").match(/(\d+) of (\d+) landed/);
+    const jl = ext(j.url, esc(j.key)), arrow = u => webUrl(u) ? " " + ext(u, `<span class="nw">↗</span>`) : "";
+    return `<div class="rp2"><div class="l1"><b>${esc(r.repo || "-")}</b>`
+      + `<span>${r.pr ? ext(pu, esc("PR " + r.pr)) + arrow(pu) : `<span class="mut3">no PR</span>`}${st ? ` <span class="mut${/draft|unstable|conflict|dirty|blocked/i.test(st) ? " warn" : ""}" title="${esc(noSha(r.prState))}">${esc(st)}</span>` : ""}</span>`
+      + `<span>${j.key ? jl + arrow(j.url) + ` <span class="mut3">${esc(j.status || "-")}</span>` : `<span class="mut3">no Jira key</span>`}</span>`
+      + (m ? `<div class="big${m[1] === m[2] ? "" : " part"}">${m[1]} of ${m[2]}<small>landed</small></div>` : /^\s*all landed/i.test(r.tasks || "") ? `<div class="big">all<small>landed</small></div>` : `<div class="big dim">no task count</div>`) + `</div>`
+      + `<div class="l2"><span>${esc([j.type, j.assignee].filter(Boolean).join(" · ") || "no Jira detail")}</span>`
+      + `<span>review: ${rv.verdict ? `<b style="color:var(--text)">${esc(rv.verdict)}</b>${rv.note ? " · " + esc(noSha(rv.note)) : ""}` : "none recorded"}</span>`
+      + (r.check ? `<span class="warn">${esc(noSha(r.check))}</span>` : "")
+      + (age != null ? `<span class="fresh${staleOf(age) ? " amber" : ""}">checked ${esc(stampOf(readAt))} · ${esc(ago(age))}</span>` : `<span class="fresh amber">no read time</span>`) + `</div>`
+      + (logOf(r).length ? `<div class="lg">${logOf(r).map(([a, b]) => `<div title="${esc(a + " " + b)}"><b>${esc(a)}</b>${esc(b)}</div>`).join("")}</div>` : "") + `</div>`;
+  }
+  const epicPill = st => /merge|release|done/i.test(st || "") ? "done" : /progress|review/i.test(st || "") ? "run" : "queue";
   function renderJira(D, M) {
     const rows = (D.epics || []).slice().sort((a, b) => num(a.epic) - num(b.epic));
-    const asOf = D.epicsAsOf && typeof D.epicsAsOf === "object" ? Object.keys(D.epicsAsOf).map(k => k + " " + D.epicsAsOf[k]).join(" · ") : (D.epicsAsOf || "");
-    let h = `<div class="card scard"><div class="cardh"><h2>Epics and Jira tasks</h2><span class="cap">${rows.length ? (asOf ? esc(asOf) + " · " : "") + "by epic id; backend before frontend" : "no rows recorded"}</span></div>`;
+    const srcs = D.epicsAsOf && typeof D.epicsAsOf === "object" ? Object.entries(D.epicsAsOf) : D.epicsAsOf ? [["read", D.epicsAsOf]] : [];
+    let h = `<div class="lh"><h2>Epics and Jira</h2><span class="cap">${rows.length ? rows.length + " epics · by epic id; backend before frontend" : "no rows recorded"}</span>`
+      + (rows.length ? `<span class="sw">${switchHtml("jira", rows.map(e => "e:" + e.epic))}</span>` : "") + `</div>`;
     if (!rows.length) {
-      h += `<div class="mut" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px;font-size:13.5px">No epic is recorded on this board: the list is empty. The rows appear here once the master writes them; the tasks still name their epics.</div></div>`;
-      document.getElementById("pane-jira").innerHTML = h; return;
+      document.getElementById("pane-jira").innerHTML = h + `<div class="card grp mut" style="padding:14px 18px;font-size:13.5px">No epic is recorded on this board: the list is empty. The rows appear here once the master writes them; the tasks still name their epics.</div>`;
+      return;
     }
-    h += `<div class="eo h"><span>Epic ↑</span><div class="ei"><span>Repo · PR</span><span>Jira (board status · assignee)</span><span>Review</span><span class="last">Last change</span></div><span class="boardh">Tasks here</span></div>`;
+    // a line with no read time of its own is dated by the oldest gh or Jira read (the board's own lines are not a check of the PR or the key)
+    const dated = l => l.map(([, v]) => [v, ageOf(v)]).filter(a => a[1] != null).sort((a, b) => b[1] - a[1])[0];
+    const srcRead = dated(srcs.filter(([k]) => !/board/i.test(k))) || dated(srcs);
+    // when each source was read; amber only past STALE_H hours (the user, 11-27: "jira tasks list seems not updated too often")
+    h += `<div class="fl">` + (srcs.length ? srcs.map(([k, v]) => { const a = ageOf(v);
+      return `<span class="${staleOf(a) ? "amber" : ""}" title="${esc(String(v))}">${esc(k)} · ${esc(stampOf(v))}${staleOf(a) ? " · older than " + STALE_H + " h" : ""}</span>`; }).join("")
+      : `<span class="amber">No read time recorded: the lines below may be old</span>`) + `</div>`;
     h += rows.map(e => {
-      // tasks on this board whose title or lines name the epic, by id
-      const board = M.tasks.filter(x => [x.t.title, ...(x.t.sub || [])].join("\n").includes(e.epic)).map(x => x.t.id).sort((a, b) => num(a) - num(b)).join(" ");
+      const here = M.tasks.filter(x => x.group === e.epic || [x.t.title, ...(x.t.sub || [])].join("\n").includes(e.epic)).sort((a, b) => a.n - b.n);
       const repos = (e.repos || [{ repo: e.repo, pr: e.pr, tasks: e.tasks, last: e.next }]).slice()
         .sort((a, b) => (String(a.repo) === "backend" ? 0 : 1) - (String(b.repo) === "backend" ? 0 : 1));
-      return `<div class="eo erow"><div><b>${esc(e.epic)}</b><div class="et clamp2" title="${esc(e.what)}">${esc(e.what || "")}</div><div class="es">${esc([e.status, e.stamps].filter(Boolean).join(" · "))}</div>`
-        + `<div class="eboardu">${board ? "Tasks here: " + esc(board) : ""}</div></div><div>`
-        + repos.map(r => {
-          const j = r.jira || {}, rv = r.review || {};
-          return `<div class="ei rline"><div><a${r.url ? ` href="${esc(r.url)}" target="_blank"` : ""}>${esc([r.repo, r.pr].filter(Boolean).join(" "))}</a>`
-            + (r.prState ? `<div class="sub${/draft|unstable|conflict|dirty|blocked/i.test(r.prState) ? " warn" : ""}">${esc(r.prState)}</div>` : "")
-            + (r.check ? `<div class="chk">${esc(r.check)}</div>` : "") + (r.tasks ? `<div class="sub">${esc(r.tasks)}</div>` : "") + `</div>`
-            + `<div>${j.key ? `<b>${esc(j.key)}</b> <span class="kp k-${JIRA_CAT[j.category] || "queue"}">${esc(j.status || "-")}</span><div class="sub">${esc([j.type, j.assignee].filter(Boolean).join(" · "))}</div>` : `<span class="mut3">–</span>`}</div>`
-            + `<div>${rv.verdict ? `<span class="kp k-${verdictKind(rv.verdict)}">${esc(rv.verdict)}</span>` : `<span class="mut3">–</span>`}${rv.note ? `<div class="sub">${esc(rv.note)}</div>` : ""}</div>`
-            + `<div class="last">${esc(r.last || "–")}</div></div>`;
-        }).join("") + `</div><div class="eboard boardc">${esc(board || "–")}</div></div>`;
-    }).join("") + `</div>`;
+      const f = fold.has("e:" + e.epic);
+      return `<div class="ep${f ? " folded" : ""}" data-epic="${esc(e.epic)}"><div class="el"><div class="eid">${esc(e.epic)}</div><div class="en">${esc(e.what || "")}</div>`
+        + (e.status ? `<span class="pill k-${epicPill(e.status)}">${esc(noSha(e.status))}</span>` : "")
+        + (e.stamps ? `<div class="stp">${esc(noSha(e.stamps))}</div>` : "")
+        + `<h4>Tasks here</h4>` + (here.length ? here.slice(0, 5).map(x => `<div class="th"><b><a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a></b><span class="pill k-${x.colour}">${esc(x.label)}</span><span title="${esc(x.t.title)}">${esc(x.t.title)}</span></div>`).join("")
+          + (here.length > 5 ? `<div class="mut3">and ${here.length - 5} more: ${here.slice(5).map(x => esc(x.t.id)).join(" ")}</div>` : "") : `<div class="mut3">no task on this board</div>`)
+        + `<div class="fold"><a data-fold="e:${esc(e.epic)}">${f ? "Show the repo lines" : "Hide the repo lines"}</a></div></div>`
+        + `<div class="er">${repos.map(r => repoBlock(r, srcRead)).join("")}</div></div>`;
+    }).join("");
+    h += `<p class="foot">The master reads these lines again with <code>node sync-epics.mjs</code> (one <code>gh pr view</code> per PR and one Jira read per key).</p>`;
     document.getElementById("pane-jira").innerHTML = h;
   }
 
   // ---------- side panel ----------
+  const panelIsOpen = () => panelOpen == null ? window.innerWidth >= 1200 : panelOpen;
+  // empty, it sits beside the Tasks and Questions tabs only (the canvas draws the Jira page without it); a report open keeps it on every tab
+  const panelVisible = () => panelIsOpen() && (!!panel || tab === "tasks" || tab === "questions");
   function showPanel() {
-    document.body.classList.toggle("withpanel", !!panel);
+    const shown = panelVisible();
+    document.body.classList.toggle("withpanel", shown);
+    document.body.classList.toggle("panel-empty", shown && !panel);
+    const pc = document.getElementById("panelchip"); pc.textContent = panelIsOpen() ? "Hide panel" : "Show panel";
     const f = document.getElementById("pframe");
-    if (!panel) { f.src = "about:blank"; f.dataset.url = ""; return; }
+    if (!panel) { if (f.dataset.url) { f.src = "about:blank"; f.dataset.url = ""; } document.getElementById("ptitle").textContent = "Reports"; return; }
     document.getElementById("ptitle").textContent = panel.label;
     document.getElementById("pnew").href = panel.url;
     if (f.dataset.url !== panel.url) { f.src = panel.url; f.dataset.url = panel.url; }
   }
+  const openPanel = p => { panel = p; panelOpen = true; store.set("panel", panel); store.set("panelOpen", true); showPanel(); };
+  // the empty panel: a hint and the newest unread reports (a pending-report task's newest written report; higher task id first)
+  function renderPanelEmpty(M) {
+    const un = M.tasks.filter(x => x.key === "pend").sort((a, b) => b.n - a.n).flatMap(x => {
+      const r = (x.t.reports || []).filter(y => y.path && !y.pending).slice(-1)[0]; return r ? [[x, r]] : []; }).slice(0, 5);
+    document.getElementById("pempty").innerHTML = `<div class="empty">Nothing opened yet. Click a report link in a row and it opens here, beside the list. A new window opens only from ↗.</div>`
+      + (un.length ? `<h4>Newest unread reports</h4>` + un.map(([x, r]) => `<div class="ur"><i class="rd"></i><div><a class="doc" data-url="${esc(fileUrl(r.path))}" data-label="${esc(x.t.id + ": " + r.label)}" data-task="${esc(x.t.id)}">${esc(r.label)}</a>`
+        + `<div class="tt">${esc(x.t.id)} · ${esc(x.t.title.length > 70 ? x.t.title.slice(0, 69) + "…" : x.t.title)}</div></div></div>`).join("") : `<h4>No unread report</h4>`);
+  }
+    // A report that caps its own width (max-width on html, body or a wrapper under body) gets the panel's width instead
+  // (the user, 11-27: "all reports shouldnt be wide restricted ... on single content report cant get wider than half of
+  // free screen"). Only when the browser lets this page reach the report's document (the same origin); otherwise the
+  // panel says so in one line and the report keeps its own width.
+  function widenReport() {
+    const f = document.getElementById("pframe"), note = document.getElementById("pwide");
+    if (!f.dataset.url) { note.textContent = ""; return; }
+    let doc = null;
+    try { doc = f.contentDocument; } catch { doc = null; }
+    if (!doc || !doc.body) { note.textContent = "This report keeps its own width: the browser does not let the page reach it."; return; }
+    const win = doc.defaultView;
+    for (const el of [doc.documentElement, doc.body, ...doc.body.children])
+      if (win.getComputedStyle(el).maxWidth !== "none") el.style.setProperty("max-width", "none", "important");
+    note.textContent = "";
+  }
+  document.getElementById("pframe").addEventListener("load", widenReport);
   function renderPanelMeta(M) {
+    renderPanelEmpty(M);
     if (!panel) return;
     const x = panel.task && M.tasks.find(y => y.t.id === panel.task);
     const path = decodeURI(panel.url.replace(/^file:\/\/\//, ""));
@@ -610,11 +894,11 @@
   // Panel width: 640 px by default; at least 380; at most what leaves the task list 560 px beside it
   // (under 1200 wide, where the panel lies over the list: the window less 120 px, the rail stays free). The stored width is the user's
   // choice; a smaller window only shows it clamped and does not overwrite it.
-  const PW_DEFAULT = 640, PW_MIN = 380, MAIN_MIN = 560;
+  const PW_DEFAULT = 300, PW_MIN = 300, MAIN_MIN = 560, SIDE_W = 420, RAIL_W = 88;
   let pw = store.get("panelw", null);
   function panelMax() {
     if (window.innerWidth < 1200) return Math.max(PW_MIN, window.innerWidth - 120);
-    const left = document.body.classList.contains("side-open") ? 292 : 72;
+    const left = document.body.classList.contains("side-open") ? SIDE_W : RAIL_W;
     return Math.max(PW_MIN, window.innerWidth - left - MAIN_MIN);
   }
   function applyPanelWidth() {
@@ -623,9 +907,9 @@
     const g = document.getElementById("pgrip");
     g.setAttribute("aria-valuenow", w); g.setAttribute("aria-valuemax", Math.round(panelMax()));
     // the list's own width: under 900 px its rows go tight (the panel only counts where it sits beside the list)
-    const narrow = window.innerWidth < 1200, left = document.body.classList.contains("side-open") ? 300 : 72;
-    const listW = window.innerWidth - left - 24 - (panel && !narrow ? w : 0);
-    document.getElementById("main").classList.toggle("tight", listW < 900);
+    const narrow = window.innerWidth < 1200, left = document.body.classList.contains("side-open") ? SIDE_W + 8 : RAIL_W;
+    const listW = window.innerWidth - left - 24 - (panelVisible() && !narrow ? w : 0);
+    document.getElementById("main").classList.toggle("tight", listW < 660);
     return w;
   }
   function setPanelWidth(w, keep) {
@@ -637,18 +921,18 @@
   function applyLayout() {
     const narrow = window.innerWidth < 1200;
     document.body.classList.toggle("narrow", narrow);
-    document.body.classList.toggle("side-open", !!store.get("side", false));
+    document.body.classList.toggle("side-open", !!store.get("side", window.innerWidth >= 1200));
     applyPanelWidth();
-    document.getElementById("main").classList.toggle("compact", narrow || !!panel || document.body.classList.contains("side-open"));
+    document.getElementById("main").classList.toggle("compact", narrow || panelVisible() || document.body.classList.contains("side-open"));
     if (theme === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", theme);
   }
   function render() {
     const D = window.DASH; if (!D) return;
-    if (!FILTERS.some(f => f[0] === filter)) filter = "open";
     if (!TABS.some(t => t[0] === tab)) tab = "questions";
     applyLayout();
-    const M = model(D);
-    renderChrome(D, M); renderQuestions(D, M); renderTasks(D, M); renderJira(D, M); renderPanelMeta(M);
+    const M = LM = model(D);
+    if (!M.filters.some(f => f[0] === filter)) filter = "open";
+    readRefs(D); renderChrome(D, M); renderQuestions(D, M); renderTasks(D, M); renderJira(D, M); renderSide(D); renderPanelMeta(M); showPanel();
   }
 
   // ---------- events ----------
@@ -657,21 +941,45 @@
   function flash(el) { if (!el) return; el.scrollIntoView({ block: "start" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600); }
   function jumpTask(id) {
     const x = window.DASH.tasks.find(t => t.id === id);
-    if (x && x.status === "done" && filter === "open" && !(window.DASH.asks || []).some(a => a.task === id && a.state !== "answered")) showAllDone = true;
+    if (x) { fold.delete("g:" + String(x.group || "").trim()); store.set("fold", [...fold]); }
     tab = "tasks"; store.set("tab", "tasks"); render();
     if (!document.getElementById("task-" + id)) { filter = "all"; store.set("filter", filter); history.replaceState(null, "", "#all"); render(); }
     flash(document.getElementById("task-" + id));
   }
+  // A task link in the Questions tab also opens the task's report in the side panel (the user, 11-27: "link from main
+  // questions tab should open related report and also move to taks list like s now"): the page an ask's facts link to,
+  // else the task's newest written report; none written: the jump only.
+  function relatedReport(taskId, askId) {
+    const D = window.DASH, a = askId && (D.asks || []).find(x => x.id === askId);
+    const f = a && (a.facts || []).find(x => x.kind === "link" && (x.path || x.text));
+    if (f) return { url: fileUrl(f.path || f.text), label: taskId + ": " + (f.text || f.label), task: taskId };
+    const t = (D.tasks || []).find(x => x.id === taskId);
+    const r = t && (t.reports || []).filter(x => x.path && !x.pending).slice(-1)[0];   // reports are kept oldest first
+    return r ? { url: fileUrl(r.path), label: taskId + ": " + r.label, task: taskId } : null;
+  }
   const toggle = (set, key, id) => { set.has(id) ? set.delete(id) : set.add(id); store.set(key, [...set]); };
   function stamp() { const d = new Date(), p = n => String(n).padStart(2, "0"); return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); }
   document.body.addEventListener("click", e => {
-    const el = e.target.closest("[data-tab],[data-go],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-more-done],[data-more-answered],a.doc,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
+    if (e.target.closest("a.ext")) return; // a Jira or GitHub link: the browser opens it, the row stays as it is
+    const el = e.target.closest("[data-tab],[data-go],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-all],[data-fold],[data-rall],a.doc,#panelchip,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
     if (!el) return;
     const d = el.dataset;
     if (d.tab) return goTab(d.tab);
     if (d.go) return d.go === "questions" ? goTab("questions") : goFilter(d.go);
-    if (d.jump) return jumpTask(d.jump);
-    if (d.ask) { goTab("questions"); return flash(document.getElementById("ask-" + d.ask)); }
+    if (d.jump) {
+      const rel = el.closest("#pane-questions") && relatedReport(d.jump, d.rep);
+      if (rel) openPanel(rel);
+      return jumpTask(d.jump);
+    }
+    if (d.ask) { const a = (window.DASH.asks || []).find(y => y.id === d.ask); if (a) { fold.delete("q:" + a.task); store.set("fold", [...fold]); } goTab("questions"); return flash(document.getElementById("ask-" + d.ask)); }
+    if (d.fold) { toggle(fold, "fold", d.fold); return render(); }
+    if (d.rall) { toggle(rall, "rall", d.rall); return render(); }
+    if (d.all) {                                   // Collapse all / Expand all of one list
+      const { keys, ids } = listKeys(d.all);
+      if (d.mode === "collapse") { keys.forEach(k => fold.add(k)); ids.forEach(id => open.delete(id)); }
+      else { keys.forEach(k => fold.delete(k)); ids.forEach(id => open.add(id)); }
+      store.set("fold", [...fold]); store.set("open", [...open]); return render();
+    }
     if (d.exp) { toggle(open, "open", d.exp); if (!open.has(d.exp)) { full.delete(d.exp); store.set("full", [...full]); } return render(); }
     if (d.full) { full.add(d.full); store.set("full", [...full]); return render(); }
     if (d.line) { toggle(lines, "lines", d.line); return render(); }
@@ -681,13 +989,15 @@
       const text = document.getElementById(d.copy).textContent, out = document.getElementById("copied");
       return navigator.clipboard.writeText(text).then(() => { out.textContent = "copied"; }, err => { out.textContent = "copy failed (" + err.name + "): select the line and copy it"; });
     }
-    if ("moreDone" in d) { showAllDone = true; return render(); }
-    if ("moreAnswered" in d) { showAllAnswered = true; return render(); }
-    if (el.matches("a.doc")) { e.preventDefault(); panel = { url: d.url, label: d.label, task: d.task || "" }; store.set("panel", panel); showPanel(); return render(); }
+    if (el.matches("a.doc")) { e.preventDefault(); openPanel({ url: d.url, label: d.label, task: d.task || "" }); return render(); }
+    if (el.id === "panelchip") { panelOpen = !panelIsOpen(); store.set("panelOpen", panelOpen); showPanel(); return render(); }
     if (el.id === "sideopen" || el.id === "sideclose") { store.set("side", el.id === "sideopen"); return render(); }
     if (el.id === "themecycle") { theme = { auto: "light", light: "dark", dark: "auto" }[theme]; store.set("theme", theme); return render(); }
     if (el.matches("#themeseg button")) { theme = d.theme; store.set("theme", theme); return render(); }
-    if (el.id === "pclose") { panel = null; store.set("panel", null); showPanel(); return render(); }
+    if (el.id === "pclose") {                      // a report open: back to the empty panel; the empty panel: hide it
+      if (panel) { panel = null; store.set("panel", null); } else { panelOpen = false; store.set("panelOpen", false); }
+      showPanel(); return render();
+    }
     if (el.id === "askchip") return goTab(window.DASH.asks && window.DASH.asks.some(a => a.state !== "answered") ? "questions" : "tasks");
     if (el.id === "readchip") return goFilter("pend");
   });
@@ -705,11 +1015,17 @@
   const endDrag = e => {
     if (!document.body.classList.contains("dragging")) return;
     document.body.classList.remove("dragging");
-    if (grip.hasPointerCapture(e.pointerId)) grip.releasePointerCapture(e.pointerId);
+    if (e && e.pointerId != null && grip.hasPointerCapture(e.pointerId)) grip.releasePointerCapture(e.pointerId);
     store.set("panelw", pw);
   };
   grip.addEventListener("pointerup", endDrag);
   grip.addEventListener("pointercancel", endDrag);
+  // A drag that ends without a pointerup on the grip (capture lost, the button let go outside the window, the window losing
+  // focus) must still end: otherwise body.dragging stays on and the page keeps the resize cursor and no text selection.
+  grip.addEventListener("lostpointercapture", endDrag);
+  window.addEventListener("blur", endDrag);
+  window.addEventListener("pointerup", endDrag);
+  document.addEventListener("pointermove", e => { if (document.body.classList.contains("dragging") && !(e.buttons & 1)) endDrag(e); });
   grip.addEventListener("dblclick", () => { pw = null; store.set("panelw", null); applyPanelWidth(); });
   grip.addEventListener("keydown", e => {
     const step = e.shiftKey ? 96 : 32, now = applyPanelWidth();

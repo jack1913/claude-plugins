@@ -16,7 +16,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | The text the master reads at one moment (start, jobs, briefs, approvals, context, helper, wrap-up, setup), and the list of those files | `skills/puppet-master/references/`, `skills/puppet-master/references/_index.md` |
 | The worker brief template | `skills/puppet-master/worker-brief.md` |
 | The analyst brief template (its tags must equal `TAGS` in `analyst.mjs`) | `skills/puppet-master/analyst-brief.md` |
-| The live task page template (page, empty data file, sessions sync); tested by `tests/task-page.test.mjs` | `skills/puppet-master/templates/task-page/` |
+| The live task page template (page, empty data file, sessions sync, epics sync); tested by `tests/task-page.test.mjs` | `skills/puppet-master/templates/task-page/` |
 | The user's setup prerequisites the master reads on demand | `skills/puppet-master/references/setup-prerequisites.md` |
 | The helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs`, with `harvest.mjs` (logs folder, redaction, events) and `analyst.mjs` (findings, summary, decisions); `compact`, `clear` and the mod's files are in `puppet.mjs` ("the mod" section) |
 | Licence | `LICENSE` |

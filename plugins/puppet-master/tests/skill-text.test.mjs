@@ -992,7 +992,8 @@ test("the live task page ships as a template: the layout in SKILL.md, the detail
 
 test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar, asks as records, pending report and its seen line (T28, T29, A62, A64)", () => {
   const bullet = read("SKILL.md").replace(/\s+/g, " ");
-  assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*three tabs, Questions \(every open ask in full, one under another\), Tasks \(the tasks only\) and Jira tasks \(epics, their PRs and Jira board status\), a sidebar with the filters and their counts, the sessions and the previous work sets, and a side panel for report pages whose width the user drags/);
+  assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*four tabs, Questions \(open asks, grouped by task\), Tasks \(one row each, grouped, done ones under the Done filter\), Epics and Jira \(epics, PRs, Jira status, read times\) and Side questions \(the user's side questions to you\), a sidebar with every status filter and its count, each session's whole record and the previous work sets, and a side panel for report pages whose width the user drags/);
+  assert.match(bullet, /and `sync-epics\.mjs` before a status that names an epic/);
   assert.match(bullet, /goes onto the page as an ask of that open task \(a record in `asks\[\]` of `tasks\.js`, shown in Questions and on the task's item\), with its id and the data to decide on/);
   const step7 = read("references/on-start.md").replace(/\s+/g, " ");
   assert.match(step7, /"questions\/tasks\/jira tasks should be 3 separate tabs, previouse work status pages go to sidebar"/);
@@ -1005,6 +1006,11 @@ test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar
   assert.match(step7, /three tabs, Questions \(every open ask as a full card, one under another, oldest first\), Tasks \(the tasks only\) and Jira tasks; the filters with their counts, the sessions and the previous work sets in the sidebar/);
   assert.match(step7, /a report side panel, 640 px wide by default, its width dragged on its left edge and kept in the browser/);
   assert.match(step7, /Every open question goes into `asks\[\]` as its own record, so the page shows them all at once\./);
+  // T46, the user on 2026-11-27: the nine fixes and "each task on list should have only title and rest under show more"
+  assert.match(step7, /"we need to have sidebar with whole sessions info \+ whole tasks status filter \+ taskjs list items must be smaller[\s\S]*\+ new tab for my side questions log"/);
+  assert.match(step7, /"each task on list should have only title and rest under show more"/);
+  assert.match(step7, /tasks and asks by id, lowest first, whatever the order in `tasks\.js`; done tasks only in the folded Done list/);
+  assert.match(step7, /log each question the user asks you beside the tasks there, with its time, their words verbatim, your short answer and its time/);
   // the page's own seen line is the one the skill tells the master to act on
   const page = fs.readFileSync(path.join(SKILL_DIR, "templates", "task-page", "index.html"), "utf8");
   assert.ok(page.includes('"seen on the task page: "'));

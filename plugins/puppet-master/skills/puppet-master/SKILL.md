@@ -216,13 +216,12 @@ This file holds what you need on every turn. The rest is in `references/`, one f
   session adopted, assigned, compacted, switched, finished or closed; an ask raised or answered.
   The sessions list is part of it. The user, 2026-11-24: "for master status page, you must keep
   updating sessions list same as other elements". The page has a pinned header (open asks, reports
-  to read, the waiting line) over three tabs, Questions (every open ask in full, one under another),
-  Tasks (the tasks only) and Jira tasks (epics, their PRs and Jira board status), a sidebar with the
-  filters and their counts, the sessions and the previous work sets, and a side panel for report
-  pages whose width the user drags; copy it from
-  `skills/puppet-master/templates/task-page/` (layout detail and the user's quotes:
-  `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same turn as
-  every page change. Before a new row, search the page for an open row that covers the same job
+  to read, the waiting line) over four tabs, Questions (open asks, grouped by task), Tasks (one row each, grouped, done ones under the Done filter), Epics and Jira (epics, PRs, Jira status, read times) and Side
+  questions (the user's side questions to you), a sidebar with every status filter and its count,
+  each session's whole record and the previous work sets, and a side panel for report pages whose
+  width the user drags; copy it from `skills/puppet-master/templates/task-page/` (layout detail
+  and the user's quotes: `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same
+  turn as every page change, and `sync-epics.mjs` before a status that names an epic. Before a new row, search the page for an open row that covers the same job
   (same epic, same checkout, same session) and add the work as a sub-step of that row; a new row
   only when no open row names the job.
 - **Reports are HTML only.** The user, 2026-11-24: "dont show me md files reports and any other

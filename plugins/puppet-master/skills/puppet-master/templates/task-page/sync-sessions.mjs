@@ -50,13 +50,16 @@ let s = readFileSync(FILE, "utf8");
 const esc = v => String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 const block = "  sessions: [" + (rows.length ? "\n" : "") + rows.map(r =>
   `    { name: "${esc(r.name)}", state: "${esc(r.state)}", model: "${esc(r.model)}", job: "${esc(r.job)}", context: "${esc(r.context)}" }`).join(",\n") + (rows.length ? "\n  " : "") + "],";
-if (!/  sessions: \[[\s\S]*?\],/.test(s)) { console.error("tasks.js has no `sessions: [...],` block"); process.exit(1); }
-s = s.replace(/  sessions: \[[\s\S]*?\],/, () => block);
+// the keys may be written plain (sessions:) or quoted ("sessions":), at any indent, as a hand-edited tasks.js has them
+const SESSIONS = /^[ \t]*"?sessions"?: *\[[\s\S]*?\],/m;
+if (!SESSIONS.test(s)) { console.error("tasks.js has no `sessions: [...],` block"); process.exit(1); }
+s = s.replace(SESSIONS, () => block);
 const now = new Date();
 const pad = n => String(n).padStart(2, "0");
 const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-s = s.replace(/^  updated: ".*",/m, () => `  updated: "${stamp}",`);
+s = s.replace(/^[ \t]*"?updated"?: *".*",/m, () => `  updated: "${stamp}",`);
 const asOf = `  sessionsAsOf: "${stamp.slice(11)}",`;
-s = /^  sessionsAsOf: ".*",/m.test(s) ? s.replace(/^  sessionsAsOf: ".*",/m, () => asOf) : s.replace(/^  sessions: \[/m, () => asOf + "\n  sessions: [");
+const AS_OF = /^[ \t]*"?sessionsAsOf"?: *".*",/m;
+s = AS_OF.test(s) ? s.replace(AS_OF, () => asOf) : s.replace(/^  sessions: \[/m, () => asOf + "\n  sessions: [");
 writeFileSync(FILE, s);
 console.log(rows.map(r => `${r.name} | ${r.state} | ${r.model} | ${r.job} | ${r.context}`).join("\n"));
