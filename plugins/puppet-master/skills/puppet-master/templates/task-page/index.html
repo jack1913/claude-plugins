@@ -225,6 +225,7 @@
   .trow.flash { outline:2px solid var(--accent); outline-offset:-2px; border-radius:8px; }
   .srow .n.k-open { color:var(--open); } .rc i.k-open { background:var(--open-bg); color:var(--open); }
   .trow .id { font-weight:600; font-variant-numeric:tabular-nums; color:var(--open); }
+  .trow .id .when { display:block; margin-top:2px; font-weight:400; font-size:11.5px; line-height:1.3; color:var(--text-3); white-space:nowrap; }
   .trow:not(.done) { box-shadow:inset 3px 0 0 var(--open); }
   .trow .ti { font-weight:600; text-wrap:pretty; overflow-wrap:anywhere; }
   .trow.done .id, .trow.done .ti { color:var(--text-2); font-weight:400; }
@@ -936,7 +937,7 @@
       : x.asks.length && x.key !== "wait" ? `<span class="pill k-wait">Ask open</span>` : "";
     const more = exp ? "Show less" : sub.length > 1 ? "Show more · " + (sub.length - 1) + " more line" + (sub.length > 2 ? "s" : "") : "Show more";
     return `<div class="trow${x.key === "done" ? " done" : ""}${exp ? " on" : ""}" data-task="${esc(t.id)}" id="task-${esc(t.id)}">`
-      + `<span class="id">${esc(t.id)}</span>`
+      + `<span class="id">${esc(t.id)}${t.day ? `<small class="when" title="asked (the master machine’s local time)">${esc(t.day)}</small>` : ""}</span>`
       + `<div class="tk"><div class="ti" title="${esc(t.title)}">${linkRefs(t.title)}</div>${exp || !sub.length ? "" : `<div class="s1 clamp2">${linkRefs(sub[0])}</div>`}`
       + `<div class="more"><a data-exp="${esc(t.id)}" aria-expanded="${exp}">${more}</a><button class="dots${menuTask === t.id ? " on" : ""}" data-menu="${esc(t.id)}" aria-haspopup="menu" aria-label="Actions for ${esc(t.id)}" title="Actions for ${esc(t.id)}">⋯</button></div></div>`
       + `<div class="stc"><div class="st"><span class="pill k-${x.colour}">${esc(x.label)}</span>${flag}</div><small class="clamp2" title="${esc(t.who || "")}">${esc(t.who || "")}</small></div>`

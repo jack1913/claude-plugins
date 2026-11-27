@@ -1,6 +1,7 @@
 // The master edits this file on every change; index.html reads it again every 90 s without a page reload.
 // The page sorts every list itself (the order is named on the page), so the order in this file does not matter:
 // tasks by group (A to Z, no group last), then by id, lowest first; asks by task, then by id; side questions newest first.
+// Every time in this file is the local time of the machine the master runs on; a time is never UTC unless it says Z.
 // The data shape (all fields are plain strings unless noted):
 //   workSet     one line naming the work set (it carries over days until a new set of work starts)
 //   days        array of the days this set has run, "YYYY-MM-DD"
@@ -67,7 +68,8 @@
 //   tasks       array of
 //               { id, day, origin, group, title, status, blocked, who, evidence, reports, sub }
 //     id        "T1", "T2", ... never reused within the work set
-//     day       the day it was asked, "MM-DD"
+//     day       when it was asked, "MM-DD HH:MM" in the machine's local time; "MM-DD" alone in older rows;
+//               the page shows it under the task id
 //     origin    initial (asked when this work set started) | added (asked later)
 //     group     optional: the epic (its id, as in epics[]) or theme the task belongs to ("CI", "status page"); the Tasks tab
 //               shows a heading per group, A to Z, and the tasks without one last; the Jira tab lists an epic's tasks by it

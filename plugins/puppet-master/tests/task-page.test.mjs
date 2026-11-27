@@ -155,7 +155,7 @@ const BOARD = {
     { id: "T5", day: "01-02", origin: "added", title: "running newer", status: "running", who: "w-a", evidence: "-", reports: [], sub: [] },
     { id: "T6", day: "01-02", origin: "added", title: "plain done", status: "done", who: "w-a", evidence: "-", reports: [], sub: [] },
     { id: "T7", day: "01-02", origin: "added", title: "waits for the user", status: "waiting-you", who: "you", evidence: "-", reports: [], sub: [] },
-    { id: "T8", day: "01-02", origin: "added", title: "blocked", status: "queued", blocked: "on the review host", who: "w-b", evidence: "-", reports: [], sub: [] },
+    { id: "T8", day: "01-02 09:15", origin: "added", title: "blocked", status: "queued", blocked: "on the review host", who: "w-b", evidence: "-", reports: [], sub: [] },
   ],
 };
 
@@ -206,8 +206,9 @@ test("the page: tasks by id, lowest first; no Done section, Done is a filter; a 
   assert.match(t, /<h2>Open tasks<\/h2><span class="cap">7 of 8<\/span><span class="sw"><button data-all="tasks" data-mode="collapse" class="">Collapse all<\/button><button data-all="tasks" data-mode="expand" class="">Expand all<\/button>/);
   assert.match(t, /<div class="thead"><span>#<\/span><span>Task<\/span><span>Status · who<\/span><span>Reports, newest first<\/span><\/div>/);
   // a row: id | title (+ the newest line, Show more) | status pill and who | reports
+  // the user, 11-27: "for each task on master page you need to add not only date but also time": the day and time under the id
   const row8 = t.slice(t.indexOf('<div class="trow" data-task="T8"')).split('</div><p class="foot">')[0];
-  assert.equal(row8, '<div class="trow" data-task="T8" id="task-T8"><span class="id">T8</span><div class="tk"><div class="ti" title="blocked">blocked</div>'
+  assert.equal(row8, '<div class="trow" data-task="T8" id="task-T8"><span class="id">T8<small class="when" title="asked (the master machine’s local time)">01-02 09:15</small></span><div class="tk"><div class="ti" title="blocked">blocked</div>'
     + '<div class="more"><a data-exp="T8" aria-expanded="false">Show more</a><button class="dots" data-menu="T8" aria-haspopup="menu" aria-label="Actions for T8" title="Actions for T8">⋯</button></div></div><div class="stc"><div class="st"><span class="pill k-queue">Queued</span>'
     + '<span class="pill k-block" title="on the review host">Blocked</span></div><small class="clamp2" title="w-b">w-b</small></div><div class="rp"><span class="mut3">–</span></div></div>');
   const row4 = t.match(/<div class="trow" data-task="T4"[\s\S]*?<div class="rp">[\s\S]*?<\/div><\/div><\/div>/)[0];
