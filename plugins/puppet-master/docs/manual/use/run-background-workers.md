@@ -91,8 +91,8 @@ there, it starts a background worker instead, on the model and effort the job's 
     it against and checks before passing it on. Each open question gets an id (A1, A2), and later messages say "A2 is
     still open" instead of asking it again.
   - Every question and every action Claude asks of you carries its id, in chat and on the live task page. Whatever a
-    task needs from you goes into that task's item on the page, with the text or evidence to decide on, never only in
-    chat.
+    task needs from you goes onto the page as an ask of that task, a record shown in full on the Questions tab and on the
+    task's item, with the text or evidence to decide on, never only in chat.
   - Claude acts on everything in your message before it replies: a "go" starts the job in the same turn, and "if you
     have free workers" starts the second job or says why not. When a job ends, it also starts any item you already
     approved that needs no decision, and says so in one line.
