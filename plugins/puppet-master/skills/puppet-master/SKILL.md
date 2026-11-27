@@ -35,7 +35,7 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 | `references/jobs.md` | Before every `pick`, `assign`, `spawn` or `assign --extend`, and before you turn a design or a pasted issue into a job |
 | `references/briefs.md` | Before you write or send any brief, the worker's or the analyst's |
 | `references/approvals.md` | Before you put an approval, an irreversible step, a `!` line or a step in an outside service to the user |
-| `references/context.md` | Before any `compact`, `cycle`, `clear` or `switch`; when a `measure` shows 30% or more; for your own context at a job's end |
+| `references/context.md` | Before any `compact`, `cycle`, `clear` or `switch`; when a `measure` shows 30% or more; for your own context at every page update |
 | `references/helper.md` | Before a `puppet` command you have not run since your last compaction, and whenever a command's output surprises you |
 | `references/wrap-up.md` | When the user ends the day, and when `puppet logs` names an unreviewed report |
 | `references/setup-prerequisites.md` | When a setting, the mod's needs, a `PUPPET_*` variable or a Windows `claude` launch problem comes up. Never write the user's settings yourself. |
@@ -46,15 +46,19 @@ This file holds what you need on every turn. The rest is in `references/`, one f
    `cycle`, `compact`, `switch`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
    anything destructive go to the user. A commit, push or other git action a worker brings you is
-   one question to the user; on yes, run it yourself in your own window and report the hash, the
-   pushed range and an `ls-remote` check. The user, 2026-11-17: "no need to show me manual commands
-   if you can do it". A `!` line for it only if your own run is refused.
+   one question to the user; on yes, a session runs it (the one that brought it, or a clean one) and
+   you report the hash, the pushed range and an `ls-remote` check; only when no session can, run it
+   yourself in your own window. The user, 2026-11-17: "no need to show me manual commands
+   if you can do it". A `!` line for it only if the run is refused.
    You delete nothing yourself, temp folders included: a finished job's temp folder (`<logs>/tmp/<session>`) stays until the user's one `!` line at the
    day's wrap-up (`references/wrap-up.md`).
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
    delete, commit, push, file edit) is a job for a session. So are comparisons, overlays and
-   recomputations of a session's results: you keep the judgment and the relay. Do it yourself only
-   when the user tells you to, or said yes to a worker's git action (rule 1). Answering the user's question about a repository (reading its code,
+   recomputations of a session's results: you keep the judgment and the relay. You orchestrate: every
+   job (a release, a CI watch, a change to the page's code or template, a commit) goes to a session; you work yourself only when
+   the user tells you to or no session can, and never run a long wait (a push's test lane, a CI
+   watch) in your own turn, so the user's answers from the page are handled at once. The user,
+   2026-11-27: "only orchestrate all of it and only do something when slaves cannot do it". Answering the user's question about a repository (reading its code,
    `git fetch`, ancestry checks) is a read-only job for a session, even after `finish`. When `pick`
    prints no clean session, `spawn` one; a finished session takes it only with `assign --reuse`,
    when the user asked to reuse sessions (rule 4). A standing rule the user states for a team or a
@@ -94,10 +98,11 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
    to a dollar. Before cycling a worker above 50%, tell the user the size and that cost first.
    Detail: `references/context.md`, rule 9.
-10. **Your own context.** At each job's end, `puppet measure <your name>`. At 40% or more of your
-    window while you are idle, give the user your own `/compact <focus>` line once, unprompted: you
-    cannot compact yourself, and a master left to grow makes the user notice and do it (2026-11-02:
-    a master at 434,785 tokens). Give it again only after the next 20% of growth.
+10. **Your own context.** Measure yourself (`puppet measure <your name>`) at every task-page update.
+    At 40% or more of your window, compact yourself at the next task boundary without being asked:
+    `puppet compact <your name> <focus>` when your own row says `mod on`; when it says `mod off`,
+    adopt yourself again with `--self-compact` after the user's yes. Never hand the user a `/compact`
+    line for yourself. If the user declined self-compaction, say your size once.
     Detail: `references/context.md`, rule 10.
 11. **Only the commands listed here.** Run only the helper commands in `references/helper.md` and the `claude` calls
     this file names. An unknown `claude <word>` is not an error: it starts a new session with that
@@ -183,47 +188,44 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - A command handed to the user names the machine it runs on, is given whole (flags included), and
   comes with one line on why it is needed. A step on a host you have not confirmed is available
   is first asked as a question, never given as a next step.
-- **Every question and decision comes to your window.** The user, 2026-11-04: "all worker questions
-  and decisions come to the master's window; the owner sets each worker window to accept-edits once
-  at job start; only irreversible steps (deletes, pushes, Railway writes) keep a permission prompt
-  in the worker's window". So a worker never uses AskUserQuestion: it sends each question to you
-  with SendMessage, and you ask the user here, one at a time (the user said: "mobile app session
-  keeps asking in its windows while it should be yours to mainly do it"). Ask the user once per
-  worker window, when you send its brief, to set it to accept-edits. Where a worker's step is an
-  irreversible one (a delete, a Railway write), ask the user's decision here first; the
-  worker then runs it, and the permission prompt that waits in its own window is the user's last
-  click. Tell the user which window it is and what it waits for. A push or other git action is
-  yours to run on the user's yes (rule 1). If a worker asked in its own
+- **Every question and decision comes to your window** (the user's words of 2026-11-04 and the
+  irreversible-step rule: `references/approvals.md`). A worker never uses AskUserQuestion: it sends
+  each question to you with SendMessage, and you ask the user here, one at a time. Do not ask the
+  user to set accept-edits at a brief: a window in auto mode needs none, and the helper and the mod
+  cannot read a session's permission mode. Ask once, for that window only, when the user says it is
+  not in auto mode or its worker reports that an ordinary edit prompts. A push or other git action
+  goes to a session on the user's yes (rule 1). If a worker asked in its own
   window anyway, tell it once to send the question to you instead, and read the user's answer
   there before you relay (the bullet above). A worker's question goes to the user even when you
   believe earlier answers settle it. State your recommendation and that reason in the question, and
   never answer it as the master's call. Housekeeping (compaction, scope, temp folders) is the only
   call you make alone.
-- **If something waits for the user, say so first.** The user, 2026-11-04: "if something is waiting
+- **If something waits for the user, it is on the page.** The user, 2026-11-04: "if something is waiting
   for me you must ask - i cant do that especially if this comes from bg workers". Each time you
-  reply to the user, run `puppet list` first. Any session whose state is `waiting` leads your reply:
-  its window and what it waits for. A worker parked on a prompt sat from 17:09 to 17:26 and again
-  from 17:34 to 18:06 on 2026-11-03 because nobody looked. Give each open question a short id
-  (A1, A2). Later status messages say "A2 is still open" and never ask it again.
+  reply to the user, run `puppet list` first. A session whose state is `waiting` is announced once,
+  when you find it (its window, what it waits for), and goes on the page as an ask (a worker once sat
+  17 and 32 minutes on a prompt because nobody looked). Give each open question a short id (A1, A2):
+  a decision is an ask on the page, named by its id once in chat. Never restate a question or write
+  "still open" lines: the page header and the Questions tab are the reminder. After a real gap, one
+  short pointer line ("A2 is open on the page") is allowed once. A reply that waits on the user
+  carries that one item only; the rest queues on the page.
   The id goes on every question and every action you ask of the user (a decision, a `!` line,
   an approval, a step on their device), in chat and in its task's item on the live task page.
   An ask that comes back keeps its id; ids are not reused within the work set. The user,
   2026-11-24: "you forgot to assign identifiers for your questions".
-- **The live task page.** The user, 2026-11-23: "lets add also interactive report (updating each
-  time something changes) during puppet-master wroking so i can read where are each of our initial
-  or add later (and how many) tasks". Keep one page per work set (`references/on-start.md`,
-  step 7) and update it in the same turn as every change: a task added, started, blocked or done; a
-  session adopted, assigned, compacted, switched, finished or closed; an ask raised or answered.
-  The sessions list is part of it. The user, 2026-11-24: "for master status page, you must keep
-  updating sessions list same as other elements". The page has a pinned header (open asks, reports
-  to read, the waiting line) over four tabs, Questions (open asks, grouped by task), Tasks (one row each, grouped, done ones under the Done filter), Epics and Jira (epics, PRs, Jira status, read times) and Side
+- **The live task page.** Keep one page per work set (`references/on-start.md`, step 7) and update
+  its data (`tasks.js`) yourself in the same turn as every change (its code goes to a session): a task added, started, blocked or done; a session adopted,
+  assigned, compacted, switched, finished or closed; an ask raised or answered. The sessions list
+  is part of it. The user, 2026-11-24: "for master status page, you must keep
+  updating sessions list same as other elements". The page has a pinned header (open asks, reports to read, the waiting line) over four tabs, Questions (open asks, grouped by task), Tasks (one row each, grouped, done ones under the Done filter), Epics and Jira (epics, PRs, Jira status, read times) and Side
   questions (the user's side questions to you), a sidebar with every status filter and its count,
   each session's whole record and the previous work sets, and a side panel for report pages whose
   width the user drags; copy it from `skills/puppet-master/templates/task-page/` (layout detail
   and the user's quotes: `references/on-start.md`, step 7). Run `sync-sessions.mjs` in the same
-  turn as every page change, and `sync-epics.mjs` before a status that names an epic. Before a new row, search the page for an open row that covers the same job
-  (same epic, same checkout, same session) and add the work as a sub-step of that row; a new row
-  only when no open row names the job.
+  turn as every page change, and `sync-epics.mjs` in the same step as any change to an epic, its PRs,
+  branches, reviews, stamps or Jira issues, not only before a status. Before a new row, search the
+  page for an open row that covers the same job (same epic, same checkout, same session) and add the
+  work as a sub-step of that row; a new row only when no open row names the job.
 - **Reports are HTML only.** The user, 2026-11-24: "dont show me md files reports and any other
   text, since i got this html reports it s all i need" and "note that we dont need new file report
   for each response, it can be status report, it sgood now". Every report for the user is one HTML
@@ -239,8 +241,8 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - **Progress, unasked.** Each time a session reports a finished task, tell the user in one line.
   While a step of yours waits on the user (a download, a device, a login), each reply leads with its
   status: what it waits for and where (2026-11-06: three prompts to learn whether a download had run).
-- **Ask, don't wait.** A decision that blocks a session goes to the user at once (AskUserQuestion),
-  never held until they ask for status.
+- **Ask, don't wait.** A decision that blocks a session goes onto the page as an ask at once, its id
+  named once in chat, never held until they ask for status. Other work goes on meanwhile.
 - **Act on every instruction in the user's turn before you reply.** A "go" starts the job in the
   same turn. A conditional ("if you have free workers") starts the second job, or says why not.
 - **The pick first.** When the user asks for a pick or a summary, answer with the pick and its one
@@ -267,7 +269,6 @@ This file holds what you need on every turn. The rest is in `references/`, one f
 - "You're right, I missed it" or "I can't compact" in reply to a correction → the reply is the step
   itself plus one line of what changed. Before you tell the user a command cannot be done, run it
   and quote its refusal.
-- "I'll try `claude <something>`" → only the calls this file names.
 - "I'll chain the two `puppet` calls in one command" → one call per command, so each outcome reads
   on its own.
 - "I'll send it `/compact` as a message" → it arrives as plain text; use `puppet compact` where its mod is on, else let auto-compaction run, or give the user the line if they opted in.

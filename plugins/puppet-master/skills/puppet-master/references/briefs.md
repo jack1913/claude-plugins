@@ -25,7 +25,9 @@ Read this before you write or send any brief, the worker's or the analyst's.
   line of the block is in the brief. Facts about the user's repositories (the IIS lock, the Stripe
   CLI process) go into the block, never into skill text. A work set may carry the window the user
   named for its git steps: record "git, commit and merge steps go to `<window>`" in the block as a
-  standing answer and route by it for that work set.
+  standing answer and route by it for that work set. Record each standing yes, and each withdrawn
+  one, with the user's quote and date. Before asking for a permission or a `!` line, check the
+  record: act on a standing case and name it in the brief; ask each time for a withdrawn one.
 - **A model rule the user gives** (a model not to use, a tier for some work) is a line of the
   standing answers, with the user's quote and its time. It holds for that day only. The user,
   2026-11-26: "it s all day specific since usage testing". Every brief and every relay you send
@@ -50,7 +52,11 @@ Read this before you write or send any brief, the worker's or the analyst's.
 - Fill these lines in every worker brief:
   - `{{deliverable}}`: code, a document or a browser run. "Check it in the browser" is a browser
     run, not tests to write. A report for the user is one HTML page with its full path, never an
-    `.md` or `.txt` file.
+    `.md` or `.txt` file. A brief or draft the user is meant to read is linked on the task page as
+    an HTML render of it; the worker still reads the Markdown file. Report tables: the prose column
+    gets the width; code paths and `file:line` go on their own small line under the item (or wrap),
+    never in a wide unbreakable column; prefer one card per finding to a many-column table, because
+    the side panel starts narrow and the user drags it wider; set no max-width on the page content.
   - `{{local_state}}`: what the worker would otherwise stop to find out: uncommitted edits, untracked
     folders, the branch and whether it is pushed. Write "none known" when there is none.
   - `{{preconditions}}`: the services, tools, device state and shared tools the job depends on (the
@@ -61,20 +67,23 @@ Read this before you write or send any brief, the worker's or the analyst's.
     date, never a password; when you cannot name them, ask the user before the job starts.
   - `{{approvals}}`: the irreversible steps the job will need (a delete, a push, a Railway write),
     each with its exact command, and "None" when it needs none. Ordinary writes are not listed:
-    the user sets the worker's window to accept-edits once, when you send the brief (Relay
-    protocol). For each irreversible command (a wipe, a volume removal, a force push), say who runs
-    it: the user in their own window, or the worker only if its permission mode allows it; a step
-    the user runs is a `!` line for the worker's window, given before the job starts (Relay
-    protocol). A commit, push or other git action is yours to run on the user's yes (rule 1), marked
-    so here. An external write (a Jira create or transition, `gh pr ready`) is always a `!` line, marked so here: auto mode's classifier does not count your relayed yes as the user's. The
-    user's decision on it comes to you; the permission prompt waits in the worker's window. A
-    relayed OK cannot lift a worker's permission mode.
+    a window in auto mode needs no accept-edits, and a worker whose ordinary edit still prompts
+    reports it to you (Relay protocol). For each irreversible command (a wipe, a volume removal, a
+    force push), say who runs it: the user in their own window, or the worker only if its permission
+    mode allows it; a step the user runs is a `!` line for the worker's window, given before the job
+    starts (Relay protocol). A commit, push or other git action goes to a session on the user's yes
+    (rule 1), marked so here. An external write the user approved (a Jira create or transition, a PR
+    comment, `gh pr ready`, a release page, a publish) is run by the session after the user confirmed
+    both its text and the apply or publish on the task page, marked so here; you give a `!` line only
+    when the permission check refuses it. A relayed OK cannot lift a worker's permission mode.
 - **Check what a brief asserts, just before you send it.** Re-read the decisions log and any state
   the brief states (approved or not, the branch, a dirty tree) instead of what you read at the
   start. Before a brief says a tool is or isn't installed, check it in the session. Build the steps
   on these checked facts, and name each step's precondition (what must exist or have run first).
   A git ref the brief names goes into `{{preconditions}}` for the worker to check first (`git
   ls-remote --heads origin <ref>`), or you check it with that read-only `git ls-remote`.
+  Before a claim about a repository's or epic's state read from a reference checkout, a worker
+  fetches and compares it with the remote; the brief says so.
 - Fill each conditional line of the worker brief, or delete it when it doesn't apply:
   - `{{write_scope}}`: the folders of `--scope`, the report files the job's tools write by default
     (a check's result file, for example), and "run no git command" with `--no-git`. With
@@ -86,7 +95,8 @@ Read this before you write or send any brief, the worker's or the analyst's.
   - `{{commit_handoff}}`: the session that commits this job's work, when it is not the worker.
   - `{{project_standards}}`: the project's own rules the job touches (an APK's name and its
     versionCode +1 per build, a doc number you reserved for this job, canvas images through
-    `<img src>`).
+    `<img src>`). A design task's brief says that the working design file is the task row's first
+    report and is added to the row in the same turn it is made or seeded.
   - `{{tier_check}}`: for a fresh session, "First, reply with your model name."
   - `{{self_compact}}`: for a worker you spawn with `--self-compact`: "The master may compact your
     context between turns and clear it once your job is finished. After your `FINAL:`, nothing may

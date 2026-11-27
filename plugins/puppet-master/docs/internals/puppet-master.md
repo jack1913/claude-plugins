@@ -101,7 +101,7 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
 - **Compaction is measured and happens at task boundaries only.** Compact an idle session at 30% or more of its window
   when the job continues, measured on each relay of a working session's message and at each `FINAL:`; at 30% or more,
   ask a working session to stop at its next boundary; never compact mid-task; a finished job is closed (or, in a
-  window whose mod is on, cleared), never compacted. The master's own line is 40%, then each further 20%. An automatic threshold that can fire mid-task is not the mechanism. A
+  window whose mod is on, cleared), never compacted. The master's own line is 40%: it compacts itself at its next task boundary (`references/context.md`, rule 10), never with a `/compact` line for the user. An automatic threshold that can fire mid-task is not the mechanism. A
   background worker is compacted by `compact` where its mod is on, else by `cycle`. A window the user opened has no
   remote stop and a message cannot compact it, so, where its mod is not on, the master lets its auto-compaction run
   (2026-11-01: four hand-pasted `/compact` lines were the user's chore, while two auto-compactions did no harm) and
@@ -125,10 +125,13 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   worker asks for the approval itself in its own window"): "all worker questions and decisions come to the master's
   window; the owner sets each worker window to accept-edits once at job start; only irreversible steps (deletes,
   pushes, Railway writes) keep a permission prompt in the worker's window". A worker never uses `AskUserQuestion`: it
-  sends the question to the master, which asks the user in its own window. On 2026-11-03 the user typed the same
+  sends the question to the master, which asks the user in its own window. The accept-edits ask was later narrowed
+  (2026-11-27, A142: "B · only outside auto mode"): the helper and the mod read no permission mode (no `permission`
+  field in `puppet.mjs` or `puppet-mod.js`), so the master asks only when the user says a window is not in auto mode
+  or a worker reports an ordinary edit prompting. On 2026-11-03 the user typed the same
   approval line in the master's window and then in a worker's, four times, and a worker sat on its own prompt for
-  17 and 32 minutes while the master looked elsewhere; so the master also runs `list` before each reply and leads with a
-  `waiting` session.
+  17 and 32 minutes while the master looked elsewhere; so the master also runs `list` before each reply and announces
+  a `waiting` session once, and puts it on the page as an ask (A141: "B · one pointer after a gap").
 - **A busy worker is paused, not compacted.** `compact` refuses a busy session. The pattern that worked four times on
   one worker on 2026-11-04: ask it to pause at its next part boundary, wait for the idle notice
   (`SendMessage` with `notify_when_idle`, never `compact` in the pause request's own turn), `compact` it with a focus,

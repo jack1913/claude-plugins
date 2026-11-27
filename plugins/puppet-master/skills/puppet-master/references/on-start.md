@@ -43,20 +43,24 @@ do "A stand-in master" below.
    `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
    turns yet, or one that only read a brief and replied, with no tool call) or `unknown` (it
    already did something). Then adopt yourself:
-   `puppet adopt <your name> --role master --window <tokens>`, with the window your status line
+   `puppet adopt <your name> --role master --window <tokens>` (add `--self-compact` once the user said yes in step 2), with the window your status line
    shows, so your own `measure` works.
 5. Run `puppet list` and show the user the inventory: each session's model and effort (`fresh` before
    its first turn), yours included. Read it from the helper only (rule 13).
 6. Run `puppet logs LOGS`. It prints the logs folder and, when there is one, the newest report of
    an earlier day without a `Reviewed:` line at its end: offer to review that report first (see
    Wrap-up). Your day's first status names everything from earlier days that still waits on the user
-   (a pick, an approval, a review), so they never have to ask for yesterday's open items.
+   (a pick, an approval, a review), so they never have to ask for yesterday's open items; on a new
+   page, one line at most, with the earlier set's page path.
 7. Open the live task page. It is one page per work set, not per day. The user, 2026-11-23: "this
    reports holds as long as we continnue each day same work list, new comes only when we start new
-   set of work". When the day goes on with the same work set, keep the page you had; start a new
-   one only for a new set of work: copy the template folder `skills/puppet-master/templates/task-page/`
-   to a folder outside every checkout, fill `tasks.js` (its comment names every field), and give the
-   user its full path. The page lists every task, from the start or added later, with their count;
+   set of work". Unless the user already said which, ask once at start, in the same question as step 2
+   or right after it: open a new page (ids from T1 and A1; the earlier set goes into the Previous work
+   sets list in the sidebar, with the path to its page), or continue the last page. The user,
+   2026-11-27: "lets make it ask at start if to open new or continue old/last, if not said
+   explicitly on start". To continue, keep the page you had; for a new page, copy the template folder
+   `skills/puppet-master/templates/task-page/` to a folder outside every checkout, fill `tasks.js`
+   (its comment names every field), and give the user its full path. The page lists every task, from the start or added later, with their count;
    each with its state and its session. It holds the sessions list (each session in your care: its
    name, role, job, state and measured context), and for each open task, what it needs from the
    user: each ask as its own record in `asks[]`, with its id, its task and the data to decide on.
@@ -119,6 +123,31 @@ do "A stand-in master" below.
    Collapse all / Expand all sits in the heading of each list with several foldable parts; the Jira
    tab is one card per epic (the epic id large, backend first, "x of y landed" largest, the review
    verdict, the check time, and an event log from `log[]` of each repo line), with no commit id on it.
+
+   What you keep true at every page update (the user, 2026-11-23: "lets add also interactive report
+   (updating each time something changes) during puppet-master wroking so i can read where are each
+   of our initial or add later (and how many) tasks"):
+
+   - Epics and Jira: run `sync-epics.mjs` in the same step as any change to an epic, its PRs,
+     branches, reviews, stamps or Jira issues (the user, 2026-11-27: "it must be refreshed anytime
+     something related to them changes"), not only before a status. A new epic in play gets its row at
+     once.
+   - Rows: each row marked running names the session or process doing it now; with none, set it done
+     or waiting. A waiting-for-you row always carries an open ask the user can answer on the page; if
+     the user answers "wait", keep the ask open with the answer noted, or set the row queued and say
+     when it returns. When a worker's `FINAL:` lands, close its row and any master row that only
+     waited on it.
+   - Reports: look in each running job's folder. A preview page, screenshot set or draft report that
+     exists goes onto that task's `reports` at once, labelled draft or preview, with a line saying it
+     can be opened, not at `FINAL:`. Never answer "do you have X?" with a link the page does not show
+     yet. A design task's row carries the working design file as its first report; a worker that
+     makes or seeds one adds it to the row in the same turn.
+   - Asks: every ask carries, in its facts, everything the user needs to decide: what was checked and
+     how, each item on its own line, what each option does and what is left out. Small information
+     goes in the ask's facts, not in a separate page. Your chat text is not where the user reads it.
+   - Side questions: every user message gets a text reply. A side question is answered in the opening
+     lines, before any relay or status, and never together with a question on another topic. Log it
+     in Side questions in the same turn. Its id is S1, S2, ... per page, never reused within the page.
 
 ## A stand-in master
 

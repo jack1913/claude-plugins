@@ -223,11 +223,14 @@ test("the brief carries the browser and credential rules and the user's decided 
   assert.match(section(readSkill(), "Briefs"), /`\{\{decided\}\}`/);
 });
 
-test("the master offers its own /compact line once at 50% of its window, unprompted (carcare P-20261102-8)", () => {
-  const skill = readSkill();
+test("the master compacts itself at 40% of its window at a task boundary, unprompted, and never hands the user its own /compact line (T68, replaces carcare P-20261102-8)", () => {
   const rule10 = rule(10);
-  assert.match(rule10, /once,\s+unprompted/);
-  assert.match(rule10, /cannot\s+compact\s+yourself/);
+  assert.match(rule10, /Measure\s+yourself[^.]*at\s+every\s+task-page\s+update/);
+  assert.match(rule10, /compact\s+yourself\s+at\s+the\s+next\s+task\s+boundary\s+without\s+being\s+asked/);
+  assert.match(rule10, /Never\s+hand\s+the\s+user\s+a\s+`\/compact`\s+line\s+for\s+yourself/);
+  assert.doesNotMatch(rule10, /cannot\s+compact\s+yourself|once,\s+unprompted/);
+  assert.match(rule10, /`mod off`,\s+adopt\s+yourself\s+again\s+with\s+`--self-compact`\s+after\s+the\s+user's\s+yes/);
+  assert.match(read("references/on-start.md"), /`puppet adopt <your name> --role master --window <tokens>` \(add `--self-compact` once the user said yes in step 2\)/);
 });
 
 test("several masters on one machine run with --group, and proposal ids carry the group (carcare P-20261102-7)", () => {
@@ -435,8 +438,7 @@ test("compaction lines of 2026-11-12: 30% while working, measure on each relay a
   assert.match(rule8, /300,000,\s+400,000\s+and\s+500,000\s+tokens/);
   const rule10 = rule(10);
   assert.match(rule10, /40%\s+or\s+more/);
-  assert.match(rule10, /next\s+20%/);
-  assert.doesNotMatch(rule10, /next\s+25%/);
+  assert.doesNotMatch(rule10, /next\s+2[05]%/); // T68: no repeated /compact line, so no "again after the next 20%"
   assert.match(section(skill, "When a job ends"), /At\s+each\s+`FINAL:`,\s+`measure`\s+the\s+worker/);
 });
 
@@ -451,7 +453,7 @@ test("questions and answers of 2026-11-12: a design pass, never the master's cal
   assert.match(relay, /Housekeeping\s+\(compaction,\s+scope,\s+temp\s+folders\)\s+is\s+the\s+only\s+call\s+you\s+make\s+alone/);
   assert.match(relay, /name\s+the\s+topic\s+you\s+read\s+it\s+against/);
   assert.match(relay, /short\s+id\s+\(A1,\s+A2\)/);
-  assert.match(relay, /"A2 is still open"/);
+  assert.doesNotMatch(relay, /"A2 is still open"/); // T68 (A141): no "still open" lines in chat
   assert.match(relay, /Act\s+on\s+every\s+instruction\s+in\s+the\s+user's\s+turn\s+before\s+you\s+reply/);
   assert.match(relay, /A\s+"go"\s+starts\s+the\s+job\s+in\s+the\s+same\s+turn/);
   assert.match(relay, /A\s+conditional\s+\("if you have free workers"\)\s+starts\s+the\s+second\s+job,\s+or\s+says\s+why\s+not/);
@@ -465,7 +467,7 @@ test("the live task page: one per work set, sessions list included, every ask in
   assert.match(relay, /An\s+ask\s+that\s+comes\s+back\s+keeps\s+its\s+id/);
   assert.match(relay, /"you forgot to assign identifiers for your questions"/);
   assert.match(relay, /\*\*The live task page\.\*\*/);
-  assert.match(relay, /update\s+it\s+in\s+the\s+same\s+turn\s+as\s+every\s+change/);
+  assert.match(relay, /update\s+its\s+data\s+\(`tasks\.js`\)\s+yourself\s+in\s+the\s+same\s+turn\s+as\s+every\s+change/);
   assert.match(relay, /"for master status page, you must keep\s+updating sessions list same as other elements"/);
   assert.match(relay, /"if you need anything\s+for working tasks it must go into thirs opened\/not done tasks items"/);
   assert.match(relay, /with\s+its\s+id\s+and\s+the\s+data\s+to\s+decide\s+on/);
@@ -482,19 +484,20 @@ test("steps the worker cannot run become `!` lines up front, and the worker wait
   const skill = readSkill();
   const relay = relayText();
   assert.match(relay, /`!`\s+line\s+for\s+the\s+worker's\s+window\s+before\s+the\s+job\s+starts/);
-  assert.match(relay, /classifier\s+refuses/);
-  assert.match(relay, /approval\s+question\s+itself/);
+  assert.match(relay, /classifier\s+can\s+refuse/); // T68: "refuses outright" was softened once the session runs an approved external write (A143)
+  assert.match(relay, /Put\s+the\s+exact\s+text\s+and\s+command\s+in\s+the\s+ask's\s+facts/); // T68 (A143): replaces "its exact line in the approval question itself"
   assert.match(relay, /`SendMessage`\s+the\s+worker\s+with\s+`notify_when_idle`,\s+and\s+tell\s+the\s+user\s+when\s+it\s+moves\s+on/);
   assert.match(section(skill, "Briefs"), /`!`\s+line\s+for\s+the\s+worker's\s+window/);
   assert.match(read("worker-brief.md"), /ready for the user's ! line/);
 });
 
-test("rule 10: the master compacts itself through the mod once its turn ends, and says it is untested in a window", () => {
-  const skill = readSkill();
+test("rule 10: the master compacts itself through the mod once its turn ends, and tells the user when no drop shows (T68)", () => {
   const rule10 = rule(10);
   assert.match(rule10, /`puppet compact <your name> <focus>`/);
-  assert.match(rule10, /not\s+yet\s+tested\s+in\s+a\s+window/);
-  assert.match(rule10, /give\s+the\s+line/);
+  assert.doesNotMatch(rule10, /not\s+yet\s+tested\s+in\s+a\s+window/);
+  assert.match(rule10, /If\s+the\s+user\s+declined\s+self-compaction,\s+say\s+your\s+size\s+once/);
+  assert.match(rule10, /never\s+hand\s+the\s+user\s+a\s+`\/compact`\s+line\s+for\s+yourself/i);
+  assert.match(rule10, /If\s+`measure`\s+shows\s+no\s+drop\s+at\s+your\s+next\s+turn,\s+tell\s+the\s+user\s+in\s+one\s+line\s+that\s+your\s+compaction\s+did\s+not\s+run/);
 });
 
 test("rule 9 names the cheaper route, and the helper table lists compact, clear, --self-compact and the mod column", () => {
@@ -543,7 +546,9 @@ test("all questions come to the master's window: workers never use AskUserQuesti
   const brief = read("worker-brief.md");
   assert.match(brief, /Never use AskUserQuestion in your own window/);
   assert.match(brief, /Questions go to the master, never to the user/);
-  assert.match(brief, /accept-edits/);
+  // T68 (A142): the brief no longer says the user sets the window to accept-edits; the worker reports an ordinary edit that prompts.
+  assert.doesNotMatch(brief, /accept-edits/);
+  assert.match(brief, /Ordinary edits need no\s+approval from you; if one still prompts, tell the master/);
   // the approved-up-front irreversible steps: the first line to the master names the window that waits (P-4)
   assert.match(brief, /first action, before any work, is one line to \{\{master_name\}\}: "waiting for the owner's approval\s+in my window: <the list>"/);
   assert.match(section(skill, "Briefs"), /`\{\{approvals\}\}`: the irreversible steps/);
@@ -612,7 +617,7 @@ test("on start the master reads each window's model and effort before it plans r
 test("the master runs list before each reply and leads with a waiting worker (carcare P-20261103-12)", () => {
   const relay = relayText();
   assert.match(relay, /Each time you\s+reply to the user, run `puppet list` first/);
-  assert.match(relay, /Any session whose state is `waiting` leads your reply/);
+  assert.match(relay, /A session whose state is `waiting` is announced once,\s+when you find it \(its window, what it waits for\), and goes on the page as an ask/);
 });
 
 test("a deploy or merge approval lists what it leaves out; an old quote goes in with its date; the first status names old open items (carcare P-20261103-14, -15, -16)", () => {
@@ -909,30 +914,39 @@ test("a refused command is explained to the user at once, by the kind of rule, n
   assert.match(section(read("SKILL.md"), "Red flags"), /"A worker's command was denied, I'll find out why" →/);
 });
 
-test("an external write the user approves is the user's ! line from the start, never a relayed go (brainiac P-20261112-8, item 3)", () => {
-  const ap = read("references/approvals.md");
-  assert.match(ap, /planned as the user's `!` line for the worker's window from the start/);
-  assert.match(ap, /does not take a relayed message as the user's approval/);
-  assert.match(section(readSkill(), "Briefs"), /An external write \(a Jira create or transition, `gh pr ready`\) is always a `!` line/);
+// T68 (A143, the user, 2026-11-27: "The session runs it after the user has confirmed texts and applying/publishing"):
+// this replaces "always the user's ! line from the start" (brainiac P-20261112-8, item 3).
+test("an external write the user approved is run by the session after the user confirmed the text and the apply on the page; a ! line only when the permission check refuses it (A143)", () => {
+  const flat = (t) => t.replace(/\s+/g, " ");
+  const ap = flat(read("references/approvals.md"));
+  assert.match(ap, /An external write the user approves \(a Jira create or transition, a PR comment, `gh pr ready`, a release page, a publish; a push is a session's, above\) is run by the session after the user confirmed both the text and the apply or publish on the task page/);
+  assert.match(ap, /"The session runs it after the user has confirmed texts and applying\/publishing"/);
+  assert.match(ap, /The classifier does not take a relayed message as the user's approval, so when it refuses the run, give the user its exact `!` line then/);
+  assert.doesNotMatch(ap, /planned as the user's `!` line for the worker's window from the start/);
+  const briefs = flat(section(readSkill(), "Briefs"));
+  assert.match(briefs, /An external write the user approved \(a Jira create or transition, a PR comment, `gh pr ready`, a release page, a publish\) is run by the session after the user confirmed both its text and the apply or publish on the task page, marked so here; you give a `!` line only when the permission check refuses it/);
+  assert.doesNotMatch(briefs, /is always a `!` line/);
 });
 
 // brainiac-pipeline P-20261117-14, narrowing P-20261117-1 for git actions (F-4, F-5, F-28).
 test("an approved git action is run by the master, with a `!` line only on refusal (brainiac-pipeline P-20261117-14)", () => {
   const r1 = rule(1);
-  assert.match(r1, /A commit, push or other git action a worker brings you is\s+one question to the user; on yes, run it yourself in your own window/);
+  // T68 (the user, 2026-11-27, orchestrate-only): a session runs it; the master only when no session can.
+  assert.match(r1, /A commit, push or other git action a worker brings you is\s+one question to the user; on yes, a session runs it/);
   assert.match(r1, /the hash, the\s+pushed range and an `ls-remote` check/);
-  assert.match(r1, /A `!` line for it only if your own run is refused/);
-  assert.match(rule(2), /or said yes to a worker's git action \(rule 1\)/);
+  assert.match(r1, /only when no session can, run it\s+yourself in your own window/);
+  assert.match(r1, /A `!` line for it only if the run is refused/);
+  assert.match(rule(2), /every\s+job \(a release, a CI watch, a change to the page's code or template, a commit\) goes to a session/);
   const ap = read("references/approvals.md");
   assert.match(ap, /\*\*A commit, push or other git action a worker brings\*\*/);
-  assert.match(ap, /Only when your own run is refused, give the user its `!` line/);
+  assert.match(ap, /Only when the run is refused, give the user its `!` line/);
   assert.match(ap, /no need to show me\s+manual commands if you can do it/);
   assert.doesNotMatch(ap, /`gh pr ready`, a push\)/);
   const relay = section(read("SKILL.md"), "Relay protocol");
-  assert.match(relay, /A push or other git action is\s+yours to run on the user's yes \(rule 1\)/);
+  assert.match(relay, /A push or other git action\s+goes to a session on the user's yes \(rule 1\)/);
   assert.doesNotMatch(relay, /irreversible one \(a delete, a push, a Railway write\)/);
   assert.match(section(read("SKILL.md"), "Red flags"), /"The user said yes to the worker's push, here is the `!` line" →/);
-  assert.match(section(readSkill(), "Briefs"), /A commit, push or other git action is yours to run on the user's yes \(rule 1\)/);
+  assert.match(section(readSkill(), "Briefs"), /A commit, push or other git action goes to a session on the user's yes\s+\(rule 1\)/);
   assert.match(read("worker-brief.md"), /send the master `ready for the master: <commands>`/);
 });
 
@@ -972,7 +986,7 @@ test("the 2026-11-24 text proposals are in the file for their moment (P-20261124
   // P-11: rule 11 names the plugin-update calls, with the user's quote
   assert.match(rule(11).replace(/\s+/g, " "), /`claude plugin marketplace update <name>` and `claude plugin update <plugin>@<name>`[\s\S]*The user, 2026-11-24: "Yes, add to rule 11 \(Recommended\)"/);
   // P-8 was rejected by the user: SKILL.md still lists a Railway write among the worker's irreversible steps
-  assert.match(skill, /\(a delete, a Railway write\), ask the user's decision here first/);
+  assert.match(ref("approvals.md"), /\(a delete, a Railway write\), ask the user's decision\s+here first/);
 });
 
 // --- the live task page template and the HTML-only reports rule (2026-11-24, A45) ---
@@ -993,7 +1007,9 @@ test("the live task page ships as a template: the layout in SKILL.md, the detail
 test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar, asks as records, pending report and its seen line (T28, T29, A62, A64)", () => {
   const bullet = read("SKILL.md").replace(/\s+/g, " ");
   assert.match(bullet, /\*\*The live task page\.\*\*[\s\S]*four tabs, Questions \(open asks, grouped by task\), Tasks \(one row each, grouped, done ones under the Done filter\), Epics and Jira \(epics, PRs, Jira status, read times\) and Side questions \(the user's side questions to you\), a sidebar with every status filter and its count, each session's whole record and the previous work sets, and a side panel for report pages whose width the user drags/);
-  assert.match(bullet, /and `sync-epics\.mjs` before a status that names an epic/);
+  // T68 (A139): the Epics and Jira section is refreshed in the same step as any change to an epic, not only before a status
+  assert.match(bullet, /and `sync-epics\.mjs` in the same step as any change to an epic, its PRs, branches, reviews, stamps or Jira issues, not only before a status/);
+  assert.doesNotMatch(bullet, /`sync-epics\.mjs` before a status that names an epic/);
   assert.match(bullet, /goes onto the page as an ask of that open task \(a record in `asks\[\]` of `tasks\.js`, shown in Questions and on the task's item\), with its id and the data to decide on/);
   const step7 = read("references/on-start.md").replace(/\s+/g, " ");
   assert.match(step7, /"questions\/tasks\/jira tasks should be 3 separate tabs, previouse work status pages go to sidebar"/);
@@ -1086,4 +1102,116 @@ test("the master runs sync-epics with --jira only when the user names a command,
   assert.match(start, /If that port is held by another program, the server takes the next free one \(up to 9 more\): give the user the `url` in `<mod folder>\/board-live\/<your session id>\.json`, not the port you wrote/);
   const setup = flat(read("references/setup-prerequisites.md"));
   assert.match(setup, /use `PUPPET_CLAUDE_BIN` first; on Windows then `claude\.exe` on the `PATH`, then the program an npm `claude\.cmd` shim runs/);
+});
+
+// --- T68: the rules the T62b re-analysis moved from the user's notes into the plugin (A138-A143, orchestrate-only) ---
+
+test("at start the master asks once whether to open a new task page or continue the last one, unless the user said (A138)", () => {
+  const flat = (text) => text.replace(/\s+/g, " ");
+  const step7 = flat(read("references/on-start.md"));
+  assert.match(step7, /Unless the user already said which, ask once at start, in the same question as step 2 or right after it: open a new page \(ids from T1 and A1; the earlier set goes into the Previous work sets list in the sidebar, with the path to its page\), or continue the last page/);
+  assert.match(step7, /"lets make it ask at start if to open new or continue old\/last, if not said explicitly on start"/);
+  assert.match(step7, /To continue, keep the page you had; for a new page, copy the template folder/);
+  assert.match(step7, /on a new page, one line at most, with the earlier set's page path/);
+  const page = flat(fs.readFileSync(path.join(SKILL_DIR, "templates", "task-page", "tasks.js"), "utf8").replace(/^\/\/ ?/gm, ""));
+  assert.match(page, /At start the master asks once, unless the user said which: a new page \(ids from T1 and A1; the earlier set goes into `previous`\) or the last page continued/);
+  assert.doesNotMatch(page, /it carries over days until a new set of work starts/);
+});
+
+test("the Epics and Jira section is refreshed in the same step as any change that touches it (A139)", () => {
+  const step7 = read("references/on-start.md").replace(/\s+/g, " ");
+  assert.match(step7, /run `sync-epics\.mjs` in the same step as any change to an epic, its PRs, branches, reviews, stamps or Jira issues \(the user, 2026-11-27: "it must be refreshed anytime something related to them changes"\), not only before a status\. A new epic in play gets its row at once/);
+});
+
+test("side-question ids are S1, S2 per page (A140), and every message gets a text reply with a side question answered first (T62b)", () => {
+  const step7 = read("references/on-start.md").replace(/\s+/g, " ");
+  assert.match(step7, /Its id is S1, S2, \.\.\. per page, never reused within the page/);
+  assert.match(step7, /every user message gets a text reply\. A side question is answered in the opening lines, before any relay or status, and never together with a question on another topic\. Log it in Side questions in the same turn/);
+  const page = fs.readFileSync(path.join(SKILL_DIR, "templates", "task-page", "tasks.js"), "utf8");
+  assert.match(page, /"S1", "S2", \.\.\. never reused within the work set/);
+});
+
+test("no restated questions and no 'still open' lines in chat; one pointer line after a real gap; a stuck worker is announced once and put on the page (A141)", () => {
+  const relay = section(read("SKILL.md"), "Relay protocol").replace(/\s+/g, " ");
+  assert.match(relay, /Never restate a question or write "still open" lines: the page header and the Questions tab are the reminder\./);
+  assert.match(relay, /After a real gap, one short pointer line \("A2 is open on the page"\) is allowed once\./);
+  assert.match(relay, /A reply that waits on the user carries that one item only; the rest queues on the page\./);
+  assert.match(relay, /A decision that blocks a session goes onto the page as an ask at once, its id named once in chat, never held until they ask for status\. Other work goes on meanwhile\./);
+  assert.doesNotMatch(relay, /AskUserQuestion\)/);
+});
+
+test("accept-edits is asked only for a worker window outside auto mode, or when a worker reports an ordinary edit prompting; the helper and the mod read no permission mode (A142)", () => {
+  const relay = section(read("SKILL.md"), "Relay protocol").replace(/\s+/g, " ");
+  assert.match(relay, /Do not ask the user to set accept-edits at a brief: a window in auto mode needs none, and the helper and the mod cannot read a session's permission mode\. Ask once, for that window only, when the user says it is not in auto mode or its worker reports that an ordinary edit prompts\./);
+  const briefs = section(readSkill(), "Briefs").replace(/\s+/g, " ");
+  assert.match(briefs, /a window in auto mode needs no accept-edits, and a worker whose ordinary edit still prompts reports it to you/);
+  assert.doesNotMatch(briefs, /sets the worker's window to accept-edits once/);
+  // The premise, checked in this job: no script or mod text reads a permission mode.
+  for (const file of [path.join(SKILL_DIR, "scripts", "puppet.mjs"), path.join(PLUGIN_DIR, "hooks", "puppet-mod.js")]) {
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /permissionMode|permission_mode|acceptEdits/, `${path.basename(file)} now reads a permission mode: A142's rule can say how it is known`);
+  }
+});
+
+test("the master orchestrates: every job goes to a session, and it never runs a long wait in its own turn (the user, 2026-11-27)", () => {
+  const rule2 = rule(2).replace(/\s+/g, " ");
+  assert.match(rule2, /You orchestrate: every job \(a release, a CI watch, a change to the page's code or template, a commit\) goes to a session; you work yourself only when the user tells you to or no session can, and never run a long wait \(a push's test lane, a CI watch\) in your own turn, so the user's answers from the page are handled at once\./);
+  assert.match(rule2, /"only orchestrate all of it and only do something when slaves cannot do it"/);
+  // The page's code goes to a session; its data (tasks.js) stays the master's own, updated in the same turn as each change.
+  const bullet = read("SKILL.md").replace(/\s+/g, " ");
+  assert.match(bullet, /\*\*The live task page\.\*\* Keep one page per work set \(`references\/on-start\.md`, step 7\) and update its data \(`tasks\.js`\) yourself in the same turn as every change \(its code goes to a session\): a task/);
+  const ap = read("references/approvals.md").replace(/\s+/g, " ");
+  assert.match(ap, /\*\*After a push:\*\* a session finds the CI run for the pushed commit and watches it in the background until it ends; you never run that wait in your own turn\. Never report a push as passing from local checks alone\./);
+  assert.match(ap, /"Pushed" is not "landed"\./);
+});
+
+test("task-page rows stay true at every update: no stale running or waiting rows, reports linked at once, asks carry their facts (T62b)", () => {
+  const step7 = read("references/on-start.md").replace(/\s+/g, " ");
+  assert.match(step7, /each row marked running names the session or process doing it now; with none, set it done or waiting\. A waiting-for-you row always carries an open ask the user can answer on the page; if the user answers "wait", keep the ask open with the answer noted, or set the row queued and say when it returns\. When a worker's `FINAL:` lands, close its row and any master row that only waited on it/);
+  assert.match(step7, /A preview page, screenshot set or draft report that exists goes onto that task's `reports` at once, labelled draft or preview, with a line saying it can be opened, not at `FINAL:`\. Never answer "do you have X\?" with a link the page does not show yet\./);
+  assert.match(step7, /A design task's row carries the working design file as its first report; a worker that makes or seeds one adds it to the row in the same turn\./);
+  assert.match(step7, /every ask carries, in its facts, everything the user needs to decide: what was checked and how, each item on its own line, what each option does and what is left out\. Small information goes in the ask's facts, not in a separate page\. Your chat text is not where the user reads it\./);
+  assert.match(flatBriefs(), /A design task's brief says that the working design file is the task row's first report/);
+});
+
+function flatBriefs() {
+  return read("references/briefs.md").replace(/\s+/g, " ");
+}
+
+test("briefs and worker rules of T62b: standing yeses with withdrawals, HTML render of a brief, report layout, fetch before a state claim (briefs.md)", () => {
+  const briefs = flatBriefs();
+  assert.match(briefs, /Record each standing yes, and each withdrawn one, with the user's quote and date\. Before asking for a permission or a `!` line, check the record: act on a standing case and name it in the brief; ask each time for a withdrawn one\./);
+  assert.match(briefs, /A brief or draft the user is meant to read is linked on the task page as an HTML render of it; the worker still reads the Markdown file\./);
+  assert.match(briefs, /Report tables: the prose column gets the width; code paths and `file:line` go on their own small line under the item \(or wrap\), never in a wide unbreakable column; prefer one card per finding to a many-column table, because the side panel starts narrow and the user drags it wider; set no max-width on the page content\./);
+  assert.match(briefs, /Before a claim about a repository's or epic's state read from a reference checkout, a worker fetches and compares it with the remote; the brief says so\./);
+});
+
+test("the worker brief: unfiltered test claims, read-only verification, real exit codes (T62b)", () => {
+  const brief = read("worker-brief.md").replace(/\s+/g, " ");
+  assert.match(brief, /A claim that tests pass names every test project that ran, with no filter\. A filtered run is for iterating and backs no pass line\. A failure that predates the change is reported with its evidence, and the user decides\./);
+  assert.match(brief, /Verification is read-only\. Before any verification step that writes to a live target, ask the master and name the exact writes; tests on fixtures are the proof\./);
+  assert.match(brief, /Capture a command's real exit code \(send its output to a log, then read the exit status of that command on its own\) and cite it\. Never judge a gate by a pipe through `tail` or `grep`: the pipeline reports the last command's code\./);
+});
+
+test("approvals and jobs of T62b: permission rules checked at a job's start, read-only verification, cleanup lines, follow-up tier, proxy backend, 'like X' dimensions", () => {
+  const ap = read("references/approvals.md").replace(/\s+/g, " ");
+  assert.match(ap, /\*\*At a job's start,\*\* check that the user's permission rules already cover the commands the job will run, and tell the user which ones they would need to allow; an answer in chat changes no permission state\./);
+  assert.match(ap, /\*\*Verification is read-only\.\*\* Before any verification step that writes to a live target, ask the user and name the exact writes; tests on fixtures are the proof\. If a live run is wanted, use the least-coupled target\./);
+  assert.match(ap, /\*\*Before you hand the user any cleanup line,\*\* read its target list\. Include only what Claude Code, a plugin, a skill, an MCP server or a session's script made; leave system, vendor and user files out, however large or old\./);
+  const jobs = read("references/jobs.md").replace(/\s+/g, " ");
+  assert.match(jobs, /A follow-up message to a working session is a new part of its job: choose its tier before sending, and switch while the session is idle\./);
+  assert.match(jobs, /A window running on a proxy backend is adopted again as a worker and is not switched: `switch` would send a Claude model and override the backend\. Give it mechanical jobs\./);
+  assert.match(jobs, /When the user says "like X", list which dimensions of X carry over and let the user correct the list\./);
+});
+
+test("the plugin's rule text carries no path, drive letter, OS, time zone, product or user name in the T68 sentences", () => {
+  // The T68 sentences were written in neutral wording; this pins the new rule blocks against the names the user's notes held.
+  const blocks = [
+    section(read("references/on-start.md"), "On start").split("What you keep true at every page update")[1],
+    read("references/approvals.md").split("- **After a push:**")[1],
+  ];
+  for (const block of blocks) {
+    assert.ok(block && block.length > 200, "a T68 block is missing");
+    assert.doesNotMatch(block, /[A-Za-z]:[\\/]|\/Users\/|\/home\//);
+    assert.doesNotMatch(block, /\b(brainiac|inEwi|carcare|Krzysztof|krzysiek)\b/i);
+  }
 });

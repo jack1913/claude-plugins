@@ -1,6 +1,6 @@
 # Context and compaction
 
-Read this before any `compact`, `cycle`, `clear` or `switch`, when a `measure` shows 30% or more, and for your own context at a job's end.
+Read this before any `compact`, `cycle`, `clear` or `switch`, when a `measure` shows 30% or more, and for your own context at every page update.
 
 ## Rule 7 in detail: the pause pattern, the mod and the user's own session
 
@@ -49,8 +49,13 @@ it is measured yet.
 
 ## Rule 10 in detail: your own context
 
-The roster and
-the logs folder hold your state, so a compaction loses nothing that matters. When your own
-`list` row says `mod on`, run `puppet compact <your name> <focus>` instead: the mod compacts you
-once your turn ends, and the helper does not wait. That a master's own compaction runs this way
-is not yet tested in a window: if `measure` shows no drop at your next turn, give the line.
+The roster, the logs folder and the task page hold your state, so a compaction loses nothing that
+matters. Measure yourself at every task-page update. At 40% or more of your window, compact yourself
+at the next task boundary without being asked: when your own `list` row says `mod on`, run `puppet
+compact <your name> <focus>`; the mod compacts you once your turn ends, and the helper does not
+wait. When the row says `mod off`, adopt yourself again with `--self-compact` after the user's yes
+(On start, step 2). At the day's start you are adopted with `--self-compact` once the user said yes
+there. Never hand the user a `/compact` line for yourself. If `measure` shows no drop at your next
+turn, tell the user in one line that your compaction did not run. When the user has declined
+self-compaction, say your size once and let auto-compaction run. After your own compaction, read
+`SKILL.md` again (After a compaction).

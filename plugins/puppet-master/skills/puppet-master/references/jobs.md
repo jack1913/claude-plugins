@@ -101,7 +101,11 @@ both commit needed your relay of "git is free" (2026-11-03).
   worker's word: a worker's own report of its effort is unreliable.
 - On a machine that uses a proxy launcher (such as use-llm), the transcript shows the Claude
   model name, and the real backend shows only in the launcher's command line. Check it there,
-  and never read the launcher's config.
+  and never read the launcher's config. A window running on a proxy backend is adopted again as a
+  worker and is not switched: `switch` would send a Claude model and override the backend. Give it
+  mechanical jobs.
+- A follow-up message to a working session is a new part of its job: choose its tier before
+  sending, and switch while the session is idle.
 
 ## A design to relay
 
@@ -114,7 +118,8 @@ both commit needed your relay of "git is free" (2026-11-03).
   first gets a design pass: a read-only `creative` job for a session, brainstorming, plus context7
   where a library is involved. Show the user its short summary, then ask one question at a time.
   Put a worker's recommendation to the user as the worker's, next to the simplest change that
-  would also work, never as your own.
+  would also work, never as your own. When the user says "like X", list which dimensions of X
+  carry over and let the user correct the list.
 
 ## Chained jobs
 

@@ -3,7 +3,8 @@
 // tasks by group (A to Z, no group last), then by id, lowest first; asks by task, then by id; side questions newest first.
 // Every time in this file is the local time of the machine the master runs on; a time is never UTC unless it says Z.
 // The data shape (all fields are plain strings unless noted):
-//   workSet     one line naming the work set (it carries over days until a new set of work starts)
+//   workSet     one line naming the work set. At start the master asks once, unless the user said which: a new page (ids
+//               from T1 and A1; the earlier set goes into `previous`) or the last page continued (same ids, `days` grows)
 //   days        array of the days this set has run, "YYYY-MM-DD"
 //   updated     "YYYY-MM-DD HH:MM" (sync-sessions.mjs rewrites it)
 //   waitingNow  one line under the header, on every tab: what waits for the user now, or a note such as a stand-in

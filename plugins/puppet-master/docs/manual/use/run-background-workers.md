@@ -73,24 +73,29 @@ there, it starts a background worker instead, on the model and effort the job's 
 - One session edits one repository at a time, unless both jobs name the folders they write, the folders don't
   overlap, and only one of them runs git. Otherwise, for a second job in the same repository, use a second clone.
 - When a session has a question, Claude asks you, one at a time, quoting your own words back before its reading of them.
-  The sessions send their questions to the master's window, never to you in their own. Set each worker's window to
-  accept-edits once, when its job starts. Only an irreversible step (a delete or a write to Railway) still shows a
-  permission prompt in the worker's own window, and Claude tells you which window and what it waits for.
-  - A commit, push or other git step a worker reaches comes to you as one question. When you say yes, Claude runs it
-    itself in its own window and tells you the commit, what reached the remote and how it checked. You get a `!` line
-    only if Claude's own run is refused.
+  The sessions send their questions to the master's window, never to you in their own. A window in auto mode needs
+  no setting. Claude can't read a session's permission mode, so it asks you to set a worker's window to accept-edits
+  only when you say that window is not in auto mode, or when the worker reports that an ordinary edit prompts. Only
+  an irreversible step (a delete or a write to Railway) still shows a permission prompt in the worker's own window,
+  and Claude tells you which window and what it waits for.
+  - A commit, push or other git step a worker reaches comes to you as one question. When you say yes, a session runs
+    it, or Claude runs it in its own window when no session can, and Claude tells you the commit, what reached the
+    remote and how it checked. You get a `!` line only if the run is refused. After a push, a session watches the CI
+    run for the pushed commit until it ends.
   - A step the worker's permission check will probably refuse (discarding a change, `rm -rf`) reaches you before the
-    job starts, as a `!` line to type in the worker's window, with the reason. In auto mode nothing prompts for an
-    outside write, so when you approve one, the question includes its `!` line. The worker waits for you at
-    that step, and Claude tells you when it moves on.
+    job starts, as a `!` line to type in the worker's window, with the reason. A write you approve in an outside
+    service (a Jira change, a PR comment, a release page) is run by a session once you confirmed both its text and
+    the apply or publish on the task page; Claude gives you a `!` line only if the permission check refuses it. The
+    worker waits for you at a step that is yours, and Claude tells you when it moves on.
   - A worker's design recommendation first gets a read-only design pass by a session. Claude shows you its short
     summary, then asks one question at a time, and puts the worker's recommendation as the worker's, next to the
     simplest change that would also work.
   - A worker's question always comes to you, even when Claude thinks your earlier answers settle it, with its
     recommendation and why. Only housekeeping (compaction, scope, temp folders) is Claude's own call.
   - When a short answer such as "a" or "later" could fit more than one open question, Claude names the one it read
-    it against and checks before passing it on. Each open question gets an id (A1, A2), and later messages say "A2 is
-    still open" instead of asking it again.
+    it against and checks before passing it on. Each open question gets an id (A1, A2) and is an ask on the page that
+    Claude names once in chat; it never restates the question or writes "still open" lines, because the page header and
+    the Questions tab are the reminder. After a real gap, one short line ("A2 is open on the page") is allowed.
   - Every question and every action Claude asks of you carries its id, in chat and on the live task page. Whatever a
     task needs from you goes onto the page as an ask of that task, a record shown in full on the Questions tab and on the
     task's item, with the text or evidence to decide on, never only in chat. You can answer on the page: pick an
@@ -126,7 +131,9 @@ Claude measures each session's context, and compacts only between tasks:
 - A busy session at 30% or more is asked to pause at its next part boundary first. Claude waits until the session
   is idle, then compacts it with a focus naming the job and the next part, and tells it to continue. A worker also
   pauses and says so on its own once it passes about 150k tokens.
-- Claude's own window gets a `/compact` line from Claude at 40% or more, and again after each further 20%.
+- Claude measures its own window at every task-page update. At 40% or more it compacts itself at the next task
+  boundary, through its own mod, and never hands you a `/compact` line for itself. Where its mod is off it asks
+  you once to switch it on; if you declined self-compaction, it tells you its size once and auto-compaction runs.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
 - Claude gives a session's size in tokens and as a share of a 1,000,000-token window, unless you tell it your
   window is another size.
