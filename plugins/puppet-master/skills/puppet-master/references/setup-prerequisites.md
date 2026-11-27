@@ -26,8 +26,9 @@ Read this when a setting, the mod's needs, a `PUPPET_*` variable or a Windows `c
   loaded, yours included: tell the user to run `/reload-plugins` in it at a task boundary. Typing
   `/puppet-master:puppet-master` again does not refresh it (2026-11-12: it served the old `SKILL.md`
   until `/reload-plugins` ran).
-- The helper runs `claude` without a shell, so on Windows an npm-installed `claude.cmd` shim cannot
-  be launched. Use the native `claude` executable, or set `PUPPET_CLAUDE_BIN` to its full path.
+- The helper and the mod run `claude` without a shell. They use `PUPPET_CLAUDE_BIN` first; on Windows then
+  `claude.exe` on the `PATH`, then the program an npm `claude.cmd` shim runs (read out of the shim); elsewhere
+  `claude`. A shim that names no program is refused: set `PUPPET_CLAUDE_BIN` to its full path.
 - Typing a `claude -p ... "/compact <focus>"` yourself from Git Bash needs `MSYS_NO_PATHCONV=1`, or
   the `/compact` argument is rewritten into a Windows path and runs as an ordinary turn with no
   compaction. `cycle` runs no shell, so it is immune.

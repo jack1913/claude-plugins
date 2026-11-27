@@ -159,7 +159,7 @@
   details.ans summary::before { content:"▸"; color:var(--text-3); font-size:12px; }
   details.ans[open] summary::before { content:"▾"; }
   details.ans summary .r { margin-left:auto; font-size:13px; color:var(--text-3); }
-  .arow { display:grid; grid-template-columns:52px minmax(0,1fr) 84px; gap:0 14px; padding:4px 0 4px 16px; border-top:1px solid var(--line); align-items:baseline; font-size:13.5px; }
+  .arow { display:grid; grid-template-columns:52px 48px minmax(0,1fr) 84px; gap:0 14px; padding:4px 0 4px 16px; border-top:1px solid var(--line); align-items:baseline; font-size:13.5px; }
   .arow .an { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); }
   .arow .at { color:var(--text-3); font-size:12.5px; text-align:right; white-space:nowrap; }
   .arh { display:flex; gap:10px; align-items:baseline; margin-top:12px; padding-bottom:4px; font-size:13.5px; min-width:0; }
@@ -375,6 +375,12 @@
   .opt .recb { margin-left:auto; font-size:12px; font-weight:600; color:var(--done); background:var(--done-bg); border-radius:999px; padding:0 8px; white-space:nowrap; }
   .notes { display:block; width:100%; background:var(--card); border-radius:10px; padding:10px 14px; min-height:64px; margin-top:10px; font:inherit; font-size:13.5px;
            color:var(--text); border:1px solid var(--line); resize:vertical; }
+  .nrow { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+  .nrow .notes { flex:1 1 260px; width:auto; }
+  .nonly { display:flex; gap:8px; align-items:flex-start; margin-top:12px; font-size:13.5px; font-weight:600; cursor:pointer; flex:0 0 auto; max-width:190px; }
+  .nonly input { margin-top:3px; accent-color:var(--accent); }
+  .nonly small { display:block; font-weight:400; color:var(--text-3); font-size:12px; }
+  .nonly-on .opt { opacity:.45; cursor:not-allowed; }
   .notes:focus-visible, .opt:focus-visible, .ask .acts .btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .ask .acts { display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap; }
   .ask .acts .btn { padding:5px 14px; }
@@ -488,7 +494,12 @@
   const linkRefs = text => esc(text).replace(/\b([A-Z][A-Z0-9_]*-\d+)\b|(^|[^\w&])#(\d+)\b/g, (m, key, pre, n) =>
     key ? (REFS.keys[key] ? ext(REFS.keys[key], key) : m) : REFS.prs[n] ? pre + ext(REFS.prs[n], "#" + n) : m);
   // A local path opens as file:///; on a page the board server serves (http) the browser refuses file:// links, so the server's /file/ route carries them
-  const fileUrl = p => /^https?:\/\//.test(p) ? p : (location.protocol === "http:" && location.hostname === "127.0.0.1" ? "/file/" : "file:///") + encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
+  // A Windows path (drive letter first) gets its third slash, a POSIX one (leading slash) already has it: file:///C:/x/r.html and file:///home/u/r.html, never file:////home/u/r.html
+  const fileUrl = p => {
+    if (/^https?:\/\//.test(p)) return p;
+    const q = encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
+    return location.protocol === "http:" && location.hostname === "127.0.0.1" ? "/file/" + q : "file://" + (q.startsWith("/") ? "" : "/") + q;
+  };
   const num = id => Number(String(id).replace(/\D/g, "")) || 0;
   const fmt = n => n.toLocaleString("en-US");
   const SHOWN = 6;                       // lines shown in an expanded task; the rest behind "Show N earlier lines"
@@ -571,9 +582,12 @@
   const typing = () => { const a = document.activeElement; return !!a && a.tagName === "TEXTAREA"; };
   function formHtml(a, g) {
     const d = dget(a.id), opts = optionsOf(a), id = esc(a.id), sent = d.state === "sent", has = !!(d.choice || String(d.notes).trim());
-    let h = `<div class="aform" data-fa="${id}">`
-      + opts.map((o, i) => `<button class="opt${d.choice === o.label ? " sel" : ""}" data-opt="${id}" data-i="${i}"${sent ? " disabled" : ""}><span class="rb"></span><span>${esc(o.label)}</span>${o.rec ? `<span class="recb">recommended</span>` : ""}</button>`).join("")
-      + `<textarea class="notes" data-notes="${id}" rows="3" maxlength="${NOTES_MAX}" aria-label="Notes for ${id}" placeholder="${opts.length ? "Notes (optional): add words for the master…" : "Your answer, in your own words…"}"${sent ? " disabled" : ""}>${esc(d.notes)}</textarea>`;
+    // "Notes only" (the user, 11-27): a question or remark back to the master carries no option, so no picked option contradicts it
+    const nonly = !!(opts.length && d.nonly);
+    let h = `<div class="aform${nonly ? " nonly-on" : ""}" data-fa="${id}">`
+      + opts.map((o, i) => `<button class="opt${d.choice === o.label ? " sel" : ""}" data-opt="${id}" data-i="${i}"${sent || nonly ? " disabled" : ""}><span class="rb"></span><span>${esc(o.label)}</span>${o.rec ? `<span class="recb">recommended</span>` : ""}</button>`).join("")
+      + `<div class="nrow">` + (opts.length ? `<label class="nonly" title="Send only the notes: no option goes with them"><input type="checkbox" data-nonly="${id}"${nonly ? " checked" : ""}${sent ? " disabled" : ""}><span>Notes only<small>a question or remark, no decision</small></span></label>` : "")
+      + `<textarea class="notes" data-notes="${id}" rows="3" maxlength="${NOTES_MAX}" aria-label="Notes for ${id}" placeholder="${nonly ? "Your question or remark for the master…" : opts.length ? "Notes (optional): add words for the master…" : "Your answer, in your own words…"}"${sent ? " disabled" : ""}>${esc(d.notes)}</textarea></div>`;
     const go = canSend();
     if (sent) h += `<div class="acts"><button class="btn" disabled>Copy answer</button><button class="btn" disabled>Sent ✓</button><span class="hint"><a data-edit="${id}">Edit and send again</a></span></div>`;
     else if (g) h += `<div class="acts"><button class="btn" data-skip="${id}"${go ? "" : " disabled"}>Skip</button>`
@@ -689,7 +703,8 @@
     ["pend", "Pending report", "unread"], ["queue", "Queued", "queue"], ["done", "Done", "done"], ["all", "All", ""],
     ["initial", "Initial", ""], ["added", "Added later", ""]];
   // the word under a filter's count in the collapsed rail
-  const RAILW = { open: "open", wait: "for you", run: "running", block: "blocked", pend: "to read", queue: "queued", done: "done", all: "all", initial: "initial", added: "later" };
+  const RAILW = { open: "open", wait: "for you", run: "running", block: "blocked", pend: "to read", queue: "queued", done: "done", all: "all" };
+  const RAIL_SKIP = new Set(["initial", "added"]);
   const TABS = [["questions", "Questions"], ["tasks", "Tasks"], ["jira", "Epics and Jira"], ["side", "Side questions"]];
   // One order everywhere, said on the page (the user, 11-27: "ordering must be strict, i see again T ids messed"):
   // groups A to Z, no group last; tasks and asks by id, lowest first. tasks.js order never counts.
@@ -788,8 +803,9 @@
     const ss = sessions(D);
     const on = f => tab === "tasks" && filter === f;
     // rail (sidebar closed, 88 px): every filter as a count circle and a word, then every session as a dot, its context % and a bar;
-    // each filter switches the Tasks filter (the user, 11-27: "all filters should move to it s collapsed version")
-    document.getElementById("railcounts").innerHTML = M.filters.map(f =>
+    // each filter switches the Tasks filter (the user, 11-27: "all filters should move to it s collapsed version");
+    // the origin filters (initial, added later) stay in the open sidebar only (the user, 11-27: "those filters are pointless on collapsed sidebar")
+    document.getElementById("railcounts").innerHTML = M.filters.filter(f => !RAIL_SKIP.has(f[0])).map(f =>
       `<button class="rc${on(f[0]) ? " on" : ""}" data-go="${esc(f[0])}" title="${esc("Show the " + f[1].toLowerCase() + " tasks")}"><i class="${M.C[f[0]] && f[2] ? "k-" + f[2] : ""}">${M.C[f[0]]}</i>${esc(RAILW[f[0]] || f[1].toLowerCase())}</button>`).join("")
       + `<div class="rdiv"></div>` + ss.map(x => `<div class="rs" title="${esc(x.name + " · " + x.state + " · " + doing(x))}"><span class="dot ${x.dot}" style="margin:0"></span><b>${esc(x.pct)}</b>`
       + `<div class="bar"><span class="${x.pctN >= 70 ? "hi" : ""}" style="width:${x.pctN}%"></span></div>${esc(String(x.name).split("-").pop())}</div>`).join("");
@@ -878,9 +894,12 @@
       + (a.recommend ? `<div class="fact rec"><div class="l">Recommended</div><div class="v">${esc(a.recommend)}</div></div>` : "")
       + formHtml(a)
       + `<div class="af"><span>${a.noHurry ? "Counts like any open ask; it stays here until you answer it." : "Stays here until you answer it, also while its task is done."}</span><a data-jump="${esc(a.task)}" data-rep="${esc(a.id)}" title="Opens its report beside and the task in the list">Open ${esc(a.task)} ↓</a></div></div>`).join("")) + `</div>`).join("");
-    if (M.answered.length) h += `<details class="ans"${nAsk ? "" : " open"}><summary><b>Answered</b><span class="mut">${M.answered.length}</span><span class="r">grouped by task, by id; the whole line is in its task</span></summary>`
-      + byTask(M, M.answered).map(([x, id, list]) => `<div class="arh"><a data-jump="${esc(id)}"><b>${esc(id)}</b></a><span class="tt" title="${esc(x ? x.t.title : "")}">${esc(x ? x.t.title : "")}</span></div>`
-        + list.map(a => `<div class="arow"><b>${esc(a.id)}</b><span class="an" title="${esc(a.answer)}">${esc(a.answer || "-")}</span><span class="at">${esc(a.answered || "")}</span></div>`).join("")).join("")
+    // answered asks: one list, the newest answer on top (the user, 11-27: "order answered questions descending with newest on top");
+    // "answered" is "MM-DD HH:MM", so it sorts as text; an ask with no time goes below, then by id, highest first
+    const newest = [...M.answered].sort((a, b) => String(b.answered || "").localeCompare(String(a.answered || "")) || num(b.id) - num(a.id));
+    const titleOf = id => { const x = M.tasks.find(y => y.t.id === id); return x ? x.t.title : ""; };
+    if (M.answered.length) h += `<details class="ans"${nAsk ? "" : " open"}><summary><b>Answered</b><span class="mut">${M.answered.length}</span><span class="r">newest first; the whole line is in its task</span></summary>`
+      + newest.map(a => `<div class="arow"><b>${esc(a.id)}</b><a class="atk" data-jump="${esc(a.task || "")}" title="${esc(titleOf(a.task))}">${esc(a.task || "-")}</a><span class="an" title="${esc(a.answer)}">${esc(a.answer || "-")}</span><span class="at">${esc(a.answered || "")}</span></div>`).join("")
       + `</details>`;
     const ids = k => M.tasks.filter(x => x.key === k).sort((a, b) => a.n - b.n);
     const run = ids("run").map(x => `<a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a> (${esc(splitWho(x.t.who)[0])})`).join(" · ");
@@ -944,7 +963,10 @@
       + reportsHtml(x) + `</div>`
       // an open ask answers inline on its task's row too (the accepted canvas, Answer)
       + x.asks.map(a => `<div class="ask inl${askSent(a.id) ? " ok" : ""}" data-inl="${esc(a.id)}"><div class="meta">${askSent(a.id) ? `<span class="pill k-done">Sent</span>` : ""}<b>${esc(a.id)}</b><span>${a.asked ? "asked " + esc(a.asked) : "open"}</span></div>`
-        + `<div style="font-weight:600;margin:4px 0">${esc(a.question)}</div>${formHtml(a)}</div>`).join("")
+        // the same facts and recommendation as the Questions tab (the user, 11-27: "questions on tasks list … with less data than on questions tab")
+        + `<div style="font-weight:600;margin:4px 0">${esc(a.question)}</div>` + (a.facts || []).map(factHtml).join("")
+        + (a.recommend ? `<div class="fact rec"><div class="l">Recommended</div><div class="v">${esc(a.recommend)}</div></div>` : "")
+        + `${formHtml(a)}</div>`).join("")
       + (exp ? detailHtml(x) : "");
   }
   function detailHtml(x) {
@@ -1028,7 +1050,7 @@
     return i > 0 && i <= 16 ? [t.slice(0, i), t.slice(i + 3)] : ["", t];
   });
   const staleOf = a => a != null && a > STALE_H;
-  function repoBlock(r, srcRead) {
+  function repoBlock(r, srcRead, jiraOff) {
     const j = r.jira || {}, rv0 = r.review || {}, pu = r.prUrl || r.url, st = prShort(r.prState);
     const rv = { verdict: /^s*-?s*$/.test(rv0.verdict || "") ? "" : noSha(rv0.verdict), note: rv0.note };
     // this line's read time, else the oldest source of the board (epicsAsOf)
@@ -1037,7 +1059,7 @@
     const jl = ext(j.url, esc(j.key)), arrow = u => webUrl(u) ? " " + ext(u, `<span class="nw">↗</span>`) : "";
     return `<div class="rp2"><div class="l1"><b>${esc(r.repo || "-")}</b>`
       + `<span>${r.pr ? ext(pu, esc("PR " + r.pr)) + arrow(pu) : `<span class="mut3">no PR</span>`}${st ? ` <span class="mut${/draft|unstable|conflict|dirty|blocked/i.test(st) ? " warn" : ""}" title="${esc(noSha(r.prState))}">${esc(st)}</span>` : ""}</span>`
-      + `<span>${j.key ? jl + arrow(j.url) + ` <span class="mut3">${esc(j.status || "-")}</span>` : `<span class="mut3">no Jira key</span>`}</span>`
+      + `<span>${j.key ? jl + arrow(j.url) + ` <span class="mut3">${esc(j.status || (jiraOff ? "Jira not configured" : "-"))}</span>` : `<span class="mut3">no Jira key</span>`}</span>`
       + (m ? `<div class="big${m[1] === m[2] ? "" : " part"}">${m[1]} of ${m[2]}<small>landed</small></div>` : /^\s*all landed/i.test(r.tasks || "") ? `<div class="big">all<small>landed</small></div>` : `<div class="big dim">no task count</div>`) + `</div>`
       + `<div class="l2"><span>${esc([j.type, j.assignee].filter(Boolean).join(" · ") || "no Jira detail")}</span>`
       + `<span>review: ${rv.verdict ? `<b style="color:var(--text)">${esc(rv.verdict)}</b>${rv.note ? " · " + esc(noSha(rv.note)) : ""}` : "none recorded"}</span>`
@@ -1058,6 +1080,8 @@
     // a line with no read time of its own is dated by the oldest gh or Jira read (the board's own lines are not a check of the PR or the key)
     const dated = l => l.map(([, v]) => [v, ageOf(v)]).filter(a => a[1] != null).sort((a, b) => b[1] - a[1])[0];
     const srcRead = dated(srcs.filter(([k]) => !/board/i.test(k))) || dated(srcs);
+    // sync-epics.mjs without --jira writes epicsAsOf.Jira = "not configured": a key with no status then says so
+    const jiraOff = srcs.some(([k, v]) => /^jira$/i.test(k) && /^\s*not configured\s*$/i.test(String(v)));
     // when each source was read; amber only past STALE_H hours (the user, 11-27: "jira tasks list seems not updated too often")
     h += `<div class="fl">` + (srcs.length ? srcs.map(([k, v]) => { const a = ageOf(v);
       return `<span class="${staleOf(a) ? "amber" : ""}" title="${esc(String(v))}">${esc(k)} · ${esc(stampOf(v))}${staleOf(a) ? " · older than " + STALE_H + " h" : ""}</span>`; }).join("")
@@ -1073,9 +1097,9 @@
         + `<h4>Tasks here</h4>` + (here.length ? here.slice(0, 5).map(x => `<div class="th${x.key === "done" ? "" : " open"}"><b><a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a></b><span class="pill k-${x.key === "done" ? x.colour : "open"}">${esc(x.label)}</span><span title="${esc(x.t.title)}">${esc(x.t.title)}</span></div>`).join("")
           + (here.length > 5 ? `<div class="mut3">and ${here.length - 5} more: ${here.slice(5).map(x => esc(x.t.id)).join(" ")}</div>` : "") : `<div class="mut3">no task on this board</div>`)
         + `<div class="fold"><a data-fold="e:${esc(e.epic)}">${f ? "Show the repo lines" : "Hide the repo lines"}</a></div></div>`
-        + `<div class="er">${repos.map(r => repoBlock(r, srcRead)).join("")}</div></div>`;
+        + `<div class="er">${repos.map(r => repoBlock(r, srcRead, jiraOff)).join("")}</div></div>`;
     }).join("");
-    h += `<p class="foot">The master reads these lines again with <code>node sync-epics.mjs</code> (one <code>gh pr view</code> per PR and one Jira read per key).</p>`;
+    h += `<p class="foot">The master reads these lines again with <code>node sync-epics.mjs</code> (one <code>gh pr view</code> per PR and, when it is given <code>--jira &lt;command&gt;</code>, one Jira read per key).</p>`;
     document.getElementById("pane-jira").innerHTML = h;
   }
 
@@ -1207,7 +1231,7 @@
     const d = el.dataset;
     if (d.opt) {                                   // an option: pick it, or click it again to clear it
       const a = askById(d.opt), o = a && optionsOf(a)[Number(d.i)];
-      if (o) { const s = dset(d.opt); s.choice = s.choice === o.label ? "" : o.label.slice(0, CHOICE_MAX); s.state = ""; saveAns(); render(); }
+      if (o) { const s = dset(d.opt); s.choice = s.choice === o.label ? "" : o.label.slice(0, CHOICE_MAX); s.nonly = false; s.state = ""; saveAns(); render(); }
       return;
     }
     if (d.copyans) return copyAnswer(d.copyans, false);
@@ -1295,6 +1319,11 @@
     const has = !!(s.choice || s.notes.trim());
     document.querySelectorAll(`[data-notes="${id}"]`).forEach(o => { if (o !== t) o.value = s.notes; });
     document.querySelectorAll(`[data-copyans="${id}"],[data-sendans="${id}"]`).forEach(b => { b.disabled = !has || (b.dataset.sendans && !canSend()); });
+  });
+  // "Notes only": ticked, the picked option is cleared and the options are off, so the line carries the notes alone
+  document.body.addEventListener("change", e => {
+    const t = e.target; if (!t || !t.dataset || !t.dataset.nonly) return;
+    const s = dset(t.dataset.nonly); s.nonly = !!t.checked; if (s.nonly) s.choice = ""; s.state = ""; saveAns(); render();
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && menuTask) closeMenu(); });
   window.addEventListener("resize", () => applyLayout());

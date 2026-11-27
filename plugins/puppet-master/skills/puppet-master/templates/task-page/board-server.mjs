@@ -3,6 +3,9 @@
 //
 //   node board-server.mjs --dir <board folder> --session <master session id> --mod-dir <puppet-master mod folder> [--port 8747]
 //
+// If the port is held by another program, it tries the next 9 (8747 to 8756) and listens on the first free one. The port
+// it got is printed and written to <mod folder>/board-live/<session>.json, where the master reads the page's address.
+//
 // What it does, and nothing else:
 //   GET  /              the board's index.html, with this run's token written into <meta id="pmtoken">
 //   GET  /tasks.js      the board's tasks.js (the only other file of the board folder it serves)
@@ -30,6 +33,7 @@ export const LINE_MAX = 2000;
 export const NOTES_MAX = 1500;
 export const CHOICE_MAX = 300;
 export const BODY_MAX = 4096;
+export const PORT_TRIES = 10;   // when the wanted port is held: it and the next 9 are tried
 export const STALE_MS = 5 * 60 * 1000;
 export const BEAT_MS = 15000;
 const ACTIONS = ["start", "wait", "commit", "push", "jira"];
@@ -206,15 +210,38 @@ export function createBoard({ dir, session, modDir, port = 0, now = () => Date.n
     return fail(res, 405, "method");
   });
 
+  const listenOn = (p) => new Promise((resolve, reject) => {
+    const onError = (err) => reject(err);
+    server.once("error", onError);
+    server.listen(p, "127.0.0.1", () => { server.off("error", onError); state.port = server.address().port; resolve(state.port); });
+  });
+
   return {
     server, token, inbox,
-    listen: () => new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(port, "127.0.0.1", () => { state.port = server.address().port; resolve(state.port); });
-    }),
+    listen: () => listenOn(port),
+    // The wanted port, else the next free ones: up to `tries` ports in a row (PORT_TRIES by default), never past 65535.
+    // Only "address in use" moves on to the next port; any other error ends it. Resolves with the port it got.
+    async listenFree(tries = PORT_TRIES) {
+      let last;
+      for (let i = 0; i < tries && port + i <= 65535; i++) {
+        try { return await listenOn(port + i); } catch (err) { if (err.code !== "EADDRINUSE") throw err; last = err; }
+      }
+      throw new Error(`no free port from ${port} to ${Math.min(port + tries - 1, 65535)} (${last ? last.message : "none tried"})`);
+    },
     close: () => new Promise((resolve) => server.close(resolve)),
     get port() { return state.port; },
   };
+}
+
+// The port the server got, where the master and the page link read it: <mod folder>/board-live/<session>.json
+// { port, wanted, url, pid, at }. Written once it listens, removed when it exits. Written through a temp file and a rename.
+export function writeLive(modDir, session, info) {
+  const dir = path.join(modDir, "board-live");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${session}.json`);
+  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify(info, null, 2)}\n`);
+  fs.renameSync(`${file}.tmp`, file);
+  return file;
 }
 
 // The command line: only when this file is run, never when a test imports it.
@@ -226,5 +253,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
     process.exit(2);
   }
   const board = createBoard({ dir, session, modDir, port });
-  board.listen().then((p) => console.log(`board http://127.0.0.1:${p}/ (session ${session}, inbox ${board.inbox})`), (err) => { console.error(`board-server: ${err.message}`); process.exit(1); });
+  board.listenFree().then((p) => {
+    const url = `http://127.0.0.1:${p}/`;
+    const live = writeLive(modDir, session, { port: p, wanted: port, url, pid: process.pid, at: new Date().toISOString() });
+    console.log(`board ${url} (session ${session}, inbox ${board.inbox}, port file ${live})`);
+    const done = () => { try { fs.rmSync(live, { force: true }); } catch { /* the file is only a pointer */ } };
+    process.on("exit", done);
+    for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(0));
+  }, (err) => { console.error(`board-server: ${err.message}`); process.exit(1); });
 }

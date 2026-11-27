@@ -21,7 +21,8 @@ It reads these environment variables, all optional:
 | `PUPPET_CONTEXT_WINDOW` | Your sessions' context window, in tokens, when it is not 1,000,000 |
 | `PUPPET_DAY_START_HOUR` | The hour a day starts in the analyst's logs, from `0` to `23`. Default `5` |
 | `PUPPET_LOGS_DIR` | The logs folder, ahead of the plugin option |
-| `PUPPET_CLAUDE_BIN` | The full path of the `claude` executable |
+| `PUPPET_CLAUDE_BIN` | The full path of the `claude` executable. Without it, `claude` on your `PATH` is used; on Windows, `claude.exe` on the `PATH`, or the program an npm `claude.cmd` shim runs |
+| `PUPPET_NODE_BIN` | The full path of the `node` executable that runs the task page's board server, when the app that runs Claude Code does not have `node` on its `PATH` (a Claude Code started from the Dock or the Start menu may not see the `PATH` your shell sets). Default `node` |
 | `PUPPET_MOD_DIR` | The folder the master and the mod share, instead of `~/.claude/puppet-master/mod` |
 
 To run a second master on the same machine, tell it to run with a group, such as your project's folder name. It then keeps its own list of sessions, its own logs folder and its own proposal ids.

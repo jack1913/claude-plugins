@@ -13,6 +13,7 @@ import { pathToFileURL } from "node:url";
 
 import { addFinding, decide, headline, markShipped, summarize, unreviewedReport } from "./analyst.mjs";
 import { harvest, resolveLogsDir } from "./harvest.mjs";
+import { resolveClaude } from "./claude-bin.mjs";
 
 export class PuppetError extends Error {
   constructor(message, exitCode = 1) {
@@ -180,16 +181,30 @@ export function percent(tokens, window) {
 
 // --- the claude CLI ------------------------------------------------------------------
 
-function claudeBin(deps) {
-  return deps.env.PUPPET_CLAUDE_BIN ?? "claude";
+// The program that starts claude (claude-bin.mjs, shared with the mod): PUPPET_CLAUDE_BIN, else on Windows claude.exe or
+// the program an npm claude.cmd shim runs, else `claude`. No shell runs it.
+function claudeLaunch(deps) {
+  const readable = (p) => {
+    try { return deps.fs.readFileSync(p, "utf8"); } catch { return null; }
+  };
+  try {
+    return resolveClaude({
+      env: deps.env,
+      platform: deps.platform ?? process.platform,
+      exists: (p) => { try { return Boolean(deps.fs.existsSync(p)); } catch { return false; } },
+      readText: readable,
+    }).argv;
+  } catch (e) {
+    throw new PuppetError(e.message);
+  }
 }
 
 function claude(deps, args, opts = {}) {
-  const r = deps.run(claudeBin(deps), args, opts);
+  const [file, ...pre] = claudeLaunch(deps);
+  const r = deps.run(file, [...pre, ...args], opts);
   if (r.error) {
-    // No shell runs the CLI, so an npm-installed `claude.cmd` shim cannot be launched.
     throw new PuppetError(
-      `cannot run ${claudeBin(deps)}: ${r.error.message} (set PUPPET_CLAUDE_BIN to the claude executable's full path)`,
+      `cannot run ${file}: ${r.error.message} (set PUPPET_CLAUDE_BIN to the claude executable's full path)`,
     );
   }
   return r;

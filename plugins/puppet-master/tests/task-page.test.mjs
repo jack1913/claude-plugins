@@ -20,7 +20,7 @@ test("the task-page template ships its five files (the board server too) and no 
 test("the shipped files hold no user name, path, epic or ticket key", () => {
   for (const f of FILES) {
     const text = read(f);
-    for (const bad of [/D:[\\/]/, /Krzysiek/i, /INEWI-/, /\bEPIC-\d/, /\bINIT-\d/, /inewi/i, /brainiac-pipeline/]) {
+    for (const bad of [/D:[\\/]/, /Krzysiek/i, /INEWI-/, /\bEPIC-\d/, /\bINIT-\d/, /inewi/i, /brainiac-pipeline/, /\bbrainiac\b/i, /brain origin/i]) {
       assert.ok(!bad.test(text), `${f} matches ${bad}`);
     }
   }
@@ -86,7 +86,7 @@ test("index.html keeps every feature of the live page and adds the T28 design wi
 });
 
 // Runs the page's own script against a small DOM stub, with a tasks.js fixture, and reads what each pane would show.
-function renderPage(dash, { seen = {}, width = 1440, tab, filter, panelw, panel, open, fold, rall, panelOpen } = {}) {
+function renderPage(dash, { seen = {}, width = 1440, tab, filter, panelw, panel, open, fold, rall, panelOpen, ans } = {}) {
   const html = read("index.html");
   const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
   const els = {};
@@ -104,6 +104,7 @@ function renderPage(dash, { seen = {}, width = 1440, tab, filter, panelw, panel,
   if (fold) localStorage.setItem("pmboard.fold", JSON.stringify(fold));
   if (rall) localStorage.setItem("pmboard.rall", JSON.stringify(rall));
   if (panelOpen != null) localStorage.setItem("pmboard.panelOpen", JSON.stringify(panelOpen));
+  if (ans) localStorage.setItem("pmboard.ans:" + pathname, JSON.stringify(ans));
   const rootStyle = {};
   els.rootStyle = rootStyle;
   const sandbox = {
@@ -179,7 +180,10 @@ test("the page: questions are records grouped by their task, tasks and asks by i
   assert.match(q, /moved here from T0/);
   assert.match(q, /<div class="q">the note<\/div>/);
   assert.match(q, /Recommended<\/div><div class="v">B</);
-  assert.deepEqual(ids(q, /<div class="arow"><b>(A\d+)<\/b>/g), ["A2", "A5"]);
+  // the user, 11-27: "order answered questions descending with newest on top": one list by answer time, newest first
+  assert.deepEqual(ids(q, /<div class="arow"><b>(A\d+)<\/b>/g), ["A5", "A2"]);
+  assert.match(q, /<span class="r">newest first; the whole line is in its task<\/span>/);
+  assert.match(q, /<div class="arow"><b>A5<\/b><a class="atk" data-jump="T2" title="[^"]*">T2<\/a><span class="an" title="“No”">“No”<\/span><span class="at">01-02 09:30<\/span><\/div>/);
   assert.match(q, /Running<\/span><span><a data-jump="T2">T2<\/a> \(w-a\) · <a data-jump="T5">T5<\/a>/);
   // the user, 11-27: "group questions from single task": one heading per task, its asks under it
   const many = [
@@ -190,10 +194,32 @@ test("the page: questions are records grouped by their task, tasks and asks by i
   assert.deepEqual(ids(g, /data-qtask="(T\d+)"/g), ["T2", "T7"], "tasks by id, lowest first");
   assert.deepEqual(ids(g, /id="ask-(A\d+)"/g), ["A10", "A4", "A12"], "the asks of one task together, by id");
   assert.match(g, /data-qtask="T7"><div class="qth"><span class="ch" data-fold="q:T7" title="Fold or open this task's asks">▾<\/span><a class="tid" data-jump="T7">T7<\/a><span class="pill k-wait">Waits for you<\/span><span class="tt" title="waits for the user">waits for the user<\/span><span class="r">2 open<\/span>/);
-  assert.deepEqual(ids(g, /<div class="arh"><a data-jump="(T\d+)">/g), ["T2", "T7"], "answered ones grouped by task too");
+  assert.deepEqual(ids(g, /<div class="arow"><b>(A\d+)<\/b>/g), ["A11", "A1"], "answered ones with no time: by id, highest first");
+  assert.ok(!g.includes('class="arh"'), "answered ones are one list, not grouped by task");
   const calm = renderPage({ ...BOARD, asks: BOARD.asks.filter((a) => a.state === "answered"), tasks: BOARD.tasks.filter((t) => t.status !== "waiting-you") });
   assert.match(calm["pane-questions"].innerHTML, /Nothing waits for you/);
   assert.equal(calm.askchip.textContent, "Nothing waits for you");
+});
+
+test("an ask on its task row shows the same facts and recommendation as the Questions tab, and Notes only sends no option", () => {
+  // the user, 11-27: "questions on tasks list wich i see with less data than on questions tab"
+  const OPT = { ...BOARD, asks: BOARD.asks.map((a) => (a.id === "A9" ? { ...a, options: ["Yes", "No"] } : a)) };
+  const t = renderPage(OPT, { tab: "tasks" })["pane-tasks"].innerHTML;
+  const inl = t.slice(t.indexOf('data-inl="A9"')).split('<div class="trow')[0];
+  assert.match(inl, /<div class="fact"><div class="l">Why<\/div><div class="v">tests pass<\/div><\/div>/);
+  assert.match(inl, /<div class="fact"><div class="l">Draft<\/div><div class="q">the note<\/div><\/div>/);
+  assert.match(inl, /<div class="fact rec"><div class="l">Recommended<\/div><div class="v">Yes<\/div><\/div>/);
+  // the user, 11-27: a note that asks back must not go out with a picked option that contradicts it
+  assert.match(inl, /<label class="nonly" [^>]*><input type="checkbox" data-nonly="A9"><span>Notes only<small>a question or remark, no decision<\/small><\/span><\/label>/);
+  const on = renderPage(OPT, { ans: { A9: { choice: "", notes: "what ships?", state: "", nonly: true } } })["pane-questions"].innerHTML;
+  const form = on.slice(on.indexOf('data-fa="A9"')).split('<div class="af">')[0];
+  assert.match(on, /<div class="aform nonly-on" data-fa="A9">/);
+  assert.match(form, /data-nonly="A9" checked>/);
+  assert.ok([...form.matchAll(/<button class="opt[^"]*" data-opt="A9" data-i="\d+" disabled>/g)].length > 0, "the options are off while Notes only is ticked");
+  assert.match(form, /placeholder="Your question or remark for the master…"/);
+  const html = read("index.html");
+  assert.ok(html.includes("s.nonly = !!t.checked; if (s.nonly) s.choice = \"\";"), "ticking Notes only clears the picked option");
+  assert.ok(html.includes("s.nonly = false;"), "picking an option unticks Notes only");
 });
 
 test("the page: tasks by id, lowest first; no Done section, Done is a filter; a row is # | title, one line, Show more | status and who | the 3 newest reports (T46)", () => {
@@ -213,7 +239,7 @@ test("the page: tasks by id, lowest first; no Done section, Done is a filter; a 
     + '<span class="pill k-block" title="on the review host">Blocked</span></div><small class="clamp2" title="w-b">w-b</small></div><div class="rp"><span class="mut3">–</span></div></div>');
   const row4 = t.match(/<div class="trow" data-task="T4"[\s\S]*?<div class="rp">[\s\S]*?<\/div><\/div><\/div>/)[0];
   assert.match(row4, /<div class="s1 clamp2">x{1200}<\/div><div class="more"><a data-exp="T4" aria-expanded="false">Show more · 1 more line<\/a>/, "one line of what is new, the rest behind Show more · n");
-  assert.match(row4, /<div class="rep unread"><i class="rd"><\/i><a class="doc" data-url="file:\/\/\/\/x\/r.html" data-label="T4: the report" data-task="T4">the report<\/a>/, "reports are always in the row");
+  assert.match(row4, /<div class="rep unread"><i class="rd"><\/i><a class="doc" data-url="file:\/\/\/x\/r.html" data-label="T4: the report" data-task="T4">the report<\/a>/, "reports are always in the row");
   for (const hidden of ["A3 open</b>", "Open the whole line", "class=\"tdet\""]) assert.ok(!t.includes(hidden), `a closed row shows ${hidden}`);
   // Show more opens the rest: the asks, the status with its block, who, the lines
   const x = renderPage(BOARD, { tab: "tasks", open: ["T1", "T4", "T8"] })["pane-tasks"].innerHTML;
@@ -327,9 +353,13 @@ test("the page: a task link in Questions opens the related report beside and jum
   const els = renderPage(board);
   const rel = (t, a) => JSON.stringify(els.sandbox.relatedReport(t, a));
   // the user, 11-27: "link from main questions tab should open related report and also move to taks list like s now"
-  assert.equal(rel("T4", "A20"), JSON.stringify({ url: "file:////x/draft.html", label: "T4: the draft", task: "T4" }), "the page the ask's facts link to");
-  assert.equal(rel("T7", "A9"), JSON.stringify({ url: "file:////x/new.html", label: "T7: new", task: "T7" }), "else the task's newest written report");
-  assert.equal(rel("T4", ""), JSON.stringify({ url: "file:////x/r.html", label: "T4: the report", task: "T4" }));
+  assert.equal(rel("T4", "A20"), JSON.stringify({ url: "file:///x/draft.html", label: "T4: the draft", task: "T4" }), "the page the ask's facts link to");
+  assert.equal(rel("T7", "A9"), JSON.stringify({ url: "file:///x/new.html", label: "T7: new", task: "T7" }), "else the task's newest written report");
+  assert.equal(rel("T4", ""), JSON.stringify({ url: "file:///x/r.html", label: "T4: the report", task: "T4" }));
+  // portability C4: a POSIX path has its leading slash already (three slashes, not four); a Windows path gets the third one
+  const winBoard = { ...board, tasks: board.tasks.map((x) => (x.id === "T7" ? { ...x, reports: [{ label: "w", path: "D:\\Work\\My Notes\\r.html" }] } : x)) };
+  assert.equal(renderPage(winBoard).sandbox.relatedReport("T7", "A9").url, "file:///D:/Work/My%20Notes/r.html");
+  assert.ok(!/file:\/\/\/\/[^/]/.test(rel("T4", "A20") + rel("T7", "A9")), "never file:////");
   assert.equal(rel("T2", ""), "null", "no report written: the jump only");
   assert.match(els["pane-questions"].innerHTML, /<a data-jump="T4" data-rep="A20" title="Opens its report beside and the task in the list">Open T4 ↓<\/a>/);
   const html = read("index.html");
@@ -362,10 +392,10 @@ test("the page: a report not written yet reads as such, muted and with no link (
   const t = renderPage(board, { tab: "tasks", open: ["T1"] })["pane-tasks"].innerHTML;
   assert.match(t, /<span class="pend" title="\/x\/later.html">T1 report <i>· not written yet<\/i><\/span>/);
   assert.ok(!/data-url="[^"]*later/.test(t), "no link to a page that does not exist");
-  assert.match(t, /<a class="doc" data-url="file:\/\/\/\/x\/plan.html"/);
+  assert.match(t, /<a class="doc" data-url="file:\/\/\/x\/plan.html"/);
 });
 
-test("the page: the Tasks tab holds only the task table; the filters and sessions are in the sidebar, the collapsed rail has every filter and every session (T33, T46)", () => {
+test("the page: the Tasks tab holds only the task table; the filters and sessions are in the sidebar, the collapsed rail has every status filter (not initial / added later) and every session (T33, T46)", () => {
   const els = renderPage(BOARD, { tab: "tasks", filter: "run" });
   const t = els["pane-tasks"].innerHTML;
   for (const gone of ["data-f=", "class=\"filters\"", "class=\"sg", "<h2>Sessions</h2>", "Context, measured"]) assert.ok(!t.includes(gone), `the Tasks tab still has ${gone}`);
@@ -378,7 +408,8 @@ test("the page: the Tasks tab holds only the task table; the filters and session
   assert.ok(renderPage({ ...BOARD, tasks: BOARD.tasks.filter((x) => !x.blocked) }).sidefilters.innerHTML.includes("data-go=\"block\""), "the user, 11-27: \"whole tasks status filter\": Blocked stays at 0");
   // the rail (88 px): every filter as a count circle and a word, then every session as dot, % and bar (the canvas's Rail artboard)
   const r = els.railcounts.innerHTML;
-  assert.deepEqual(ids(r, /data-go="([\w-]+)"/g), ["open", "wait", "run", "block", "pend", "queue", "done", "all", "initial", "added"]);
+  // the user, 11-27: "those filters are pointless on collapsed sidebar": initial and added later only in the open sidebar
+  assert.deepEqual(ids(r, /data-go="([\w-]+)"/g), ["open", "wait", "run", "block", "pend", "queue", "done", "all"]);
   assert.match(r, /<button class="rc" data-go="open" title="Show the open tasks"><i class="k-open">7<\/i>open<\/button>/);
   assert.match(r, /<button class="rc on" data-go="run" title="Show the running tasks"><i class="k-run">2<\/i>running<\/button>/, "the chosen filter is ringed");
   assert.match(r, /<i class="k-wait">2<\/i>for you<\/button>/);
@@ -402,7 +433,7 @@ test("the page: the report panel is open by default with an empty state and the 
   const cl = els.sandbox.document.body.classList;
   assert.ok(cl.contains("withpanel") && cl.contains("panel-empty"), "open with nothing selected");
   assert.match(els.pempty.innerHTML, /Nothing opened yet\. Click a report link in a row and it opens here, beside the list\./);
-  assert.match(els.pempty.innerHTML, /<h4>Newest unread reports<\/h4><div class="ur"><i class="rd"><\/i><div><a class="doc" data-url="file:\/\/\/\/x\/r.html" data-label="T4: the report" data-task="T4">the report<\/a><div class="tt">T4 · pending report<\/div>/);
+  assert.match(els.pempty.innerHTML, /<h4>Newest unread reports<\/h4><div class="ur"><i class="rd"><\/i><div><a class="doc" data-url="file:\/\/\/x\/r.html" data-label="T4: the report" data-task="T4">the report<\/a><div class="tt">T4 · pending report<\/div>/);
   assert.equal(els.panelchip.textContent, "Hide panel");
   // the canvas draws the Jira page without it: empty, it sits beside Tasks and Questions only; closed by the user, it stays closed
   assert.ok(!renderPage(BOARD, { tab: "jira" }).sandbox.document.body.classList.contains("withpanel"));
@@ -554,7 +585,7 @@ test("the page: Jira keys and PR numbers link to Jira and GitHub in a new tab, o
 test("the page: previous work sets are links in the sidebar, newest first (tweak 2)", () => {
   const p = renderPage(BOARD).prev.innerHTML;
   assert.deepEqual(ids(p, /(Work set [\d-]+) ↗/g), ["Work set 2025-12-28", "Work set 2025-12-20"]);
-  assert.match(p, /href="file:\/\/\/\/x\/2025-12-28\/index.html" target="_blank"/);
+  assert.match(p, /href="file:\/\/\/x\/2025-12-28\/index.html" target="_blank"/);
   assert.match(p, /Left open: one proposal/);
 });
 
@@ -706,6 +737,35 @@ test("sync-epics.mjs reads each PR with gh and each Jira key, rewrites only the 
     assert.equal(fe.prState, "draft · mergeable, unstable (head abcdef0123)");
     assert.equal(fe.check, "check lint: failure");
     assert.equal(fe.url, "https://github.com/o/f/pull/6");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("sync-epics.mjs has no default Jira command: without --jira it reads no Jira key, writes \"not configured\" and does not count it as missed (portability D1)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-page-test-"));
+  try {
+    fs.copyFileSync(path.join(TEMPLATE, "sync-epics.mjs"), path.join(dir, "sync-epics.mjs"));
+    fs.writeFileSync(path.join(dir, "tasks.js"), HAND_EDITED);
+    const gh = path.join(dir, "fake-gh.mjs");
+    fs.writeFileSync(gh, 'console.log(JSON.stringify({ state: "OPEN", mergeable: "MERGEABLE", mergeStateStatus: "CLEAN", statusCheckRollup: [] }));\n');
+    const file = path.join(dir, "tasks.js");
+    // PATH is emptied: a default command such as `brainiac` could not be found, so it would show as a failure here
+    const out = execFileSync(process.execPath, [path.join(dir, "sync-epics.mjs"), "--file", file, "--gh", gh, "--repo", "frontend=o/f"], { encoding: "utf8", stdio: "pipe", env: { ...process.env, PATH: "", Path: "" } });
+    assert.match(out, /Jira not read: no --jira command/);
+    assert.ok(!/NOT READ/.test(out), "no key is missed: Jira was not asked");
+    const sb = { window: {} };
+    vm.runInNewContext(fs.readFileSync(file, "utf8"), sb);
+    const [be, fe] = sb.window.DASH.epics[0].repos;
+    assert.equal(sb.window.DASH.epicsAsOf.Jira, "not configured");
+    assert.equal(be.jira.status, "To Do", "a Jira status already on the line is not touched");
+    assert.match(be.asOf, /^\d\d-\d\d \d\d:\d\d$/, "a line whose PR was read is dated");
+    assert.equal(fe.jira.key, "KEY-404");
+    const j = renderPage({ ...BOARD, epicsAsOf: { gh: "01-01 10:00", Jira: "not configured" },
+      epics: [{ epic: "EPIC-0031", repos: [{ repo: "backend", pr: "#1", jira: { key: "KEY-1" } }, { repo: "frontend", pr: "#2" }] }] }, { tab: "jira" })["pane-jira"].innerHTML;
+    assert.match(j, /<span>KEY-1 <span class="mut3">Jira not configured<\/span><\/span>/, "the key says why it has no status");
+    assert.match(j, /no Jira key/, "a line with no key is unchanged");
+    assert.match(j, /Jira · not configured/, "the source chip says it too");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

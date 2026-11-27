@@ -1,7 +1,9 @@
 // The task-page channel (T53): the answer line, the board server's checks, the inbox write, and the mod's side
 // (inbox -> prompt, board server child) against a fake `$`. No Claude session and no browser start.
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
+import net from "node:net";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -14,7 +16,10 @@ import { register } from "../hooks/puppet-mod.js";
 
 const PLUGIN_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATE = path.join(PLUGIN_DIR, "skills", "puppet-master", "templates", "task-page");
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "channel-test-"));
+// every folder a test makes is removed when the file's tests end (portability G5)
+const made = [];
+const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), "channel-test-")); made.push(d); return d; };
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
 
 // ---------- the page's own script, run against a small DOM stub ----------
 function page(dash, { served = false, ans } = {}) {
@@ -155,6 +160,7 @@ function boardFolder(extra = "") {
   fs.writeFileSync(path.join(dir, "index.html"), '<html><meta id="pmtoken" content=""><body>page</body></html>');
   fs.writeFileSync(path.join(dir, "tasks.js"), `window.DASH = { tasks: [{ id: "T1", reports: [{ label: "r", path: ${JSON.stringify(path.join(reports, "r.html").replace(/\\/g, "/"))} }] }] };\n${extra}`);
   fs.writeFileSync(path.join(path.dirname(dir), "outside.html"), "nope");
+  made.push(path.join(path.dirname(dir), "outside.html"));   // written beside the folder, in the temp root: removed too
   return { dir, modDir, reports };
 }
 function call(port, { method = "GET", url = "/", headers = {}, body, host } = {}) {
@@ -191,6 +197,60 @@ test("server: binds 127.0.0.1 only and serves the page with this run's token in 
     assert.equal((await call(port, { url: "/tasks.js" })).status, 200);
     assert.equal((await call(port, { url: "/nothing" })).status, 404);
   });
+});
+
+// a port held by another program (portability C2)
+const hold = (port = 0) => new Promise((resolve, reject) => {
+  const s = net.createServer();
+  s.once("error", reject);
+  s.listen(port, "127.0.0.1", () => resolve({ s, port: s.address().port, close: () => new Promise((r) => s.close(r)) }));
+});
+
+test("server: a held port moves to the next free one inside a bounded range, and the page is served there", async () => {
+  const held = await hold();
+  const f = boardFolder();
+  const b = createBoard({ dir: f.dir, session: "test-master", modDir: f.modDir, port: held.port });
+  try {
+    const got = await b.listenFree();
+    assert.ok(got > held.port && got < held.port + 10, `got ${got} for held ${held.port}`);
+    assert.equal(b.port, got);
+    const r = await call(got);
+    assert.equal(r.status, 200, "served on the port it got");
+    assert.ok(r.text.includes(`<meta id="pmtoken" content="${b.token}">`));
+    const wrongHost = await call(got, { host: `127.0.0.1:${held.port}` });
+    assert.notEqual(wrongHost.status, 200, "the Host check follows the port it got");
+  } finally { await b.close(); await held.close(); }
+});
+
+test("server: when every port of the range is held it fails loudly, naming the range; another error is not retried", async () => {
+  const held = await hold();
+  const f = boardFolder();
+  const b = createBoard({ dir: f.dir, session: "test-master", modDir: f.modDir, port: held.port });
+  try {
+    await assert.rejects(() => b.listenFree(1), (e) => e.message.startsWith(`no free port from ${held.port} to ${held.port} `));
+  } finally { await held.close(); }
+});
+
+test("server: run as a command with its port held, it listens on the next one and writes the port to board-live/<session>.json", async () => {
+  const held = await hold();
+  const f = boardFolder();
+  const child = spawn(process.execPath, [path.join(TEMPLATE, "board-server.mjs"), "--dir", f.dir, "--session", "port-test", "--mod-dir", f.modDir, "--port", String(held.port)], { stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    const line = await new Promise((resolve, reject) => {
+      let out = "", err = "";
+      child.stdout.on("data", (c) => { out += c; if (out.includes("\n")) resolve(out); });
+      child.stderr.on("data", (c) => { err += c; });
+      child.on("exit", (code) => reject(new Error(`exited ${code}: ${err}`)));
+      setTimeout(() => reject(new Error(`no start line: ${out} ${err}`)), 8000);
+    });
+    const live = JSON.parse(fs.readFileSync(path.join(f.modDir, "board-live", "port-test.json"), "utf8"));
+    assert.equal(live.wanted, held.port);
+    assert.ok(live.port > held.port && live.port < held.port + 10);
+    assert.equal(live.url, `http://127.0.0.1:${live.port}/`);
+    assert.equal(live.pid, child.pid);
+    assert.ok(line.includes(live.url), "the start line names the same address");
+    assert.equal((await call(live.port)).status, 200);
+  } finally { child.removeAllListeners("exit"); child.kill(); await held.close(); }
 });
 
 test("server: a wrong Host (DNS rebinding) is refused on every route", async () => {

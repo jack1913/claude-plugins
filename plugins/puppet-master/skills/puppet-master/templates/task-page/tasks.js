@@ -54,8 +54,9 @@
 //                 read time and its age, and marks it stale after 2 hours
 //               An older flat row { epic, repo, what, status, stamps, tasks, pr, collector, next } still shows,
 //               as one repo line (next as the last change).
-//   epicsAsOf   when each source was read: { "brain origin": "21:35", "gh": "21:35", "Jira": "22:59" }
-//               (a plain string is shown as it is); sync-epics.mjs rewrites "gh" and "Jira"
+//   epicsAsOf   when each source was read: { "origin": "21:35", "gh": "21:35", "Jira": "22:59" }
+//               (a plain string is shown as it is); sync-epics.mjs rewrites "gh" and "Jira"; "Jira" reads
+//               "not configured" when sync-epics.mjs ran without --jira (the Jira tab then says "Jira not configured")
 //   sessions    array of { name, state, model, job, context } (sync-sessions.mjs rewrites it from `puppet list`)
 //   sessionsAsOf "HH:MM" the list was read (sync-sessions.mjs rewrites it)
 //   previous    array of { label, days, tasks, open, path }: earlier work sets, linked from the sidebar, newest first;

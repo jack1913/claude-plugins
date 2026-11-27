@@ -12,14 +12,15 @@ const ASK_ALWAYS = "Yes, always on this machine";
 const ASK_NEVER = "No, and don't ask again on this machine";
 
 // A running mod in a fake session. `files` seeds the folder, keys relative to /mod.
-function setup({ mode = "ask", kind = "interactive", answer = ASK_YES, files = {}, sid = SID, compact, run, agentsFail = false } = {}) {
+function setup({ mode = "ask", kind = "interactive", answer = ASK_YES, files = {}, sid = SID, compact, run, agentsFail = false, env = {}, absFiles = {} } = {}) {
   const fsMap = new Map(Object.entries(files).map(([k, v]) => [`${DIR}/${k}`, typeof v === "string" ? v : JSON.stringify(v)]));
+  for (const [k, v] of Object.entries(absFiles)) fsMap.set(k, v);
   const handlers = {};
   const timers = { every: null, after: [] };
   const calls = { compact: [], run: [], ask: [], set: [], log: [], process: [], status: [] };
   const state = { now: 1_000_000, sid, mode };
   const $ = {
-    env: { get: async (n) => (n === "PUPPET_MOD_DIR" ? DIR : undefined) },
+    env: { get: async (n) => (n === "PUPPET_MOD_DIR" ? DIR : env[n]) },
     fs: {
       exists: async (p) => fsMap.has(p),
       read: async (p) => {
@@ -576,6 +577,25 @@ test("start question: an interactive window in mode ask is asked, with the four 
   assert.equal(t.json(`heartbeat/${SID}.json`).enabled, true);
   assert.equal(t.json(`heartbeat/${SID}.json`).source, "asked");
   assert.equal(t.json(`heartbeat/${SID}.json`).ask, "yes");
+});
+
+// portability B2: one resolver (skills/puppet-master/scripts/claude-bin.mjs) for the helper and the mod
+test("claude launch in the mod: PUPPET_CLAUDE_BIN first, claude.exe on a Windows PATH, a claude.cmd shim read for its program, never a shell", async () => {
+  const run = async (opts) => {
+    const t = setup(opts);
+    await t.start();
+    await t.ask();
+    return t;
+  };
+  assert.deepEqual((await run({ env: { PUPPET_CLAUDE_BIN: "/opt/claude" } })).calls.process[0], ["/opt/claude", "agents", "--json"]);
+  const win = { OS: "Windows_NT", PATH: "C:\\nope;C:\\Program Files\\Claude" };
+  const exe = "C:\\Program Files\\Claude\\claude.exe";
+  assert.deepEqual((await run({ env: win, absFiles: { [exe]: "" } })).calls.process[0], [exe, "agents", "--json"]);
+  const shim = '@ECHO off\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n)\r\nendLocal & "%_prog%"  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n';
+  const only = await run({ env: { ...win, PUPPET_NODE_BIN: "/n/node" }, absFiles: { "C:\\Program Files\\Claude\\claude.cmd": shim } });
+  assert.deepEqual(only.calls.process[0], ["/n/node", "C:\\Program Files\\Claude\\node_modules\\@anthropic-ai\\claude-code\\cli.js", "agents", "--json"]);
+  assert.deepEqual((await run({ env: win })).calls.process[0], ["claude", "agents", "--json"], "nothing found: the bare name, the launch fails loudly");
+  assert.deepEqual((await run({})).calls.process[0], ["claude", "agents", "--json"], "elsewhere: the bare name");
 });
 
 test("start question: yes for this session writes no config; always sets self_compact=on", async () => {

@@ -23,7 +23,7 @@ if (!existsSync(PUPPET)) {
 
 // --group lists another master's group (the helper's own --group option); without it, the helper's default.
 const GROUP = arg("--group");
-const out = execFileSync("node", [PUPPET, ...(GROUP ? ["--group", GROUP] : []), "list"], { encoding: "utf8" });
+const out = execFileSync(process.execPath, [PUPPET, ...(GROUP ? ["--group", GROUP] : []), "list"], { encoding: "utf8" });
 const rows = out.trim().split(/\r?\n/).filter(Boolean).map(line => {
   const name = line.split(/\s+/)[0];
   const tokens = line.split(/\s+/)[1];

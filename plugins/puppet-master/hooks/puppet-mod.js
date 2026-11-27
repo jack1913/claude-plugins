@@ -26,6 +26,8 @@
 // "port": 8747 }) exists, the mod starts the board server as a child ($.process.spawn, no shell) that lives with the
 // session; the child is restarted at most every 30 s when it exits.
 
+import { claudeProbePaths, resolveClaude } from "../skills/puppet-master/scripts/claude-bin.mjs";
+
 const VERSION = "0.1.0";
 const TICK_MS = 3000;
 const ASK_DELAY_MS = 5000;
@@ -179,13 +181,39 @@ async function fail($, st, err) {
   $.ui.log(`puppet-master mod: ${st.lastError}`);
 }
 
+// The argv prefix that starts claude, from the resolver the helper uses (skills/puppet-master/scripts/claude-bin.mjs):
+// PUPPET_CLAUDE_BIN, on Windows claude.exe or the program an npm claude.cmd shim runs, else `claude`. The module is
+// imported with an import declaration, as `claude plugin validate` asks of a hooks module (a dynamic import() is
+// refused). The resolver is synchronous and $.fs is not, so the files it may look at are read first.
+async function claudeArgv($) {
+  // literal names, as `claude plugin validate` asks, so the variables the mod reads can be listed
+  const env = {
+    PUPPET_CLAUDE_BIN: await $.env.get("PUPPET_CLAUDE_BIN"),
+    PUPPET_NODE_BIN: await $.env.get("PUPPET_NODE_BIN"),
+    PATH: (await $.env.get("PATH")) || (await $.env.get("Path")),
+  };
+  const os = await $.env.get("OS");
+  // Windows always sets OS=Windows_NT; elsewhere the runtime's own platform name, if it has one
+  const platform = os === "Windows_NT" ? "win32" : (globalThis.process?.platform ?? "posix");
+  const present = new Map();
+  for (const p of claudeProbePaths(env, platform)) {
+    if (await $.fs.exists(p)) present.set(p, p.toLowerCase().endsWith(".exe") ? "" : await $.fs.read(p));
+  }
+  return resolveClaude({
+    env, platform,
+    exists: (p) => present.has(p),
+    readText: (p) => present.get(p) ?? null,
+    nodeBin: env.PUPPET_NODE_BIN || "node",
+  }).argv;
+}
+
 // This session's own `kind` in `claude agents --json`: interactive (a window the user
 // opened) or background (a worker), null when it cannot be told. A background session
 // cannot answer a dialog and would sit `waiting` behind it (probe, 2026-11-04), and
 // `isInteractive` and `surface` are true there too, so they say nothing.
 async function ownKind($, sid) {
-  const bin = (await $.env.get("PUPPET_CLAUDE_BIN")) || "claude";
-  const r = await $.process.run([bin, "agents", "--json"], { timeoutMs: 20000 });
+  const argv = await claudeArgv($);
+  const r = await $.process.run([...argv, "agents", "--json"], { timeoutMs: 20000 });
   if (r.exitCode !== 0) throw new Error(`claude agents --json exited ${r.exitCode}`);
   const own = JSON.parse(r.stdout).find((a) => a.sessionId === sid);
   return own ? (own.kind ?? null) : null;

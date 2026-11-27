@@ -17,8 +17,9 @@ only does the housekeeping; every decision stays yours.
   ```
 
 - You've run `claude` once in each folder a worker will use, so the folder is trusted.
-- On Windows, the native `claude` executable is on your `PATH`. Installed through npm? Set `PUPPET_CLAUDE_BIN` to the
-  full path of the `claude` executable, because the npm `claude.cmd` shim can't be started.
+- `claude` is on your `PATH`. On Windows puppet-master uses `claude.exe` on the `PATH`; installed through npm, it
+  reads the program out of the `claude.cmd` shim (it never starts a shell). To name the executable yourself, set
+  `PUPPET_CLAUDE_BIN` to its full path.
 - Optional: for the master to compact, clear and switch the model of sessions for you, Claude Code 2.1.287 or
   newer. See
   [Let sessions compact themselves](#let-sessions-compact-themselves).

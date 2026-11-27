@@ -168,8 +168,13 @@ Things that shaped the helper:
   judges success by a new boundary in the transcript, never by the exit code. The helper itself runs no shell.
 - A compaction re-reads the whole context. One of a 77k-token session cost about $0.88, which is why the skill tells
   the user the size and cost before cycling a worker above 50%.
-- The helper runs every child process with `spawnSync` and `shell: false`, so on Windows an npm `claude.cmd` shim cannot
-  be launched; `PUPPET_CLAUDE_BIN` names the native executable.
+- The helper runs every child process with `spawnSync` and `shell: false`. Which program starts `claude` is one
+  resolver, `skills/puppet-master/scripts/claude-bin.mjs`, used by the helper and by the mod (`ownKind`, through a static
+  import: `claude plugin validate` lets a hooks module import only its own files, so the resolver imports nothing
+  itself): `PUPPET_CLAUDE_BIN`, then on Windows `claude.exe` on the `PATH`, then the `.exe` or node script
+  an npm `claude.cmd` shim runs (the shim's `"%dp0%\…" %*` line is read, never executed), else `claude`. Tested in
+  `tests/claude-bin.test.mjs` and `tests/mod.test.mjs` with a faked platform, `PATH` and files; not yet run against a real
+  npm install of Claude Code on Windows (the shim text was read from another npm package's shim on this machine).
 
 ## Measuring
 
@@ -268,6 +273,7 @@ temp file, then a rename) and plainly by the mod (the mod has no rename or delet
 | `overrides/<sessionId>.json` | the mod, on a switch | `model`, `effort`, `at`, `nonce`, and `carriedFrom` when a clear moved it to a new id; `{}` after `--reset` |
 | `inbox/<sessionId>/<nonce>.json` | the board server (see [The task-page channel](#the-task-page-channel)) | `nonce`, `kind`, `text` (the line), `at` (ms); the mod blanks it to `{}` once handled and acks it |
 | `board/<sessionId>.json` | the master | `dir` (the page's folder) and optionally `port` (default 8747): the mod starts the board server from it |
+| `board-live/<sessionId>.json` | the board server, once it listens (removed when it exits normally; a killed server on Windows leaves it, so check `pid`) | `port` it got, `wanted`, `url`, `pid`, `at`: if the wanted port is held it takes the next free one of 10 |
 
 The mod acts only on a request for its own session id, newer than five minutes, with a valid nonce it has not seen,
 and answers every refusal with an ack: `wrong-session`, `stale`, `not-enabled`, `refused-role`, `refused-value`,
@@ -332,7 +338,9 @@ answers the master's asks on the task page instead of typing in the master's win
   master has it". One message a tick, the oldest first.
 - **The server's lifetime.** When `board/<session id>.json` (`{ "dir": the board folder, "port": 8747 }`) exists
   and the mod is on, the mod starts the server with `$.process.spawn` (an argument vector, no shell, `node` or
-  `PUPPET_NODE_BIN`), which lives with the session; one that exits is started again after 30 s. After a `/clear` of
+  `PUPPET_NODE_BIN`), which lives with the session; one that exits is started again after 30 s. A held port is not an
+  exit: the server tries the next 9 ports and writes the one it got to `board-live/<session id>.json`; only a whole
+  range held ends it, with `no free port from … to …` in the mod's log. After a `/clear` of
   the master the server keeps the old session id's inbox (a master is not cleared by the helper).
 
 **What the server checks** (`board-server.mjs`, header comment; every row has a test in `tests/channel.test.mjs`):

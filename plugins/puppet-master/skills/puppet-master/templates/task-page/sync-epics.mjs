@@ -4,8 +4,10 @@
 //   node sync-epics.mjs [--file <tasks.js>] [--gh <gh>] [--jira <command>] [--repo <name>=<owner/repo>]...
 // Per repo line, two reads and nothing else:
 //   gh pr view <url> --json ...           (or <number> --repo <owner/repo> from --repo) -> prState, check, asOf
-//   <jira command> <KEY> --json           default "brainiac jira show"                   -> jira status, category, type, assignee
+//   <jira command> <KEY> --json           only when --jira is given (no default)        -> jira status, category, type, assignee
+//                                         prints one JSON object { status: { name, category }, type, assignee }
 // --gh and --jira take a command; a path ending in .mjs or .js runs with node. Read only: no write to GitHub or Jira.
+// Without --jira no Jira read runs: epicsAsOf.Jira becomes "not configured" and the Jira tab shows "Jira not configured".
 // A line that cannot be read keeps its old values and is listed; the script then exits 2 (1: no tasks.js or no epics block).
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -27,10 +29,11 @@ const command = (c, dflt) => {
   return /\.(mjs|js)$/i.test(c) ? [process.execPath, c] : c.split(/\s+/).filter(Boolean);
 };
 const GH = command(arg("--gh"), ["gh"]);
-const JIRA = command(arg("--jira"), ["brainiac", "jira", "show"]);
+// No default: Jira is read only when --jira names a command (null: not configured, and the Jira tab says so).
+const JIRA = arg("--jira") ? command(arg("--jira")) : null;
 const run = ([file, ...pre], rest) => execFileSync(file, [...pre, ...rest], {
   encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60000,
-  // a shim such as brainiac.cmd needs the shell on Windows; every value passed here is checked against a strict pattern first
+  // a shim such as jira.cmd needs the shell on Windows; every value passed here is checked against a strict pattern first
   shell: process.platform === "win32" && file !== process.execPath,
 });
 
@@ -79,6 +82,7 @@ for (const e of D.epics) {
     // the Jira issue, from the Jira command
     const key = r.jira && r.jira.key;
     if (key && !KEY.test(key)) missed.push(`${where}: Jira key ${key} not read (not KEY-123)`);
+    else if (key && !JIRA) { /* not configured: nothing to read, nothing missed (the notice is written to epicsAsOf below) */ }
     else if (key) {
       try {
         const j = JSON.parse(run(JIRA, [key, "--json"]));
@@ -117,6 +121,7 @@ function replaceValue(src, key, value) {
 const asOf = D.epicsAsOf && typeof D.epicsAsOf === "object" ? D.epicsAsOf : {};
 if (ghRead) asOf.gh = stamp;
 if (jiraRead) asOf.Jira = stamp;
+else if (!JIRA) asOf.Jira = "not configured";
 let out = replaceValue(text, "epics", D.epics);
 if (out === null) { console.error("tasks.js has no `epics: [...]` block"); process.exit(1); }
 out = replaceValue(out, "epicsAsOf", asOf) ?? out.replace(/^([ \t]*"?epics"?[ \t]*:)/m, (m0, k) => `  epicsAsOf: ${JSON.stringify(asOf)},\n${k}`);
@@ -126,5 +131,6 @@ const check = { window: {} };
 vm.runInNewContext(out, check);
 if (JSON.stringify(check.window.DASH.epics) !== JSON.stringify(D.epics)) { console.error("the rewritten tasks.js does not read back: not written"); process.exit(1); }
 writeFileSync(FILE, out);
-console.log(read.map((l) => "read    " + l).concat(missed.map((l) => "NOT READ " + l)).join("\n") || "no repo line in epics");
+const notes = JIRA ? [] : ["Jira not read: no --jira command (the Jira tab shows \"Jira not configured\")"];
+console.log(read.map((l) => "read    " + l).concat(missed.map((l) => "NOT READ " + l), notes).join("\n") || "no repo line in epics");
 process.exit(missed.length ? 2 : 0);

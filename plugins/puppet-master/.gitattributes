@@ -1,0 +1,4 @@
+# Line endings for this plugin's files only (a .gitattributes in a folder applies to that folder's tree, so the other
+# plugins' files are not touched): text files are checked out with LF on every OS, so a Windows checkout with
+# core.autocrlf=true does not turn the Markdown and templates the tests match literally into CRLF.
+* text=auto eol=lf

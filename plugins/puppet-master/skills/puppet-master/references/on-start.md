@@ -74,7 +74,9 @@ do "A stand-in master" below.
    start (task page)` or `T53 wait (task page)` you act on. A line `T53 request commit (task page)` (or `push`, `jira`) is a
    request only: prepare it and ask in your own window, because a page message never approves an outward step. To serve the
    page, write `<mod folder>/board/<your session id>.json` with `{ "dir": "<the page's folder>", "port": 8747 }`; the mod
-   then starts the board server on 127.0.0.1 and the page shows "Linked · live over http". `sync-sessions.mjs`
+   then starts the board server on 127.0.0.1 and the page shows "Linked · live over http". If that port is held by
+   another program, the server takes the next free one (up to 9 more): give the user the `url` in
+   `<mod folder>/board-live/<your session id>.json`, not the port you wrote. `sync-sessions.mjs`
    rewrites the sessions list from `puppet list` (from a copy outside the plugin, pass `--puppet <path
    to puppet.mjs>`). Run it in the same turn as every page change. Layout, as the user asked on
    2026-11-24: "list items like T39/41 when get so big they need a shortneing with 'show more' button
@@ -102,7 +104,9 @@ do "A stand-in master" below.
    to Z, none last); tasks and asks by id, lowest first, whatever the order in `tasks.js`; done tasks
    only in the folded Done list; open asks grouped under their task; the Jira tab shows when each
    epic was read and marks it stale after 2 hours, and `sync-epics.mjs` reads the PRs and Jira
-   issues again (one `gh pr view` per PR, one Jira read per key); a fourth tab, Side questions,
+   issues again (one `gh pr view` per PR; one Jira read per key only when you pass `--jira <command>`, a command that
+   prints one issue as JSON for `<command> <KEY> --json`, as the user names it; with no command the Jira tab shows
+   "Jira not configured", so never invent one); a fourth tab, Side questions,
    lists `sideQuestions[]`: log each question the user asks you beside the tasks there, with its
    time, their words verbatim, your short answer and its time, in the same turn you answer it.
    On 2026-11-27, after the design canvas `pm-status-page-r3` (this replaces the folded Done list, the 640 px panel

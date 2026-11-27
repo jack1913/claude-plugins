@@ -5,7 +5,8 @@ Find what you see, then do what's next to it.
 | You see | Do this |
 | --- | --- |
 | `/puppet-master:puppet-master` doesn't start when you ask in words | Type the command. It only runs when typed |
-| `puppet: cannot run claude` | Set `PUPPET_CLAUDE_BIN` to the full path of the `claude` executable. On Windows the npm `claude.cmd` shim can't be started |
+| `puppet: cannot run claude` | Check that `claude` is on your `PATH`, or set `PUPPET_CLAUDE_BIN` to the full path of the `claude` executable. On Windows puppet-master finds `claude.exe` on the `PATH`, or reads the program out of an npm `claude.cmd` shim; if the shim names none, it says so and you set `PUPPET_CLAUDE_BIN` |
+| The board server's page does not open at the port you wrote | Another program held that port, so the board server took the next free one (up to 9 more). Open the `url` in `~/.claude/puppet-master/mod/board-live/<the master's session id>.json`, or ask the master for the link |
 | `one job per context` or `no clean session` | That session already did a job, or none of yours is free in that folder. Claude can reuse a finished session under 30% of its context window, or you clear one and tell Claude, or Claude starts a background worker |
 | `changed (new session id …)` or `has a new session id` | That window was cleared or restarted. Tell Claude whether it is clean now |
 | A resumed master session's commands fail | Tell it to run its start-up steps again: list the sessions, adopt itself and any session shown as `changed`, then measure. The helper refuses a session with a new session id until it is adopted again |

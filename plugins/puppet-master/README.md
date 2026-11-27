@@ -47,7 +47,7 @@ browser.
   its three newest reports), Epics and Jira (one card per epic, with each repo's PR, its Jira status and when it was read)
   and Side questions (what you asked the master beside the tasks).
 - **Sidebar and rail.** The wide sidebar lists every status filter with its count, each session's share of its context
-  and what it is doing, and the earlier sets of work. Folded, it is a narrow rail that keeps every filter and session.
+  and what it is doing, and the earlier sets of work. Folded, it is a narrow rail that keeps every status filter and session.
   Open tasks wear their own colour, teal, so they stand apart from running, waiting and done ones.
 - **Reports** open in a panel beside the list (shown from the start on a window 1,200 px wide or more); drag its left
   edge to resize it.
@@ -67,7 +67,10 @@ and a notes box. Pick, write, and either:
   has no Send. To serve it, the master writes `board/<its session id>.json` into the mod's folder
   (`~/.claude/puppet-master/mod`) with `{ "dir": "<the page's folder>", "port": 8747 }`; its mod then starts the board
   server and delivers each message as a prompt. After an install or an update, type `/reload-plugins` in the master so
-  its mod loads the new code: a window keeps the mod it loaded until then. Then open `http://127.0.0.1:8747/`.
+  its mod loads the new code: a window keeps the mod it loaded until then. Then open `http://127.0.0.1:8747/`. If
+  another program holds that port, the server takes the next free one (up to nine more) and writes the address to
+  `~/.claude/puppet-master/mod/board-live/<its session id>.json`; the master gives you the link, and `port` in the
+  board file picks a different starting port.
 
 Also on the page:
 
@@ -83,7 +86,12 @@ The board server listens on 127.0.0.1 only, and accepts a message only from its 
 
 | For | You need |
 | --- | --- |
-| Everything, including the board server | Node.js 20 or newer (the server uses only Node's own modules) |
+| Everything, including the board server | Node.js 20 or newer on the `PATH` of the app that runs Claude Code (the server uses only Node's own modules). If that app cannot see `node`, set `PUPPET_NODE_BIN` to its full path |
+| Starting, listing and closing sessions | `claude` on your `PATH`, or `PUPPET_CLAUDE_BIN` set to its full path. On Windows it also finds `claude.exe` on the `PATH`, or the program an npm `claude.cmd` shim runs |
+| One editor per checkout | `git` on your `PATH` (the helper asks it for a folder's repository root) |
+| The Epics and Jira tab's PR lines | `gh` on your `PATH`, signed in (`sync-epics.mjs` runs `gh pr view`; it only reads) |
+| The Epics and Jira tab's Jira lines | Optional: a Jira command you name with `sync-epics.mjs --jira <command>`, which prints one issue as JSON for `<command> <KEY> --json`. Without it the tab says "Jira not configured" |
+| Operating systems | Windows, macOS and Linux are supported. The plugin's tests run in CI on Linux only, on Node 20 and Node 24 (`.github/workflows/puppet-master.yml`); Windows and macOS are supported but not tested in CI. CI does not start a real Claude session |
 | Compact, clear, switch model, and Send | The mod on in that session: Claude Code 2.1.287 or newer, and your yes at its start question |
 | The master's mod to load new code | `/reload-plugins` in that window |
 | Send from the page | The master's mod on, and its `board/<session id>.json` file |

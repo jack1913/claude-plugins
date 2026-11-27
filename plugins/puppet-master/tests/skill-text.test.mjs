@@ -1077,3 +1077,13 @@ test("a stand-in master works in the main master's roster and hands its work bac
   // model rules: a standing answer for the day, with the user's quote
   assert.match(flat(read("references/briefs.md")), /\*\*A model rule the user gives\*\*[\s\S]*It holds for that day only\. The user, 2026-11-26: "it s all day specific since usage testing"\. Every brief and every relay you send that day carries it/);
 });
+
+// portability fixes (T66): the master's text for the epic sync, the board port and the claude launch
+test("the master runs sync-epics with --jira only when the user names a command, and gives the link the server wrote (portability D1, C2)", () => {
+  const flat = (text) => text.replace(/\s+/g, " ");
+  const start = flat(read("references/on-start.md"));
+  assert.match(start, /one Jira read per key only when you pass `--jira <command>`[\s\S]*?with no command the Jira tab shows "Jira not configured", so never invent one/);
+  assert.match(start, /If that port is held by another program, the server takes the next free one \(up to 9 more\): give the user the `url` in `<mod folder>\/board-live\/<your session id>\.json`, not the port you wrote/);
+  const setup = flat(read("references/setup-prerequisites.md"));
+  assert.match(setup, /use `PUPPET_CLAUDE_BIN` first; on Windows then `claude\.exe` on the `PATH`, then the program an npm `claude\.cmd` shim runs/);
+});

@@ -1,5 +1,11 @@
-# The puppet-master plugin's checks: its node:test suite (a fake `run` answers every CLI call, so no Claude session
-# starts) and the manifest, with no network beyond installing the pinned Claude Code CLI.
+# The puppet-master plugin's checks: its node:test suite on Linux only (ubuntu-24.04), on Node 20 (the documented
+# minimum) and Node 24 (a fake `run` answers every CLI call, so no Claude session starts), and the manifest, with no
+# network beyond installing the pinned Claude Code CLI. Windows and macOS are supported but not tested in CI.
+#
+#   linux          `node --test` on Node 20 and 24; the manifest check runs once, with Node 24
+#   puppet-master  the verdict: passes only when every other job passed. It keeps the one check name the release
+#                  tag ruleset needs (.github/rulesets/puppet-master-release-tags.json); the matrix checks
+#                  (`linux (node 20)` ...) are not in that ruleset
 name: puppet-master
 
 on:
@@ -21,27 +27,53 @@ permissions:
 defaults:
   run:
     working-directory: plugins/puppet-master
+    # one shell on every OS: Node 20 does not expand `tests/*.test.mjs` itself, and PowerShell (the Windows default) does not either
+    shell: bash
 
 env:
   # the Claude Code CLI that validates the manifest: the version brand-creator.yml pins (CLAUDE_CODE_VERSION)
   CLAUDE_CODE_VERSION: "2.1.302"
 
 jobs:
-  # named after the workflow: its check is the verdict a release tag puppet-master--v* needs (.github/rulesets/)
-  puppet-master:
+  linux:
+    name: "linux (node ${{ matrix.node }})"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "24"]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node }}
       - name: Tests (node:test)
         run: node --test tests/*.test.mjs
       # a CLI that cannot be installed fails the job: an unvalidated manifest must not pass the verdict
       - name: Install the Claude Code CLI
+        if: matrix.node == '24'
         run: |
           npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
           claude --version
       - name: claude plugin validate --strict
+        if: matrix.node == '24'
         run: claude plugin validate "$GITHUB_WORKSPACE/plugins/puppet-master" --strict
+
+  # named after the workflow: its check is the verdict a release tag puppet-master--v* needs (.github/rulesets/)
+  puppet-master:
+    needs:
+      - linux
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null
