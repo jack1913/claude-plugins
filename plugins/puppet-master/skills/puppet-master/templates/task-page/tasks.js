@@ -9,12 +9,20 @@
 //               master's; start it with "Nothing waits" when nothing does. The counts come from asks and tasks.
 //   asks        array of the asks (questions and actions for the user), each its own record; shown in the Questions tab
 //               grouped by their task, open ones in full, answered ones folded:
-//               { id, task, state, asked, question, facts, recommend, noHurry, answer, answered, movedFrom }
+//               { id, task, state, asked, question, options, facts, recommend, noHurry, answer, answered, movedFrom, thread, of }
 //     id        "A1", "A2", ... never reused within the work set
 //     task      the id of the task it belongs to; an open ask keeps its task in Open, also while the task is done
 //     state     open | answered
 //     asked     "MM-DD HH:MM" when it was asked
 //     question  the question, one line
+//     options   optional array of short answer strings, shown as option buttons under the ask; the one that equals `recommend`
+//               (or that `recommend` starts with) is marked "recommended" and listed first. An ask with no options gets
+//               the notes box and Copy only. A picked option and the notes become one line for the master:
+//               A122 answer (task page): "Commit + push both" — notes: ...
+//               (Send, on a page the board server serves, delivers the same line; see board-server.mjs)
+//     thread    optional: a grill-me run, e.g. "G1": asks with the same thread open one at a time in the right panel (Grill me),
+//               the lowest open id first, the answered ones as its history; write the next question as the next ask
+//     of        optional, with thread: how many questions the run is expected to have, as text ("~5"), for "question 2 of ~5"
 //     facts     array of { label, text, kind, path }: the data to decide on; kind: text | quote | link
 //               (a link opens path, an absolute path or URL, in the side panel)
 //     recommend the recommended answer

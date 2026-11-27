@@ -18,6 +18,13 @@
 // It calls $.session.id, usage, compact, $.command.run, $.ui.ask, $.ui.status, $.config.list and set, $.fs,
 // $.env, and one $.process.run (`claude agents --json`, to learn whether it runs in a window
 // or a worker before it asks). No shell, no network.
+//
+// The task-page channel (T53), in the master's session only and only where the mod is on: inbox/<session>/<nonce>.json
+// (written by the board server, templates/task-page/board-server.mjs) holds one message the user sent from the page;
+// the mod checks it, submits its line as a prompt of its own ($.prompt.submit, framed as a plugin message, never as
+// the user's typing) and writes acks/<nonce>.json. And when board/<session>.json ({ "dir": the board folder,
+// "port": 8747 }) exists, the mod starts the board server as a child ($.process.spawn, no shell) that lives with the
+// session; the child is restarted at most every 30 s when it exits.
 
 const VERSION = "0.1.0";
 const TICK_MS = 3000;
@@ -28,6 +35,12 @@ const REQUEST_MAX_AGE_MS = 5 * 60 * 1000;
 // A prompt submitted within this long ago, with no turn started yet, counts as work arriving.
 const PROMPT_GRACE_MS = 10000;
 const CONFIG_KEY = "puppet-master.self_compact";
+// The channel: what a page message may say (board-server.mjs builds the same forms), its size, and the board's retry.
+const INBOX_LINE = /^(?:A\d{1,6} (?:grill answer|answer) \(task page\)|T\d{1,6}[a-z]? (?:start|wait|request (?:commit|push|jira)) \(task page\))(?:: [^\r\n]*)?$/;
+const INBOX_LINE_MAX = 2000;
+const BOARD_RETRY_MS = 30000;
+const BOARD_PORT = 8747;
+const NONCE_RE = /^[A-Za-z0-9-]{4,64}$/;
 
 const ASK_QUESTION =
   "puppet-master: may the master compact this session, and switch its model and effort for a job (this session only), when it asks (a worker session it may also clear between jobs)?";
@@ -105,6 +118,8 @@ export function register(on) {
     shown: undefined,
     ready: false,
     lastSid: null,
+    // The board server child: { running, port, retryAt, session }, or null before it was first started.
+    board: null,
   };
 
   // The switch. On the main loop only: a subagent keeps the model and effort it was given.
@@ -282,6 +297,79 @@ async function showSwitch($, st) {
   }
 }
 
+// The board server for this session, started when board/<session>.json names a board folder. A child lives as long as
+// the loop that reads it, so the loop runs on after this call returns; the mod unloading ends it.
+async function ensureBoard($, st, { dir, sid, source, now }) {
+  if (source === null) return;
+  const cfg = await readJson($, `${dir}/board/${sid}.json`);
+  if (cfg === null) return;
+  if (st.board && (st.board.running || now < st.board.retryAt)) return;
+  if (typeof cfg.dir !== "string" || cfg.dir === "") throw new Error(`board/${sid}.json needs "dir", the board folder`);
+  const port = cfg.port === undefined ? BOARD_PORT : cfg.port;
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error(`board/${sid}.json: port must be 1024 to 65535, got ${JSON.stringify(cfg.port)}`);
+  const bin = (await $.env.get("PUPPET_NODE_BIN")) || "node";
+  const script = `${slash($.plugin.root)}/skills/puppet-master/templates/task-page/board-server.mjs`;
+  const board = (st.board = { running: true, port, retryAt: 0, session: sid });
+  void (async () => {
+    try {
+      for await (const piece of $.process.spawn({ argv: [bin, script, "--dir", cfg.dir, "--session", sid, "--mod-dir", dir, "--port", String(port)] })) {
+        if (piece && piece.stream === "stderr" && piece.text) await fail($, st, `board server: ${String(piece.text).trim()}`);
+      }
+    } catch (err) {
+      await fail($, st, `board server: ${(err && err.message) || err}`);
+    } finally {
+      board.running = false;
+      board.retryAt = (await $.clock.now()) + BOARD_RETRY_MS;
+    }
+  })();
+}
+
+// One message a tick from inbox/<session>/, the oldest first, submitted as a prompt. A message is refused when its
+// line is not one of the page's closed forms, stale (over 5 minutes) or the mod is not on in this session; every
+// message, taken or refused, gets an ack the page reads, and its file is blanked like a handled request.
+async function pumpInbox($, st, { dir, sid, source, now }) {
+  const folder = `${dir}/inbox/${sid}`;
+  if (!(await $.fs.exists(folder))) return;
+  const entries = (await $.fs.list(folder))
+    .filter((e) => e.kind === "file" && e.name.endsWith(".json") && !st.handled.has(`inbox:${e.name.slice(0, -5)}`))
+    .sort((a, b) => a.mtimeMs - b.mtimeMs || (a.name < b.name ? -1 : 1));
+  for (const e of entries) {
+    const nonce = e.name.slice(0, -5);
+    const file = `${folder}/${e.name}`;
+    const msg = await readJson($, file);
+    if (msg === null) {
+      st.handled.add(`inbox:${nonce}`);
+      continue;
+    }
+    const done = async (body) => {
+      st.handled.add(`inbox:${nonce}`);
+      await $.fs.write(file, "{}");
+      await writeJson($, `${dir}/acks/${nonce}.json`, { nonce, action: "say", sessionId: sid, at: now, ...body });
+    };
+    if (!NONCE_RE.test(nonce) || msg.nonce !== nonce || typeof msg.text !== "string" || [...msg.text].length > INBOX_LINE_MAX || !INBOX_LINE.test(msg.text)) {
+      await done({ ok: false, outcome: "refused-message", detail: "not one of the task page's message forms" });
+      continue;
+    }
+    if (typeof msg.at !== "number" || now - msg.at > REQUEST_MAX_AGE_MS) {
+      await done({ ok: false, outcome: "stale" });
+      continue;
+    }
+    if (source === null) {
+      await done({ ok: false, outcome: "not-enabled", detail: "the mod is not switched on in this session" });
+      continue;
+    }
+    try {
+      // Not awaited: a prompt "runs once the session is idle", so the call may last as long as a turn.
+      Promise.resolve($.prompt.submit({ text: msg.text })).catch((err) => fail($, st, `prompt submit: ${(err && err.message) || err}`));
+    } catch (err) {
+      await done({ ok: false, outcome: "rejected", detail: String((err && err.message) || err) });
+      continue;
+    }
+    await done({ ok: true, outcome: "queued" });
+    return;
+  }
+}
+
 async function poll($, st) {
   const { dir, sid, mode, optin, role, source } = await refresh($, st);
   const now = await $.clock.now();
@@ -300,8 +388,16 @@ async function poll($, st) {
       // The model and effort every main-loop request is sent with; null when none applies.
       override: st.overrideOn ? st.override : null,
       lastError: st.lastError,
+      board: st.board ? { running: st.board.running, port: st.board.port } : null,
     });
   await beat();
+  // The channel never stops a compact, clear or switch request below: its own failure is logged and the tick goes on.
+  try {
+    await ensureBoard($, st, { dir, sid, source, now });
+    await pumpInbox($, st, { dir, sid, source, now });
+  } catch (err) {
+    await fail($, st, err);
+  }
 
   const file = `${dir}/requests/${sid}.json`;
   const req = await readJson($, file);

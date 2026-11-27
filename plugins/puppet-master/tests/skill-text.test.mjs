@@ -1014,6 +1014,11 @@ test("the task page of 2026-11-26: three tabs, previous work sets in the sidebar
   // the page's own seen line is the one the skill tells the master to act on
   const page = fs.readFileSync(path.join(SKILL_DIR, "templates", "task-page", "index.html"), "utf8");
   assert.ok(page.includes('"seen on the task page: "'));
+  // T53: the answer channel: how the master reads a page line and serves the page
+  assert.match(step7, /An ask may carry `options\[\]`[\s\S]*A122 answer \(task page\): "Commit \+ push both" — notes: …/);
+  assert.match(step7, /Read it as the user's answer to that ask: quote it into the ask's `answer` and record it/);
+  assert.match(step7, /request only: prepare it and ask in your own window, because a page message never approves an outward step/);
+  assert.match(step7, /write `<mod folder>\/board\/<your session id>\.json` with `\{ "dir": "<the page's folder>", "port": 8747 \}`/);
 });
 
 test("every report for the user is one HTML page with its full path", () => {

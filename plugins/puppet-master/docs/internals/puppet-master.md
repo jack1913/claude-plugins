@@ -266,6 +266,8 @@ temp file, then a rename) and plainly by the mod (the mod has no rename or delet
 | `requests/<sessionId>.json` | the helper | `nonce`, `sessionId`, `requestedAt` (ms), `action` (`compact`, `switch` or `clear`), `focus`, `model` and `effort` or `reset`, `role` |
 | `acks/<nonce>.json` | the mod | `ok`, `outcome`, tokens before and after, `model`, `effort` and `previous` after a switch, or `newSessionId` after a clear |
 | `overrides/<sessionId>.json` | the mod, on a switch | `model`, `effort`, `at`, `nonce`, and `carriedFrom` when a clear moved it to a new id; `{}` after `--reset` |
+| `inbox/<sessionId>/<nonce>.json` | the board server (see [The task-page channel](#the-task-page-channel)) | `nonce`, `kind`, `text` (the line), `at` (ms); the mod blanks it to `{}` once handled and acks it |
+| `board/<sessionId>.json` | the master | `dir` (the page's folder) and optionally `port` (default 8747): the mod starts the board server from it |
 
 The mod acts only on a request for its own session id, newer than five minutes, with a valid nonce it has not seen,
 and answers every refusal with an ack: `wrong-session`, `stale`, `not-enabled`, `refused-role`, `refused-value`,
@@ -309,6 +311,50 @@ and a Map for the files.
 as `waiting`, which is in `BUSY_STATES` and not in `IDLE_STATES`, so `compact`, `clear` and `cycle` refuse it and the
 checkout lock counts an `unknown` session in that state as editing (before, only `compact` and `clear` checked
 `status`). Idle means state `done` or `idle` and no pending dialog.
+
+### The task-page channel
+
+Built on 2026-11-27 at the owner's word that the design was "fine, we need to build it and test" (T53). The user
+answers the master's asks on the task page instead of typing in the master's window. Two routes, one line:
+
+- **Copy.** Every open ask (Questions tab and inline on its task's row) has an answer form: option buttons from the
+  ask's optional `options[]` (the `recommend` one marked and first), a notes box and Copy. The page builds one line,
+  `A122 answer (task page): "Commit + push both" — notes: …`, and the user pastes it into the master's window.
+  Works on a `file://` page. The line is built by `buildLine` in `index.html` and again by `buildLine` in
+  `board-server.mjs`; `tests/channel.test.mjs` holds the two equal.
+- **Send.** `templates/task-page/board-server.mjs` serves the board folder on `127.0.0.1` and takes `POST /say`. It
+  writes one JSON per message to `<mod folder>/inbox/<master session id>/<nonce>.json`. The master's mod reads that
+  folder on its 3 s tick, checks the line against the page's closed forms (an answer, a grill answer, or a task
+  action), refuses anything older than five minutes or from a mod that is not on, and submits the line with
+  `$.prompt.submit({ text })`: a prompt of its own once the session is idle, framed as a message from the plugin,
+  never `asUser`, so it is not the user's typing. It writes `acks/<nonce>.json` (`queued`, `refused-message`,
+  `stale`, `not-enabled`, `rejected`), which the page reads through `GET /ack/<nonce>` to turn "Sent" into "the
+  master has it". One message a tick, the oldest first.
+- **The server's lifetime.** When `board/<session id>.json` (`{ "dir": the board folder, "port": 8747 }`) exists
+  and the mod is on, the mod starts the server with `$.process.spawn` (an argument vector, no shell, `node` or
+  `PUPPET_NODE_BIN`), which lives with the session; one that exits is started again after 30 s. After a `/clear` of
+  the master the server keeps the old session id's inbox (a master is not cleared by the helper).
+
+**What the server checks** (`board-server.mjs`, header comment; every row has a test in `tests/channel.test.mjs`):
+it binds `127.0.0.1` only; every request needs `Host: 127.0.0.1:<port>` (DNS rebinding); a `POST` needs this run's
+random token in `x-pm-token` (written into the served page, so another site cannot read it), an `Origin` equal to the
+server's own, `Content-Type: application/json` and a body of at most 4 KB, and `Sec-Fetch-Site` must not say
+cross-site; at most 30 messages a minute; the kinds are a closed set (`answer`, `grill`, `action`) and the line is
+built by the server from validated fields, never taken from the page. `GET /file/<path>` serves only files under the
+folder of a report or ask link listed in `tasks.js`, with a known extension, with `Content-Security-Policy: sandbox`
+(no `allow-same-origin`), because a browser refuses `file://` links on an `http` page and a report must not be able
+to read the token.
+
+**Never approval.** A page message is the user's instruction, not the approval of an outward step: `commit`, `push`
+and `jira` arrive as `T53 request commit (task page): the master asks in its window`, and the master asks in its own
+window. `approvals.md` already says a relayed message is not approval; a plugin-submitted prompt is, by its origin
+(`plugin`), not the user's typing either (hypothesis: not probed against the auto-mode classifier).
+
+**Verified** (2026-11-27, Windows 10, Node 24): the real `puppet-mod.js` on a fake `$`, with real files, started the
+real board server through its own `ensureBoard` and delivered each answer sent from a browser as the exact line to
+`$.prompt.submit` (T53 build report). **Not verified**: the mod inside a real Claude session (that `$.prompt.submit`
+frames and queues the line as the design says, and that `$.process.spawn` keeps the child alive across turns); only
+the type file's doc comments say so.
 
 ### The model switch
 

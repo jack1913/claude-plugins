@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 const PLUGIN_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATE = path.join(PLUGIN_DIR, "skills", "puppet-master", "templates", "task-page");
 const read = (name) => fs.readFileSync(path.join(TEMPLATE, name), "utf8");
-const FILES = ["index.html", "tasks.js", "sync-sessions.mjs", "sync-epics.mjs"];
+const FILES = ["index.html", "tasks.js", "sync-sessions.mjs", "sync-epics.mjs", "board-server.mjs"];
 
-test("the task-page template ships its four files and no add-reports script", () => {
+test("the task-page template ships its five files (the board server too) and no add-reports script", () => {
   for (const f of FILES) assert.ok(fs.existsSync(path.join(TEMPLATE, f)), `missing ${f}`);
   assert.ok(!fs.existsSync(path.join(TEMPLATE, "add-reports.mjs")), "reports are written straight into tasks.js");
 });
@@ -208,7 +208,7 @@ test("the page: tasks by id, lowest first; no Done section, Done is a filter; a 
   // a row: id | title (+ the newest line, Show more) | status pill and who | reports
   const row8 = t.slice(t.indexOf('<div class="trow" data-task="T8"')).split('</div><p class="foot">')[0];
   assert.equal(row8, '<div class="trow" data-task="T8" id="task-T8"><span class="id">T8</span><div class="tk"><div class="ti" title="blocked">blocked</div>'
-    + '<div class="more"><a data-exp="T8" aria-expanded="false">Show more</a></div></div><div class="stc"><div class="st"><span class="pill k-queue">Queued</span>'
+    + '<div class="more"><a data-exp="T8" aria-expanded="false">Show more</a><button class="dots" data-menu="T8" aria-haspopup="menu" aria-label="Actions for T8" title="Actions for T8">⋯</button></div></div><div class="stc"><div class="st"><span class="pill k-queue">Queued</span>'
     + '<span class="pill k-block" title="on the review host">Blocked</span></div><small class="clamp2" title="w-b">w-b</small></div><div class="rp"><span class="mut3">–</span></div></div>');
   const row4 = t.match(/<div class="trow" data-task="T4"[\s\S]*?<div class="rp">[\s\S]*?<\/div><\/div><\/div>/)[0];
   assert.match(row4, /<div class="s1 clamp2">x{1200}<\/div><div class="more"><a data-exp="T4" aria-expanded="false">Show more · 1 more line<\/a>/, "one line of what is new, the rest behind Show more · n");
@@ -245,7 +245,7 @@ test("the page: related tasks under a heading per group, groups A to Z, no group
   assert.deepEqual(ids(t, /data-task="(T\d+)" id=/g), ["T5", "T2", "T7", "T3", "T1", "T4", "T6", "T8"]);
   assert.match(t, /data-group="" data-fold="g:"><span class="ch">▾<\/span>No group <span class="cap">4 shown<\/span>/);
   const j = renderPage(board, { tab: "jira" })["pane-jira"].innerHTML;
-  assert.match(j, /data-epic="EPIC-0036">[\s\S]*?<h4>Tasks here<\/h4><div class="th"><b><a data-jump="T2">T2<\/a><\/b>[\s\S]*?data-jump="T7">T7<\/a>/);
+  assert.match(j, /data-epic="EPIC-0036">[\s\S]*?<h4>Tasks here<\/h4><div class="th open"><b><a data-jump="T2">T2<\/a><\/b>[\s\S]*?data-jump="T7">T7<\/a>/);
 });
 
 test("the page: Collapse all / Expand all in each list heading; a group folds on its own heading (T46)", () => {
@@ -378,7 +378,7 @@ test("the page: the Tasks tab holds only the task table; the filters and session
   // the rail (88 px): every filter as a count circle and a word, then every session as dot, % and bar (the canvas's Rail artboard)
   const r = els.railcounts.innerHTML;
   assert.deepEqual(ids(r, /data-go="([\w-]+)"/g), ["open", "wait", "run", "block", "pend", "queue", "done", "all", "initial", "added"]);
-  assert.match(r, /<button class="rc" data-go="open" title="Show the open tasks"><i class="">7<\/i>open<\/button>/);
+  assert.match(r, /<button class="rc" data-go="open" title="Show the open tasks"><i class="k-open">7<\/i>open<\/button>/);
   assert.match(r, /<button class="rc on" data-go="run" title="Show the running tasks"><i class="k-run">2<\/i>running<\/button>/, "the chosen filter is ringed");
   assert.match(r, /<i class="k-wait">2<\/i>for you<\/button>/);
   assert.match(r, /<i class="k-unread">1<\/i>to read<\/button>/);
@@ -459,6 +459,39 @@ test("the page: one card per epic by epic id, the id big and bold, backend befor
   assert.ok(read("index.html").includes(".ep .el .eid { font-size:22px; font-weight:800;"), "the epic id is 22 px, weight 800 (the canvas)");
   const empty = renderPage({ ...BOARD, epics: [] }, { tab: "jira" })["pane-jira"].innerHTML;
   assert.match(empty, /no rows recorded/);
+});
+
+test("the page: Tasks here lists open tasks first in the open colour, done ones after; the Jira cards are capped and the check time follows the review (T46)", () => {
+  const g = { T6: "EPIC-0036", T2: "EPIC-0036", T7: "EPIC-0036", T4: "EPIC-0036" };
+  const board = { ...BOARD, tasks: BOARD.tasks.map((x) => (g[x.id] ? { ...x, group: g[x.id] } : x)) };
+  const j = renderPage(board, { tab: "jira" })["pane-jira"].innerHTML;
+  const card = j.match(/data-epic="EPIC-0036">[\s\S]*?<div class="er">/)[0];
+  assert.deepEqual([...card.matchAll(/<div class="th( open)?"><b><a data-jump="(T\d+)"/g)].map((m) => (m[1] ? "open " : "done ") + m[2]), ["open T2", "open T4", "open T7", "done T6"], "open first, then done, each by id");
+  assert.match(card, /<span class="pill k-open">Running<\/span>/, "an open task's pill takes the open colour");
+  assert.match(card, /<span class="pill k-done">Done<\/span>/, "a done one keeps the green");
+  const html = read("index.html");
+  assert.ok(html.includes("#pane-jira > * { max-width:1180px; }"), "the cards are capped, left-aligned");
+  assert.ok(!/\.rp2 \.l2 \.fresh \{[^}]*margin-left:auto/.test(html), "the check time is not pushed to the far edge");
+  const side = renderPage(BOARD, { tab: "tasks" }).sidefilters.innerHTML;
+  assert.match(side, /data-go="open"><span>Open<\/span><span class="n hot k-open">7<\/span>/, "the open count in the sidebar");
+});
+
+test("the page: open has its own colour token, a hue no status uses (T46)", () => {
+  const css = read("index.html");
+  const hue = (hex) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    const h = d === 0 ? 0 : mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return Math.round(((h * 60) + 360) % 360); };
+  const light = css.match(/:root \{[^}]*?--open:(#\w+)/)[1], dark = css.match(/:root\[data-theme="dark"\] \{[^}]*?--open:(#\w+)/)[1];
+  assert.ok(css.includes("--open-bg:#d3f1f6") && css.includes("--open-bg:#0e3f4a"), "a background for each theme");
+  for (const [name, hex, from] of [["light", light, ":root {"], ["dark", dark, ':root[data-theme="dark"] {']]) {
+    const block = css.slice(css.indexOf(from), css.indexOf("}", css.indexOf(from)));
+    for (const k of ["--accent", "--wait", "--run", "--block", "--unread", "--done", "--queue"]) {
+      const v = block.match(new RegExp(k + ":(#\\w+)"))[1];
+      const d = Math.abs(hue(hex) - hue(v)), gap = Math.min(d, 360 - d);
+      assert.ok(gap >= 25, name + ": --open (" + hue(hex) + " deg) is " + gap + " deg from " + k + " (" + hue(v) + " deg)");
+    }
+  }
+  assert.match(css, /\.k-open \{ background:var\(--open-bg\); color:var\(--open\);/);
+  assert.ok(!/\.k-open[^}]*--accent|\.th\.open[^}]*--accent|\.trow \.id[^}]*--accent/.test(css), "the open rules use --open, not the accent");
 });
 
 test("the page: no commit id on the Jira tab, and each repo line has a one-line event log (T46)", () => {

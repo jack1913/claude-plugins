@@ -65,7 +65,16 @@ do "A stand-in master" below.
    as waiting (A62, 2026-11-26: "new list item status, 'pending report' which tells me nothing waits
    there but it s thing to read"); its "Mark seen" button (A64: "button next to it marking showed")
    shows it done in that browser and gives the user a line for you, "seen on the task page: T22
-   (11-26 23:40)"; on that line, or when the user says they read it, set it `done`. `sync-sessions.mjs`
+   (11-26 23:40)"; on that line, or when the user says they read it, set it `done`.
+   An ask may carry `options[]` (short answers; the `recommend` one is marked and first) and a `thread` (a grill-me run,
+   one open question at a time). The page turns a picked option and the user's notes into one line, `A122 answer (task
+   page): "Commit + push both" — notes: …`: the user pastes it into your window (Copy) or, on a page served by
+   `board-server.mjs` with your mod on, sends it to you (Send), and it reaches you as a prompt from the puppet-master
+   plugin. Read it as the user's answer to that ask: quote it into the ask's `answer` and record it. A line `T53
+   start (task page)` or `T53 wait (task page)` you act on. A line `T53 request commit (task page)` (or `push`, `jira`) is a
+   request only: prepare it and ask in your own window, because a page message never approves an outward step. To serve the
+   page, write `<mod folder>/board/<your session id>.json` with `{ "dir": "<the page's folder>", "port": 8747 }`; the mod
+   then starts the board server on 127.0.0.1 and the page shows "Linked · live over http". `sync-sessions.mjs`
    rewrites the sessions list from `puppet list` (from a copy outside the plugin, pass `--puppet <path
    to puppet.mjs>`). Run it in the same turn as every page change. Layout, as the user asked on
    2026-11-24: "list items like T39/41 when get so big they need a shortneing with 'show more' button

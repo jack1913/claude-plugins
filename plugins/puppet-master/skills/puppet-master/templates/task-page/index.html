@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta id="pmtoken" content="">
 <title>puppet-master: work-set tasks</title>
 <style>
   /* Style "Soft cards" (the user's pick, A30), light and dark. Tokens from the T28 canvas. */
@@ -11,7 +12,7 @@
     --text:#1e2230; --text-2:#586074; --text-3:#626a7d; --accent:#3d5bd9;
     --wait:#8a5200; --wait-bg:#ffe9bd; --wait-soft:#fff6e3; --run:#2748b5; --run-bg:#e2eaff;
     --block:#a1261d; --block-bg:#fde3e0; --unread:#6a3cc0; --unread-bg:#efe6ff; --done:#1f6b3a; --done-bg:#e2f3e7;
-    --queue:#4b5368; --queue-bg:#e7e9ef; --dot-busy:#2f9e5b; --dot-idle:#8a91a3;
+    --queue:#4b5368; --queue-bg:#e7e9ef; --open:#00677a; --open-bg:#d3f1f6; --dot-busy:#2f9e5b; --dot-idle:#8a91a3;
     --shadow:0 1px 2px rgba(22,28,45,.06), 0 1px 1px rgba(22,28,45,.03);
     --shadow-pin:0 1px 0 #e2e5ec, 0 10px 16px -14px rgba(22,28,45,.35);
     --ui:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,sans-serif; }
@@ -20,7 +21,7 @@
     --text:#e9ebf1; --text-2:#aab1c2; --text-3:#949cb0; --accent:#93a8ff;
     --wait:#ffd791; --wait-bg:#4d3610; --wait-soft:#2a2416; --run:#bccaff; --run-bg:#22326d;
     --block:#ffb9b0; --block-bg:#5a231e; --unread:#d6c2ff; --unread-bg:#3b2a66; --done:#a3e3b8; --done-bg:#17402a;
-    --queue:#c5cbd8; --queue-bg:#323745; --dot-busy:#45c07a; --dot-idle:#6f7790;
+    --queue:#c5cbd8; --queue-bg:#323745; --open:#7fe0ee; --open-bg:#0e3f4a; --dot-busy:#45c07a; --dot-idle:#6f7790;
     --shadow:0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.35);
     --shadow-pin:0 1px 0 #313644, 0 10px 16px -12px rgba(0,0,0,.7); } }
   :root[data-theme="dark"] { color-scheme:dark;
@@ -28,7 +29,7 @@
     --text:#e9ebf1; --text-2:#aab1c2; --text-3:#949cb0; --accent:#93a8ff;
     --wait:#ffd791; --wait-bg:#4d3610; --wait-soft:#2a2416; --run:#bccaff; --run-bg:#22326d;
     --block:#ffb9b0; --block-bg:#5a231e; --unread:#d6c2ff; --unread-bg:#3b2a66; --done:#a3e3b8; --done-bg:#17402a;
-    --queue:#c5cbd8; --queue-bg:#323745; --dot-busy:#45c07a; --dot-idle:#6f7790;
+    --queue:#c5cbd8; --queue-bg:#323745; --open:#7fe0ee; --open-bg:#0e3f4a; --dot-busy:#45c07a; --dot-idle:#6f7790;
     --shadow:0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.35);
     --shadow-pin:0 1px 0 #313644, 0 10px 16px -12px rgba(0,0,0,.7); }
 
@@ -46,6 +47,8 @@
   .k-wait { background:var(--wait-bg); color:var(--wait); } .k-run { background:var(--run-bg); color:var(--run); }
   .k-block { background:var(--block-bg); color:var(--block); } .k-unread { background:var(--unread-bg); color:var(--unread); }
   .k-done { background:var(--done-bg); color:var(--done); } .k-queue { background:var(--queue-bg); color:var(--queue); }
+  /* open (not done) tasks: their own colour, teal (--open), a hue no status uses (blue running, amber waits, violet to read, green done, red blocked, grey queued): id, pill, left accent, faint tint */
+  .k-open { background:var(--open-bg); color:var(--open); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--open) 40%, transparent); }
   .nw { display:inline-flex; width:22px; height:22px; border-radius:7px; background:var(--well); align-items:center; justify-content:center;
         font-size:12px; color:var(--text-2); flex:none; text-decoration:none !important; }
   .card { background:var(--card); border-radius:16px; box-shadow:var(--shadow); }
@@ -220,7 +223,9 @@
   .trow { padding:10px 14px; border-top:1px solid var(--line); scroll-margin-top:12px; }
   .tgh + .trow { border-top:0; }
   .trow.flash { outline:2px solid var(--accent); outline-offset:-2px; border-radius:8px; }
-  .trow .id { font-weight:600; font-variant-numeric:tabular-nums; }
+  .srow .n.k-open { color:var(--open); } .rc i.k-open { background:var(--open-bg); color:var(--open); }
+  .trow .id { font-weight:600; font-variant-numeric:tabular-nums; color:var(--open); }
+  .trow:not(.done) { box-shadow:inset 3px 0 0 var(--open); }
   .trow .ti { font-weight:600; text-wrap:pretty; overflow-wrap:anywhere; }
   .trow.done .id, .trow.done .ti { color:var(--text-2); font-weight:400; }
   .trow .s1 { margin-top:3px; font-size:13px; color:var(--text-2); overflow-wrap:anywhere; }
@@ -285,6 +290,7 @@
   #main.tight .rp2 .l1 { grid-template-columns:70px minmax(0,1fr) minmax(0,1fr); gap:4px 12px; } #main.tight .rp2 .big { grid-column:1 / -1; }
 
 /* Epics and Jira: one card per epic, backend first (the accepted canvas): left the epic, right a block per repo */
+  #pane-jira > * { max-width:1180px; }   /* on a wide window the data stays beside what it belongs to (the user, 11-27) */
   .fl { display:flex; gap:18px; padding:0 6px; font-size:13px; color:var(--text-3); flex-wrap:wrap; }
   .fl .amber { color:var(--wait); font-weight:600; }
   .ep { display:grid; grid-template-columns:290px minmax(0,1fr); border-radius:16px; background:var(--card); box-shadow:var(--shadow); overflow:hidden; }
@@ -294,7 +300,9 @@
   .ep .el .stp { margin-top:6px; overflow-wrap:anywhere; }
   .ep .el h4 { margin:12px 0 4px; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-3); }
   .ep .el .th { display:flex; gap:6px; align-items:baseline; padding:2px 0; min-width:0; }
-  .ep .el .th b { font-weight:600; color:var(--text); }
+  .ep .el .th { border-left:3px solid transparent; padding-left:6px; margin-left:-9px; border-radius:4px; }
+  .ep .el .th.open { border-left-color:var(--open); background:color-mix(in srgb, var(--open) 9%, transparent); }
+  .ep .el .th b { font-weight:600; color:var(--text); } .ep .el .th.open b a { color:var(--open); font-weight:700; }
   .ep .el .th .pill { font-size:11.5px; padding:0 8px; flex:none; }
   .ep .el .th span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ep .el .fold { margin-top:10px; font-size:12.5px; }
@@ -308,7 +316,7 @@
   .rp2 .big.part small { color:var(--wait); }
   .rp2 .big.dim { font-size:14px; font-weight:600; color:var(--text-3); }
   .rp2 .l2 { display:flex; gap:12px; align-items:baseline; margin-top:6px; font-size:13px; color:var(--text-2); flex-wrap:wrap; }
-  .rp2 .l2 .fresh { margin-left:auto; font-size:12.5px; color:var(--text-3); }
+  .rp2 .l2 .fresh { font-size:12.5px; color:var(--text-3); }
   .rp2 .l2 .fresh.amber { color:var(--wait); font-weight:600; }
   .rp2 .lg { margin-top:8px; padding:6px 12px; border-radius:10px; background:var(--card-quiet); font-size:12.5px; color:var(--text-2); display:flex; flex-direction:column; gap:2px; }
   .rp2 .lg div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -354,6 +362,53 @@
   #pempty .ur .tt { color:var(--text-3); font-size:12.5px; overflow-wrap:anywhere; }
   body.panel-empty #pframe, body.panel-empty #pmeta, body.panel-empty #pwide, body.panel-empty #pnew { display:none; }
   body:not(.panel-empty) #pempty { display:none; }
+
+/* T53, the answer channel (the accepted canvas, Answer / Grill / Menu): an answer form on every open ask, the link chip,
+   the row menu and Grill me in the right panel */
+  .aform { margin-top:12px; }
+  .opt { display:flex; gap:10px; align-items:flex-start; width:100%; text-align:left; background:var(--card); border-radius:10px; padding:9px 14px; margin-top:8px;
+         border:1.5px solid transparent; font-size:14px; cursor:pointer; overflow-wrap:anywhere; }
+  .opt.sel { border-color:var(--accent); }
+  .opt .rb { width:16px; height:16px; border-radius:50%; border:2px solid var(--text-3); flex:none; margin-top:3px; }
+  .opt.sel .rb { border-color:var(--accent); background:radial-gradient(var(--accent) 45%, transparent 50%); }
+  .opt .recb { margin-left:auto; font-size:12px; font-weight:600; color:var(--done); background:var(--done-bg); border-radius:999px; padding:0 8px; white-space:nowrap; }
+  .notes { display:block; width:100%; background:var(--card); border-radius:10px; padding:10px 14px; min-height:64px; margin-top:10px; font:inherit; font-size:13.5px;
+           color:var(--text); border:1px solid var(--line); resize:vertical; }
+  .notes:focus-visible, .opt:focus-visible, .ask .acts .btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .ask .acts { display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .ask .acts .btn { padding:5px 14px; }
+  .ask .acts .hint { margin-left:auto; font-size:12.5px; color:var(--text-3); }
+  .btn.pri { background:var(--accent); color:var(--card); }
+  .btn.off, .btn:disabled { opacity:.45; cursor:default; }
+  .ask.ok { background:var(--done-bg); }
+  .ask.ok .meta b { color:var(--done); }
+  .ask.inl { margin:6px 14px 10px 64px; padding:12px 14px 10px; }
+  #main.tight .ask.inl { margin-left:14px; }
+  .lineout { margin-top:10px; padding:8px 12px; border-radius:10px; background:var(--card); font-size:13px; }
+  .lineout code { background:none; user-select:all; }
+  .lineout .m { display:block; margin-bottom:4px; color:var(--done); font-weight:600; }
+  .lineout.bad .m { color:var(--block); }
+  .lc { display:inline-flex; gap:8px; align-items:center; padding:3px 12px; border-radius:999px; font-size:13px; font-weight:600; white-space:nowrap; cursor:default; }
+  .lc .dot { margin:0; }
+  .lc.live { background:var(--done-bg); color:var(--done); } .lc.copy { background:var(--queue-bg); color:var(--queue); }
+  .lc.warn { background:var(--wait-bg); color:var(--wait); } .lc.down { background:var(--block-bg); color:var(--block); }
+  .trow .dots { border:0; background:none; font-weight:700; color:var(--text-3); padding:0 6px; border-radius:6px; cursor:pointer; margin-left:10px; font-size:15px; line-height:1; }
+  .trow .dots:hover, .trow .dots.on { background:var(--well); color:var(--text); }
+  .trow .more { display:flex; align-items:center; }
+  .menu { position:fixed; background:var(--card); border-radius:12px; box-shadow:0 10px 30px rgba(20,25,40,.28), 0 0 0 1px var(--line); padding:6px; width:330px; z-index:8; font-size:13.5px; }
+  .menu .mi { padding:7px 12px; border-radius:8px; display:flex; gap:10px; align-items:baseline; width:100%; border:0; background:none; text-align:left; cursor:pointer; }
+  .menu .mi:hover, .menu .mi:focus-visible { background:var(--well); outline:none; }
+  .menu .mi small { color:var(--text-3); font-size:12px; margin-left:auto; }
+  .menu .ms { padding:8px 12px 3px; font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.03em; border-top:1px solid var(--line); margin-top:4px; }
+  .menu .mi.req { color:var(--text-2); }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:9; background:var(--text); color:var(--card); padding:8px 16px; border-radius:10px; font-size:13.5px; max-width:80vw; overflow-wrap:anywhere; }
+  #pgrill { padding:14px 18px 18px; display:flex; flex-direction:column; gap:12px; overflow-y:auto; flex:1; }
+  #pgrill .hist { background:var(--card-quiet); border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:13.5px; }
+  #pgrill .hist .h { margin-top:6px; overflow-wrap:anywhere; }
+  #pgrill .ask { margin-top:0; }
+  #pgrill .next { font-size:12.5px; color:var(--text-3); }
+  body:not(.panel-grill) #pgrill { display:none; }
+  body.panel-grill #pframe, body.panel-grill #pmeta, body.panel-grill #pwide, body.panel-grill #pempty, body.panel-grill #pnew { display:none; }
 </style>
 </head>
 <body>
@@ -380,7 +435,9 @@
     <h1>puppet-master</h1><span id="workset"></span>
     <button class="chip" id="askchip" title="Open Questions"></button>
     <button class="chip k-unread hide" id="readchip" title="Show the tasks with a report to read"></button>
+    <button class="chip k-wait hide" id="grillchip" title="Answer the master's grill-me questions one at a time"></button>
     <button class="chip" id="panelchip" title="Show or hide the report panel" style="background:var(--well);color:var(--text-2)"></button>
+    <span class="lc copy" id="linkchip"></span>
     <span id="updated"></span>
   </header>
   <div id="waiting"></div>
@@ -402,9 +459,12 @@
     <div class="pmeta" id="pmeta"></div>
     <div class="pwide" id="pwide"></div>
     <div id="pempty"></div>
+    <div id="pgrill"></div>
     <iframe id="pframe" title="Report"></iframe>
   </div>
 </aside>
+<div class="menu hide" id="menu" role="menu"></div>
+<div id="toast" class="hide" role="status"></div>
 <script>
   // Reads window.DASH from tasks.js (shape: the comment at the top of tasks.js). Writes nothing but the browser's
   // localStorage: the tab, the filter, expanded tasks, the panel and its width, the theme, and the "seen" marks.
@@ -426,7 +486,8 @@
   }
   const linkRefs = text => esc(text).replace(/\b([A-Z][A-Z0-9_]*-\d+)\b|(^|[^\w&])#(\d+)\b/g, (m, key, pre, n) =>
     key ? (REFS.keys[key] ? ext(REFS.keys[key], key) : m) : REFS.prs[n] ? pre + ext(REFS.prs[n], "#" + n) : m);
-  const fileUrl = p => /^https?:\/\//.test(p) ? p : "file:///" + encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
+  // A local path opens as file:///; on a page the board server serves (http) the browser refuses file:// links, so the server's /file/ route carries them
+  const fileUrl = p => /^https?:\/\//.test(p) ? p : (location.protocol === "http:" && location.hostname === "127.0.0.1" ? "/file/" : "file:///") + encodeURI(String(p).replace(/\\/g, "/")).replace(/%23/g, "#");
   const num = id => Number(String(id).replace(/\D/g, "")) || 0;
   const fmt = n => n.toLocaleString("en-US");
   const SHOWN = 6;                       // lines shown in an expanded task; the rest behind "Show N earlier lines"
@@ -450,6 +511,171 @@
   let LM = null;                                    // the model of the last render, for Collapse all / Expand all
   let theme = store.get("theme", "auto");
 
+  // ---------- the answer channel (T53): answers by Copy anywhere, by Send when the board server serves this page ----------
+  // The page is "served" when it was opened from the board server (http on 127.0.0.1); a file:// page has Copy only.
+  const SERVED = location.protocol === "http:" && location.hostname === "127.0.0.1";
+  const TOKEN = (document.getElementById("pmtoken") || {}).content || "";
+  if (SERVED && panel && /^file:\/\/\//.test(panel.url)) panel.url = "/file/" + panel.url.slice(8);   // a report kept from a file:// visit
+  const LINK = { up: false, modAlive: false };      // read from GET /ping every 10 s
+  const ANS_KEY = "ans:" + location.pathname;
+  let ans = store.get(ANS_KEY, {});                 // drafts and marks, per ask: { choice, notes, state: "" | "copied" | "copyfail" | "sent" | "senderr", at, nonce, acked, err }
+  let grill = store.get("grill", null);             // the thread open in the right panel (asks with the same `thread`)
+  let menuTask = null;                              // the task whose row menu is open
+  const NOTES_MAX = 1500, CHOICE_MAX = 300;
+  const canSend = () => SERVED && LINK.up && LINK.modAlive;
+  // The one line an answer becomes, for Copy and (rebuilt by the board server from the same fields) for Send.
+  // Keep it equal to buildLine in board-server.mjs: a test holds the two equal.
+  function buildLine(m) {
+    const one = s => String(s == null ? "" : s).replace(/\s*[\r\n]+\s*/g, " / ").replace(/\s+/g, " ").trim();
+    const REQ = ["commit", "push", "jira"];
+    if (m.kind === "action") {
+      const base = m.task + " " + (REQ.includes(m.action) ? "request " : "") + m.action + " (task page)";
+      return REQ.includes(m.action) ? base + ": the master asks in its window" : base;
+    }
+    const head = m.ask + " " + (m.kind === "grill" ? "grill answer" : "answer") + " (task page)";
+    if (m.skip) return head + ": skipped";
+    const parts = [], choice = one(m.choice).replace(/"/g, "'"), notes = one(m.notes);
+    if (choice) parts.push('"' + choice + '"');
+    if (notes) parts.push("notes: " + notes);
+    return parts.length ? head + ": " + parts.join(" — ") : head;
+  }
+  // an ask's option buttons: options[] with the recommended one first and marked (recommend is read as the option's text, or its start)
+  function optionsOf(a) {
+    const raw = (Array.isArray(a.options) ? a.options : []).map(o => typeof o === "string" ? o : o && o.label).filter(Boolean).map(String);
+    const norm = s => s.trim().toLowerCase(), rec = norm(String(a.recommend || ""));
+    let i = rec ? raw.findIndex(o => norm(o) === rec) : -1;
+    if (i < 0 && rec) i = raw.findIndex(o => norm(o).length >= 3 && (rec.startsWith(norm(o)) || norm(o).startsWith(rec)));
+    const list = raw.map((label, k) => ({ label, rec: k === i }));
+    if (i > 0) list.unshift(list.splice(i, 1)[0]);
+    return list;
+  }
+  const dget = id => ans[id] || { choice: "", notes: "", state: "" };
+  const dset = id => (ans[id] = ans[id] || { choice: "", notes: "", state: "" });
+  const saveAns = () => store.set(ANS_KEY, ans);
+  const askById = id => ((window.DASH || {}).asks || []).find(a => a.id === id);
+  const answerMsg = (id, skip) => { const a = askById(id) || {}, d = dget(id);
+    return { kind: a.thread ? "grill" : "answer", ask: id, task: a.task, choice: skip ? "" : d.choice, notes: skip ? "" : d.notes, skip: !!skip }; };
+  function toast(text) {
+    const t = document.getElementById("toast"); if (!t) return;
+    t.textContent = text; t.classList.remove("hide");
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.add("hide"), 5000);
+  }
+  function say(m) {                                 // POST /say: the board server checks the token, Origin and Host and writes the inbox file
+    if (typeof fetch !== "function") return Promise.resolve({ ok: false, j: { error: "this browser cannot send" } });
+    return fetch("/say", { method: "POST", headers: { "content-type": "application/json", "x-pm-token": TOKEN }, body: JSON.stringify(m) })
+      .then(r => r.json().then(j => ({ ok: r.ok && j.ok === true, j }), () => ({ ok: false, j: { error: "no readable reply (HTTP " + r.status + ")" } })))
+      .catch(err => ({ ok: false, j: { error: "the board server did not answer (" + err.name + ")" } }));
+  }
+  const copyText = text => navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject({ name: "no clipboard here" });
+  const typing = () => { const a = document.activeElement; return !!a && a.tagName === "TEXTAREA"; };
+  function formHtml(a, g) {
+    const d = dget(a.id), opts = optionsOf(a), id = esc(a.id), sent = d.state === "sent", has = !!(d.choice || String(d.notes).trim());
+    let h = `<div class="aform" data-fa="${id}">`
+      + opts.map((o, i) => `<button class="opt${d.choice === o.label ? " sel" : ""}" data-opt="${id}" data-i="${i}"${sent ? " disabled" : ""}><span class="rb"></span><span>${esc(o.label)}</span>${o.rec ? `<span class="recb">recommended</span>` : ""}</button>`).join("")
+      + `<textarea class="notes" data-notes="${id}" rows="3" maxlength="${NOTES_MAX}" aria-label="Notes for ${id}" placeholder="${opts.length ? "Notes (optional): add words for the master…" : "Your answer, in your own words…"}"${sent ? " disabled" : ""}>${esc(d.notes)}</textarea>`;
+    const go = canSend();
+    if (sent) h += `<div class="acts"><button class="btn" disabled>Copy answer</button><button class="btn" disabled>Sent ✓</button><span class="hint"><a data-edit="${id}">Edit and send again</a></span></div>`;
+    else if (g) h += `<div class="acts"><button class="btn" data-skip="${id}"${go ? "" : " disabled"}>Skip</button>`
+      + (SERVED ? `<button class="btn pri" data-sendans="${id}"${go && has ? "" : " disabled"}>Answer and next question</button>` : `<button class="btn pri" data-copyans="${id}"${has ? "" : " disabled"}>Copy answer</button>`)
+      + `<span class="hint">${SERVED ? (go ? "Send goes to the master over http" : "the master's mod does not answer: Send is off") : "file:// page: only Copy works"}</span></div>`;
+    else h += `<div class="acts"><button class="btn" data-copyans="${id}"${has ? "" : " disabled"}>Copy answer</button>`
+      + (SERVED ? `<button class="btn pri" data-sendans="${id}"${go && has ? "" : " disabled"}>Send</button>` : "")
+      + `<span class="hint">${SERVED ? (go ? "Send goes to the master over http" : "the master's mod does not answer: use Copy") : "file:// page: Copy, then paste the line into the master's window"}</span></div>`;
+    const line = buildLine(answerMsg(a.id, d.skip));
+    if (sent) h += `<div class="lineout"><span class="m">Sent ${esc(d.at || "")} · ${d.acked ? "the master has it" : "waiting for the master"}</span><code>${esc(line)}</code></div>`;
+    else if (d.state === "copied") h += `<div class="lineout"><span class="m">Copied ${esc(d.at || "")} ✓ Paste it into the master's window and press Enter</span><code>${esc(line)}</code></div>`;
+    else if (d.state === "copyfail") h += `<div class="lineout bad"><span class="m">Copy failed (${esc(d.err)}): select this line and copy it</span><code>${esc(line)}</code></div>`;
+    else if (d.state === "senderr") h += `<div class="lineout bad"><span class="m">Not sent: ${esc(d.err)}</span></div>`;
+    return h + `</div>`;
+  }
+  const askSent = id => dget(id).state === "sent";
+  function copyAnswer(id, skip) {
+    const d = dset(id), line = buildLine(answerMsg(id, skip));
+    return copyText(line).then(() => Object.assign(d, { state: "copied", at: stamp(), err: "" }), err => Object.assign(d, { state: "copyfail", err: err && err.name || "error" }))
+      .then(() => { saveAns(); render(); });
+  }
+  function sendAnswer(id, skip) {
+    const d = dset(id);
+    return say(answerMsg(id, skip)).then(r => {
+      if (r.ok) Object.assign(d, { state: "sent", at: stamp(), nonce: r.j.nonce, acked: false, err: "", skip: !!skip });
+      else Object.assign(d, { state: "senderr", err: String(r.j.error || "error") + (/token|origin/.test(r.j.error || "") ? " (reload the page)" : "") });
+      saveAns(); render();
+    });
+  }
+  // a sent answer waits for the mod's ack (it submitted the line as a prompt in the master)
+  function pollAcks() {
+    const waiting = Object.entries(ans).filter(([, d]) => d.state === "sent" && !d.acked && d.nonce);
+    if (!SERVED || !waiting.length || typeof fetch !== "function") return;
+    Promise.all(waiting.map(([id, d]) => fetch("/ack/" + d.nonce).then(r => r.json()).then(j => {
+      if (!j.acked) return false;
+      if (j.ok) d.acked = true; else Object.assign(d, { state: "senderr", err: "the master's mod refused it (" + j.outcome + ")" });
+      return true; }).catch(() => false))).then(r => { if (r.some(Boolean)) { saveAns(); if (!typing()) render(); } });
+  }
+  function pollLink() {
+    if (!SERVED || typeof fetch !== "function") return;
+    const was = LINK.up + "/" + LINK.modAlive;
+    fetch("/ping").then(r => r.json()).then(j => { LINK.up = true; LINK.modAlive = !!(j.modAlive && j.enabled); }, () => { LINK.up = false; LINK.modAlive = false; })
+      .then(() => { if (was !== LINK.up + "/" + LINK.modAlive && window.DASH && !typing()) render(); });
+  }
+  function linkChipHtml() {
+    if (!SERVED) return ["copy", "Copy-only · file://", "This page was opened from a file: Send is hidden; Copy answer and the row menu's Copy stay. Open it from the board server (http://127.0.0.1) for Send."];
+    if (!LINK.up) return ["down", "Board server not reachable", "The board server did not answer /ping: Send is off; Copy works."];
+    if (!LINK.modAlive) return ["warn", "Linked · master's mod silent", "The server is up, but the master's puppet-master mod has not answered in 15 s or is not switched on: Send is off; Copy works."];
+    return ["live", "Linked · live over http", "Send reaches the master over the board server and the master's mod."];
+  }
+  // the row menu: start and wait go to the master; commit, push and Jira only as a request the master asks about in its own window
+  function openMenu(btn, id) {
+    const x = (LM && LM.tasks.find(y => y.t.id === id)), m = document.getElementById("menu");
+    if (!x || !m) return;
+    const live = x.key !== "done";
+    const item = (act, name, hint, cls) => `<button class="mi${cls ? " " + cls : ""}" role="menuitem" data-act="${act}" data-mt="${esc(id)}">${name} <small>${hint}</small></button>`;
+    m.innerHTML = (live ? item("start", "Start", "master starts the job") + item("wait", "Wait", "park it, not queued") : "") + item("report", "Open report", "in the right panel")
+      + (live ? `<div class="ms">Request: the master asks in its window</div>` + item("commit", "Commit", "request", "req") + item("push", "Push", "request", "req") + item("jira", "Jira change", "request", "req") : "")
+      + `<div class="mut3" style="padding:6px 12px 2px;font-size:12px">${canSend() ? "Sends the line to the master" : "Copies the line to paste into the master's window"}</div>`;
+    const r = btn.getBoundingClientRect ? btn.getBoundingClientRect() : { left: 0, bottom: 0, top: 0 };
+    m.classList.remove("hide");
+    m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 346)) + "px";
+    m.style.top = (r.bottom + 4 + 260 > window.innerHeight ? Math.max(8, r.top - 264) : r.bottom + 4) + "px";
+    menuTask = id; render();
+  }
+  function closeMenu() { const m = document.getElementById("menu"); if (m) m.classList.add("hide"); if (menuTask) { menuTask = null; render(); } }
+  function menuAct(id, act) {
+    closeMenu();
+    if (act === "report") { const rel = relatedReport(id, null); if (rel) { openPanel(rel); render(); } else toast("No written report for " + id + " yet"); return; }
+    const m = { kind: "action", task: id, action: act }, line = buildLine(m);
+    if (canSend()) return say(m).then(r => toast(r.ok ? "Sent: " + line : "Not sent: " + r.j.error));
+    return copyText(line).then(() => toast("Copied: " + line + " · paste it into the master's window"), () => toast("Copy failed: select this line: " + line));
+  }
+  // Grill me: the asks that share a `thread` (one task's run of questions), one open question at a time in the right panel
+  function threads(M) {
+    const t = new Map();
+    for (const a of M.openAsks) if (a.thread) { if (!t.has(a.thread)) t.set(a.thread, []); t.get(a.thread).push(a); }
+    return t;
+  }
+  function renderGrill(D, M) {
+    const th = threads(M), box = document.getElementById("pgrill");
+    const chip = document.getElementById("grillchip");
+    const first = th.size ? [...th.entries()][0] : null;
+    chip.classList.toggle("hide", !first);
+    if (first) chip.dataset.grill = first[0];
+    if (first) chip.textContent = "Grill me · " + first[1][0].task + " · " + first[1].length + " open";
+    if (grill && !th.has(grill)) {                       // the thread is done: show the last answers, no open question
+      const done = M.answered.filter(a => a.thread === grill);
+      if (!done.length) grill = null;
+    }
+    if (!grill) { box.innerHTML = ""; return; }
+    const open = (th.get(grill) || []).slice().sort((a, b) => num(a.id) - num(b.id));
+    const hist = M.answered.filter(a => a.thread === grill).sort((a, b) => num(a.id) - num(b.id));
+    const cur = open[0], n = hist.length + 1, of = cur && cur.of ? " of " + cur.of : "";
+    const task = (cur || hist[hist.length - 1] || {}).task || "";
+    document.getElementById("ptitle").textContent = "Grill me · " + task + (cur ? " · question " + n + of : " · finished");
+    box.innerHTML = (hist.length ? `<div class="hist"><b>History</b>` + hist.map((a, i) => `<div class="h"><span class="mut3">Q${i + 1}</span> ${esc(a.question)} <b>${esc(a.answer || "-")}</b></div>`).join("") + `</div>` : "")
+      + (cur ? `<div class="ask${askSent(cur.id) ? " ok" : ""}"><div class="meta"><span class="pill ${askSent(cur.id) ? "k-done" : "k-wait"}">${askSent(cur.id) ? "Sent" : "Question " + n}</span><span>${esc(cur.id)}</span></div>`
+        + `<h3>${esc(cur.question)}</h3>` + (cur.recommend ? `<div class="fact rec" style="grid-template-columns:1fr"><div class="v"><span style="color:var(--done)">Recommendation:</span> ${esc(cur.recommend)}</div></div>` : "") + formHtml(cur, true) + `</div>`
+        + (open[1] ? `<div class="next">Next: ${esc(open[1].question)}</div>` : "")
+        : `<div class="empty">No open question in this run. The master writes the next one as a new ask with the same thread.</div>`);
+  }
+
   const STATUS = {                                   // tasks.js status -> [page key, label, pill colour]
     "running": ["run", "Running", "run"], "waiting-you": ["wait", "Waits for you", "wait"], "queued": ["queue", "Queued", "queue"],
     "open": ["queue", "Queued", "queue"], "pending-report": ["pend", "Pending report", "unread"], "done": ["done", "Done", "done"],
@@ -458,7 +684,7 @@
   const normStatus = s => String(s == null ? "" : s).trim().toLowerCase().replace(/[\s_]+/g, "-");
   // Every status filter is listed, with its count (0 too); a status tasks.js uses that is not above gets its own row
   // (the user, 11-27: "whole tasks status filter").
-  const FILTERS = [["open", "Open", ""], ["wait", "Waits for you", "wait"], ["run", "Running", "run"], ["block", "Blocked", "block"],
+  const FILTERS = [["open", "Open", "open"], ["wait", "Waits for you", "wait"], ["run", "Running", "run"], ["block", "Blocked", "block"],
     ["pend", "Pending report", "unread"], ["queue", "Queued", "queue"], ["done", "Done", "done"], ["all", "All", ""],
     ["initial", "Initial", ""], ["added", "Added later", ""]];
   // the word under a filter's count in the collapsed rail
@@ -494,6 +720,8 @@
     const asks = (D.asks || []).slice();
     const openAsks = asks.filter(a => a.state !== "answered").sort((a, b) => num(a.id) - num(b.id));      // oldest first
     const answered = asks.filter(a => a.state === "answered").sort((a, b) => num(a.id) - num(b.id));      // by id, lowest first
+    // an ask the master has recorded as answered no longer keeps a draft or a sent mark here
+    for (const a of answered) if (ans[a.id]) { delete ans[a.id]; saveAns(); }
     const askBy = {};
     openAsks.forEach(a => { (askBy[a.task] = askBy[a.task] || []).push(a); });
     // Drop seen marks the master has folded in (the task is no longer pending-report in tasks.js).
@@ -538,6 +766,9 @@
     document.getElementById("workset").title = (D.days || []).join(", ");
     document.getElementById("updated").textContent = "Updated " + String(D.updated || "-").slice(11);
     document.getElementById("updated").title = D.updated || "";
+    const lk = linkChipHtml(), lc = document.getElementById("linkchip");
+    lc.className = "lc " + lk[0]; lc.title = lk[2];
+    lc.innerHTML = `<span class="dot ${lk[0] === "live" ? "busy" : lk[0] === "copy" ? "idle" : "warn"}"></span>${esc(lk[1])}`;
     const nAsk = M.openAsks.length, nWaitTasks = M.C.wait;
     const ask = document.getElementById("askchip");
     ask.className = "chip " + (nAsk || nWaitTasks ? "k-wait" : "k-done");
@@ -633,17 +864,18 @@
       + `<span class="chip ${nAsk ? "k-wait" : "k-done"}" style="cursor:default">${nAsk ? nAsk + " open" + (nNoHurry ? " · " + nNoHurry + " of them no hurry" : "") : "0 open"}</span>`
       + (nAsk > 1 ? `<span class="mut3" style="font-size:13px">grouped by task; tasks and asks by id, lowest first</span>` : "")
       + (nAsk > 1 ? `<span class="sw">${switchHtml("questions", byTask(M, M.openAsks).map(a => "q:" + a[1]))}</span>` : "")
-      + `<span class="right">You answer in the master's chat, by the ask's id</span></div>`;
+      + `<span class="right">${SERVED ? "Answer below: Send reaches the master, Copy builds the line to paste" : "Answer below with Copy, then paste the line into the master's window"}</span></div>`;
     if (!nAsk) h += `<div class="calmh">Nothing waits for you</div><div class="mut">No ask is open in any task. ${M.answered.length} asks answered on this board, below.</div>`;
     // the asks of one task together, under that task's heading (the user, 11-27: "group questions from single task")
     h += byTask(M, M.openAsks).map(([x, id, list]) => `<div class="qtask" data-qtask="${esc(id)}"><div class="qth"><span class="ch" data-fold="q:${esc(id)}" title="Fold or open this task's asks">${fold.has("q:" + id) ? "▸" : "▾"}</span><a class="tid" data-jump="${esc(id)}">${esc(id)}</a>`
       + (x ? `<span class="pill k-${x.colour}">${esc(x.label)}</span><span class="tt" title="${esc(x.t.title)}">${esc(x.t.title)}</span>` : `<span class="tt mut">not on this board</span>`)
       + `<span class="r">${list.length} open</span></div>`
-      + (fold.has("q:" + id) ? "" : list.map(a => `<div class="ask" id="ask-${esc(a.id)}">`
-      + `<div class="meta"><b>${esc(a.id)}</b>${a.asked ? `<span>asked ${esc(a.asked)}</span>` : ""}`
-      + (a.movedFrom ? `<span>moved here from ${esc(a.movedFrom)}</span>` : "") + (a.noHurry ? `<span class="pill k-queue" style="padding:1px 9px">No hurry</span>` : "") + `</div>`
+      + (fold.has("q:" + id) ? "" : list.map(a => `<div class="ask${askSent(a.id) ? " ok" : ""}" id="ask-${esc(a.id)}">`
+      + `<div class="meta">${askSent(a.id) ? `<span class="pill k-done">Sent</span>` : ""}<b>${esc(a.id)}</b>${a.asked ? `<span>asked ${esc(a.asked)}</span>` : ""}`
+      + (a.movedFrom ? `<span>moved here from ${esc(a.movedFrom)}</span>` : "") + (a.thread ? `<span class="pill k-unread" style="padding:1px 9px">Grill me ${esc(a.thread)}</span>` : "") + (a.noHurry ? `<span class="pill k-queue" style="padding:1px 9px">No hurry</span>` : "") + `</div>`
       + `<h3>${esc(a.question)}</h3>` + (a.facts || []).map(factHtml).join("")
       + (a.recommend ? `<div class="fact rec"><div class="l">Recommended</div><div class="v">${esc(a.recommend)}</div></div>` : "")
+      + formHtml(a)
       + `<div class="af"><span>${a.noHurry ? "Counts like any open ask; it stays here until you answer it." : "Stays here until you answer it, also while its task is done."}</span><a data-jump="${esc(a.task)}" data-rep="${esc(a.id)}" title="Opens its report beside and the task in the list">Open ${esc(a.task)} ↓</a></div></div>`).join("")) + `</div>`).join("");
     if (M.answered.length) h += `<details class="ans"${nAsk ? "" : " open"}><summary><b>Answered</b><span class="mut">${M.answered.length}</span><span class="r">grouped by task, by id; the whole line is in its task</span></summary>`
       + byTask(M, M.answered).map(([x, id, list]) => `<div class="arh"><a data-jump="${esc(id)}"><b>${esc(id)}</b></a><span class="tt" title="${esc(x ? x.t.title : "")}">${esc(x ? x.t.title : "")}</span></div>`
@@ -706,9 +938,13 @@
     return `<div class="trow${x.key === "done" ? " done" : ""}${exp ? " on" : ""}" data-task="${esc(t.id)}" id="task-${esc(t.id)}">`
       + `<span class="id">${esc(t.id)}</span>`
       + `<div class="tk"><div class="ti" title="${esc(t.title)}">${linkRefs(t.title)}</div>${exp || !sub.length ? "" : `<div class="s1 clamp2">${linkRefs(sub[0])}</div>`}`
-      + `<div class="more"><a data-exp="${esc(t.id)}" aria-expanded="${exp}">${more}</a></div></div>`
+      + `<div class="more"><a data-exp="${esc(t.id)}" aria-expanded="${exp}">${more}</a><button class="dots${menuTask === t.id ? " on" : ""}" data-menu="${esc(t.id)}" aria-haspopup="menu" aria-label="Actions for ${esc(t.id)}" title="Actions for ${esc(t.id)}">⋯</button></div></div>`
       + `<div class="stc"><div class="st"><span class="pill k-${x.colour}">${esc(x.label)}</span>${flag}</div><small class="clamp2" title="${esc(t.who || "")}">${esc(t.who || "")}</small></div>`
-      + reportsHtml(x) + `</div>` + (exp ? detailHtml(x) : "");
+      + reportsHtml(x) + `</div>`
+      // an open ask answers inline on its task's row too (the accepted canvas, Answer)
+      + x.asks.map(a => `<div class="ask inl${askSent(a.id) ? " ok" : ""}" data-inl="${esc(a.id)}"><div class="meta">${askSent(a.id) ? `<span class="pill k-done">Sent</span>` : ""}<b>${esc(a.id)}</b><span>${a.asked ? "asked " + esc(a.asked) : "open"}</span></div>`
+        + `<div style="font-weight:600;margin:4px 0">${esc(a.question)}</div>${formHtml(a)}</div>`).join("")
+      + (exp ? detailHtml(x) : "");
   }
   function detailHtml(x) {
     const t = x.t, [who, whoSub] = splitWho(t.who);
@@ -826,14 +1062,14 @@
       return `<span class="${staleOf(a) ? "amber" : ""}" title="${esc(String(v))}">${esc(k)} · ${esc(stampOf(v))}${staleOf(a) ? " · older than " + STALE_H + " h" : ""}</span>`; }).join("")
       : `<span class="amber">No read time recorded: the lines below may be old</span>`) + `</div>`;
     h += rows.map(e => {
-      const here = M.tasks.filter(x => x.group === e.epic || [x.t.title, ...(x.t.sub || [])].join("\n").includes(e.epic)).sort((a, b) => a.n - b.n);
+      const here = M.tasks.filter(x => x.group === e.epic || [x.t.title, ...(x.t.sub || [])].join("\n").includes(e.epic)).sort((a, b) => (a.key === "done") - (b.key === "done") || a.n - b.n);   // open tasks first, then done; by id
       const repos = (e.repos || [{ repo: e.repo, pr: e.pr, tasks: e.tasks, last: e.next }]).slice()
         .sort((a, b) => (String(a.repo) === "backend" ? 0 : 1) - (String(b.repo) === "backend" ? 0 : 1));
       const f = fold.has("e:" + e.epic);
       return `<div class="ep${f ? " folded" : ""}" data-epic="${esc(e.epic)}"><div class="el"><div class="eid">${esc(e.epic)}</div><div class="en">${esc(e.what || "")}</div>`
         + (e.status ? `<span class="pill k-${epicPill(e.status)}">${esc(noSha(e.status))}</span>` : "")
         + (e.stamps ? `<div class="stp">${esc(noSha(e.stamps))}</div>` : "")
-        + `<h4>Tasks here</h4>` + (here.length ? here.slice(0, 5).map(x => `<div class="th"><b><a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a></b><span class="pill k-${x.colour}">${esc(x.label)}</span><span title="${esc(x.t.title)}">${esc(x.t.title)}</span></div>`).join("")
+        + `<h4>Tasks here</h4>` + (here.length ? here.slice(0, 5).map(x => `<div class="th${x.key === "done" ? "" : " open"}"><b><a data-jump="${esc(x.t.id)}">${esc(x.t.id)}</a></b><span class="pill k-${x.key === "done" ? x.colour : "open"}">${esc(x.label)}</span><span title="${esc(x.t.title)}">${esc(x.t.title)}</span></div>`).join("")
           + (here.length > 5 ? `<div class="mut3">and ${here.length - 5} more: ${here.slice(5).map(x => esc(x.t.id)).join(" ")}</div>` : "") : `<div class="mut3">no task on this board</div>`)
         + `<div class="fold"><a data-fold="e:${esc(e.epic)}">${f ? "Show the repo lines" : "Hide the repo lines"}</a></div></div>`
         + `<div class="er">${repos.map(r => repoBlock(r, srcRead)).join("")}</div></div>`;
@@ -845,19 +1081,21 @@
   // ---------- side panel ----------
   const panelIsOpen = () => panelOpen == null ? window.innerWidth >= 1200 : panelOpen;
   // empty, it sits beside the Tasks and Questions tabs only (the canvas draws the Jira page without it); a report open keeps it on every tab
-  const panelVisible = () => panelIsOpen() && (!!panel || tab === "tasks" || tab === "questions");
+  const panelVisible = () => !!grill || panelIsOpen() && (!!panel || tab === "tasks" || tab === "questions");
   function showPanel() {
     const shown = panelVisible();
     document.body.classList.toggle("withpanel", shown);
-    document.body.classList.toggle("panel-empty", shown && !panel);
+    document.body.classList.toggle("panel-grill", !!grill);
+    document.body.classList.toggle("panel-empty", shown && !panel && !grill);
     const pc = document.getElementById("panelchip"); pc.textContent = panelIsOpen() ? "Hide panel" : "Show panel";
+    if (grill) return;                                // Grill me owns the panel's title and body (renderGrill)
     const f = document.getElementById("pframe");
     if (!panel) { if (f.dataset.url) { f.src = "about:blank"; f.dataset.url = ""; } document.getElementById("ptitle").textContent = "Reports"; return; }
     document.getElementById("ptitle").textContent = panel.label;
     document.getElementById("pnew").href = panel.url;
     if (f.dataset.url !== panel.url) { f.src = panel.url; f.dataset.url = panel.url; }
   }
-  const openPanel = p => { panel = p; panelOpen = true; store.set("panel", panel); store.set("panelOpen", true); showPanel(); };
+  const openPanel = p => { grill = null; store.set("grill", null); panel = p; panelOpen = true; store.set("panel", panel); store.set("panelOpen", true); showPanel(); };
   // the empty panel: a hint and the newest unread reports (a pending-report task's newest written report; higher task id first)
   function renderPanelEmpty(M) {
     const un = M.tasks.filter(x => x.key === "pend").sort((a, b) => b.n - a.n).flatMap(x => {
@@ -886,7 +1124,7 @@
     renderPanelEmpty(M);
     if (!panel) return;
     const x = panel.task && M.tasks.find(y => y.t.id === panel.task);
-    const path = decodeURI(panel.url.replace(/^file:\/\/\//, ""));
+    const path = decodeURI(panel.url.replace(/^file:\/\/\/|^\/file\//, ""));
     document.getElementById("pmeta").innerHTML = esc(path)
       + (x && x.key === "pend" ? `<div class="pn"><span>${esc(x.t.id)} stays Pending report until you mark it seen</span><button class="btn seen" data-seen="${esc(x.t.id)}">Mark seen ✓</button></div>` : "");
   }
@@ -895,6 +1133,7 @@
   // (under 1200 wide, where the panel lies over the list: the window less 120 px, the rail stays free). The stored width is the user's
   // choice; a smaller window only shows it clamped and does not overwrite it.
   const PW_DEFAULT = 300, PW_MIN = 300, MAIN_MIN = 560, SIDE_W = 420, RAIL_W = 88;
+  const GRILL_W = 470;                               // Grill me opens wider (the accepted canvas draws it 470 px), unless the user dragged a width
   let pw = store.get("panelw", null);
   function panelMax() {
     if (window.innerWidth < 1200) return Math.max(PW_MIN, window.innerWidth - 120);
@@ -902,7 +1141,7 @@
     return Math.max(PW_MIN, window.innerWidth - left - MAIN_MIN);
   }
   function applyPanelWidth() {
-    const w = Math.round(Math.min(panelMax(), Math.max(PW_MIN, pw ?? PW_DEFAULT)));
+    const w = Math.round(Math.min(panelMax(), Math.max(PW_MIN, pw ?? (grill ? GRILL_W : PW_DEFAULT))));
     document.documentElement.style.setProperty("--pw", w + "px");
     const g = document.getElementById("pgrip");
     g.setAttribute("aria-valuenow", w); g.setAttribute("aria-valuemax", Math.round(panelMax()));
@@ -932,7 +1171,7 @@
     applyLayout();
     const M = LM = model(D);
     if (!M.filters.some(f => f[0] === filter)) filter = "open";
-    readRefs(D); renderChrome(D, M); renderQuestions(D, M); renderTasks(D, M); renderJira(D, M); renderSide(D); renderPanelMeta(M); showPanel();
+    readRefs(D); renderChrome(D, M); renderQuestions(D, M); renderTasks(D, M); renderJira(D, M); renderSide(D); renderPanelMeta(M); renderGrill(D, M); showPanel();
   }
 
   // ---------- events ----------
@@ -961,9 +1200,22 @@
   function stamp() { const d = new Date(), p = n => String(n).padStart(2, "0"); return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); }
   document.body.addEventListener("click", e => {
     if (e.target.closest("a.ext")) return; // a Jira or GitHub link: the browser opens it, the row stays as it is
-    const el = e.target.closest("[data-tab],[data-go],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-all],[data-fold],[data-rall],a.doc,#panelchip,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
+    if (menuTask && !e.target.closest("#menu,[data-menu]")) closeMenu();       // a click outside the row menu closes it
+    const el = e.target.closest("[data-opt],[data-copyans],[data-sendans],[data-skip],[data-edit],[data-menu],[data-act],#grillchip,[data-tab],[data-go],[data-jump],[data-ask],[data-exp],[data-full],[data-line],[data-seen],[data-unseen],[data-copy],[data-all],[data-fold],[data-rall],a.doc,#panelchip,#sideopen,#sideclose,#themecycle,#themeseg button,#pclose,#askchip,#readchip");
     if (!el) return;
     const d = el.dataset;
+    if (d.opt) {                                   // an option: pick it, or click it again to clear it
+      const a = askById(d.opt), o = a && optionsOf(a)[Number(d.i)];
+      if (o) { const s = dset(d.opt); s.choice = s.choice === o.label ? "" : o.label.slice(0, CHOICE_MAX); s.state = ""; saveAns(); render(); }
+      return;
+    }
+    if (d.copyans) return copyAnswer(d.copyans, false);
+    if (d.sendans) return sendAnswer(d.sendans, false);
+    if (d.skip) return sendAnswer(d.skip, true);
+    if (d.edit) { dset(d.edit).state = ""; saveAns(); return render(); }
+    if (d.menu) return menuTask === d.menu ? closeMenu() : openMenu(el, d.menu);
+    if (d.act) return menuAct(d.mt, d.act);
+    if (el.id === "grillchip") { grill = d.grill || null; store.set("grill", grill); panelOpen = true; store.set("panelOpen", true); return render(); }
     if (d.tab) return goTab(d.tab);
     if (d.go) return d.go === "questions" ? goTab("questions") : goFilter(d.go);
     if (d.jump) {
@@ -994,7 +1246,8 @@
     if (el.id === "sideopen" || el.id === "sideclose") { store.set("side", el.id === "sideopen"); return render(); }
     if (el.id === "themecycle") { theme = { auto: "light", light: "dark", dark: "auto" }[theme]; store.set("theme", theme); return render(); }
     if (el.matches("#themeseg button")) { theme = d.theme; store.set("theme", theme); return render(); }
-    if (el.id === "pclose") {                      // a report open: back to the empty panel; the empty panel: hide it
+    if (el.id === "pclose") {                      // Grill me open: close it; a report open: back to the empty panel; the empty panel: hide it
+      if (grill) { grill = null; store.set("grill", null); showPanel(); return render(); }
       if (panel) { panel = null; store.set("panel", null); } else { panelOpen = false; store.set("panelOpen", false); }
       showPanel(); return render();
     }
@@ -1033,6 +1286,16 @@
     else if (e.key === "ArrowRight") { e.preventDefault(); setPanelWidth(now - step, true); }
     else if (e.key === "Home" || e.key === "Enter") { e.preventDefault(); pw = null; store.set("panelw", null); applyPanelWidth(); }
   });
+  // typing in a notes box keeps the draft (no redraw: the box keeps its focus), mirrors it into the same ask's other box and enables the buttons
+  document.body.addEventListener("input", e => {
+    const t = e.target; if (!t || !t.dataset || !t.dataset.notes) return;
+    const id = t.dataset.notes, s = dset(id);
+    s.notes = String(t.value).slice(0, NOTES_MAX); if (s.state === "copied" || s.state === "copyfail" || s.state === "senderr") s.state = ""; saveAns();
+    const has = !!(s.choice || s.notes.trim());
+    document.querySelectorAll(`[data-notes="${id}"]`).forEach(o => { if (o !== t) o.value = s.notes; });
+    document.querySelectorAll(`[data-copyans="${id}"],[data-sendans="${id}"]`).forEach(b => { b.disabled = !has || (b.dataset.sendans && !canSend()); });
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && menuTask) closeMenu(); });
   window.addEventListener("resize", () => applyLayout());
   document.getElementById("scroller").addEventListener("scroll", e => e.target.classList.toggle("pinned", e.target.scrollTop > 0));
 
@@ -1040,12 +1303,16 @@
   function loadData(first) {
     const s = document.createElement("script");
     s.src = "tasks.js?t=" + Date.now();
-    s.onload = () => { render(); if (first) showPanel(); s.remove(); };
+    s.onload = () => { if (!typing()) render(); if (first) showPanel(); s.remove(); };      // never redraw under a notes box being typed in
     s.onerror = () => { s.remove(); document.getElementById("waiting").innerHTML = "<b>tasks.js did not load</b> (" + esc(new Date().toTimeString().slice(0, 5)) + "): the page shows the last data it read."; };
     document.body.appendChild(s);
   }
   loadData(true);
   setInterval(() => loadData(false), 90000);
+  // the channel: the link state every 10 s; a sent answer waits for its ack (3 s) and, while one has no answer from the master yet,
+  // tasks.js is read every 5 s instead of 90 s, so a grill-me run's next question shows quickly
+  pollLink(); setInterval(pollLink, 10000); setInterval(pollAcks, 3000);
+  setInterval(() => { if (SERVED && Object.values(ans).some(d => d.state === "sent")) loadData(false); }, 5000);
 </script>
 </body>
 </html>

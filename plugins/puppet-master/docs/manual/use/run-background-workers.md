@@ -92,7 +92,11 @@ there, it starts a background worker instead, on the model and effort the job's 
     still open" instead of asking it again.
   - Every question and every action Claude asks of you carries its id, in chat and on the live task page. Whatever a
     task needs from you goes onto the page as an ask of that task, a record shown in full on the Questions tab and on the
-    task's item, with the text or evidence to decide on, never only in chat.
+    task's item, with the text or evidence to decide on, never only in chat. You can answer on the page: pick an
+    option (the recommended one is first), add notes, and press Copy, then paste the line it builds into the master's
+    window. If the master serves the page itself (the header chip says "Linked · live over http"), Send delivers the
+    same line to the master with no paste. A button for a commit, a push or a Jira change on a task's ⋯ menu only
+    sends a request: the master asks you in its own window, because a click on the page never approves those.
   - Claude acts on everything in your message before it replies: a "go" starts the job in the same turn, and "if you
     have free workers" starts the second job or says why not. When a job ends, it also starts any item you already
     approved that needs no decision, and says so in one line.
